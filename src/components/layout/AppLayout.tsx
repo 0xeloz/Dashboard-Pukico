@@ -128,7 +128,7 @@ export function AppLayout({
               onClick={() => onTabChange('discover')}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 cursor-pointer active:scale-[0.98] ${
                 currentTab === 'discover'
-                  ? 'bg-[#0052FF] text-white shadow-xs'
+                  ? 'bg-[#0052FF] text-white'
                   : 'bg-[#EEF4FF] text-[#0052FF] hover:bg-[#E0ECFF]'
               }`}
             >
@@ -192,8 +192,8 @@ export function AppLayout({
           </nav>
         </div>
 
-        {/* Desktop Profile Summary */}
-        <div className="p-4 bg-[#F7F8FA] rounded-2xl border border-[#E5E7EB]">
+        {/* Desktop Profile Summary - Flat style with top border */}
+        <div className="pt-4 border-t border-[#E5E7EB]">
           <div className="text-[11px] font-medium text-[#5B6577] mb-1">Current Session</div>
           <div className="font-mono text-xs font-bold text-[#0A0B0D] truncate">
             {formattedPukicoId ? formattedPukicoId : 'No Pukico ID yet'}
@@ -219,9 +219,9 @@ export function AppLayout({
 
         {/* TOPBAR (Tidak sticky, tinggi 56px, padding 16px, jarak elemen 8px) */}
         <header className="w-full h-14 px-4 py-2 shrink-0">
-          <div className="w-full max-w-[412px] lg:max-w-[560px] mx-auto flex items-center justify-between gap-2 h-full">
+          <div className="w-full max-w-[560px] mx-auto flex items-center justify-between gap-2 h-full">
             {/* Kiri: pil ID tinggi 36px, teks 13px */}
-            <div className="h-9 px-3 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-2 shadow-2xs">
+            <div className="h-9 px-3 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-2">
               {formattedPukicoId ? (
                 <>
                   {/* Titik hijau #10B981 (hanya saat session sukses) */}
@@ -261,7 +261,7 @@ export function AppLayout({
             {/* Kanan: pil jaringan tinggi 36px, lalu lonceng 36x36 (jarak 8px) */}
             <div className="flex items-center gap-2 shrink-0">
               {/* Network Pill tinggi 36px */}
-              <div className="h-9 px-2.5 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-1.5 shadow-2xs">
+              <div className="h-9 px-2.5 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-1.5">
                 {/* Generic blue circle network icon */}
                 <GenericNetworkIcon className="w-3.5 h-3.5 shrink-0" />
                 {/* Chip "Testnet" (latar #EEF4FF, teks #0052FF) */}
@@ -274,7 +274,7 @@ export function AppLayout({
               <button
                 type="button"
                 onClick={() => setIsNotificationOpen(true)}
-                className="w-9 h-9 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] transition-all cursor-pointer active:scale-[0.98] shadow-2xs"
+                className="w-9 h-9 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] transition-all cursor-pointer active:scale-[0.98]"
                 aria-label="Notifications"
               >
                 <Bell className="w-4 h-4" />
@@ -289,7 +289,7 @@ export function AppLayout({
         </main>
       </div>
 
-      {/* NAVBAR BAWAH (Mobile floating pill, tinggi 60px, radius 30px, margin sisi 12px) */}
+      {/* NAVBAR BAWAH (Mobile floating pill, tinggi 60px, radius 30px, margin sisi 12px, grid 5 kolom sama lebar) */}
       <div
         className={`lg:hidden fixed bottom-3 left-0 right-0 z-40 px-3 pointer-events-none pb-safe transition-all duration-250 ease-out ${
           isSheetOpen
@@ -301,75 +301,85 @@ export function AppLayout({
       >
         <nav
           aria-label="Mobile Navigation"
-          className="max-w-[388px] mx-auto h-[60px] rounded-[30px] bg-white border border-[#E5E7EB] shadow-[0_4px_16px_rgba(10,11,13,0.06)] px-2 flex items-center justify-around pointer-events-auto"
+          className="w-full max-w-[560px] mx-auto h-[60px] rounded-[30px] bg-white border border-[#E5E7EB] shadow-[0_4px_16px_rgba(10,11,13,0.06)] grid grid-cols-5 items-center pointer-events-auto"
         >
-          {/* 1. Home (LayoutGrid, item aktif berupa pil 52x34) */}
-          <button
-            type="button"
-            onClick={() => onTabChange('home')}
-            aria-label="Home"
-            className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.98] ${
-              currentTab === 'home' || currentTab === 'receive'
-                ? 'w-[52px] h-[34px] rounded-full bg-[#EEF4FF] text-[#0052FF]'
-                : 'text-[#5B6577] hover:text-[#0A0B0D]'
-            }`}
-          >
-            <LayoutGrid className="w-5 h-5" />
-          </button>
-
-          {/* 2. Friends (Users) */}
-          <button
-            type="button"
-            onClick={() => onTabChange('friends')}
-            aria-label="Friends"
-            className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.98] ${
-              currentTab === 'friends'
-                ? 'w-[52px] h-[34px] rounded-full bg-[#EEF4FF] text-[#0052FF]'
-                : 'text-[#5B6577] hover:text-[#0A0B0D]'
-            }`}
-          >
-            <Users className="w-5 h-5" />
-          </button>
-
-          {/* 3. Discover (Tombol tengah 44px, terangkat 10px di atas pil, ikon 20px putih, ring putih 4px) */}
-          <div className="relative -top-2.5">
+          {/* 1. Home (LayoutGrid, pil aktif 52x34 di tengah kolom) */}
+          <div className="h-full flex items-center justify-center">
             <button
               type="button"
-              onClick={() => onTabChange('discover')}
-              aria-label="Discover"
-              className="w-11 h-11 rounded-full bg-[#0052FF] hover:bg-[#0042D6] text-white flex items-center justify-center ring-4 ring-white shadow-md shadow-[#0052FF]/25 transition-all duration-150 cursor-pointer active:scale-[0.95]"
+              onClick={() => onTabChange('home')}
+              aria-label="Home"
+              className={`w-[52px] h-[34px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                currentTab === 'home' || currentTab === 'receive'
+                  ? 'bg-[#EEF4FF] text-[#0052FF]'
+                  : 'text-[#5B6577] hover:text-[#0A0B0D]'
+              }`}
             >
-              <Compass className="w-5 h-5" />
+              <LayoutGrid className="w-5 h-5" />
             </button>
           </div>
 
+          {/* 2. Friends (Users) */}
+          <div className="h-full flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => onTabChange('friends')}
+              aria-label="Friends"
+              className={`w-[52px] h-[34px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                currentTab === 'friends'
+                  ? 'bg-[#EEF4FF] text-[#0052FF]'
+                  : 'text-[#5B6577] hover:text-[#0A0B0D]'
+              }`}
+            >
+              <Users className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* 3. Discover (Tombol tengah 44px, terangkat 10px di atas pil di dalam sel ke-3 tanpa mendorong kolom lain) */}
+          <div className="relative h-full flex items-center justify-center">
+            <div className="absolute -top-2.5 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => onTabChange('discover')}
+                aria-label="Discover"
+                className="w-11 h-11 rounded-full bg-[#0052FF] hover:bg-[#0042D6] text-white flex items-center justify-center ring-4 ring-white shadow-md shadow-[#0052FF]/25 transition-all duration-150 cursor-pointer active:scale-[0.95]"
+              >
+                <Compass className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
           {/* 4. History (History) */}
-          <button
-            type="button"
-            onClick={() => onTabChange('history')}
-            aria-label="History"
-            className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.98] ${
-              currentTab === 'history'
-                ? 'w-[52px] h-[34px] rounded-full bg-[#EEF4FF] text-[#0052FF]'
-                : 'text-[#5B6577] hover:text-[#0A0B0D]'
-            }`}
-          >
-            <History className="w-5 h-5" />
-          </button>
+          <div className="h-full flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => onTabChange('history')}
+              aria-label="History"
+              className={`w-[52px] h-[34px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                currentTab === 'history'
+                  ? 'bg-[#EEF4FF] text-[#0052FF]'
+                  : 'text-[#5B6577] hover:text-[#0A0B0D]'
+              }`}
+            >
+              <History className="w-5 h-5" />
+            </button>
+          </div>
 
           {/* 5. Settings (Settings) */}
-          <button
-            type="button"
-            onClick={() => onTabChange('settings')}
-            aria-label="Settings"
-            className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.98] ${
-              currentTab === 'settings' || currentTab === 'dev'
-                ? 'w-[52px] h-[34px] rounded-full bg-[#EEF4FF] text-[#0052FF]'
-                : 'text-[#5B6577] hover:text-[#0A0B0D]'
-            }`}
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+          <div className="h-full flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => onTabChange('settings')}
+              aria-label="Settings"
+              className={`w-[52px] h-[34px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                currentTab === 'settings' || currentTab === 'dev'
+                  ? 'bg-[#EEF4FF] text-[#0052FF]'
+                  : 'text-[#5B6577] hover:text-[#0A0B0D]'
+              }`}
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
         </nav>
       </div>
     </div>

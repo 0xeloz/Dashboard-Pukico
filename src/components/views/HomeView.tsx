@@ -165,11 +165,11 @@ export function HomeView({
   }, [fetchAllBalances]);
 
   return (
-    <div className="w-full max-w-[412px] lg:max-w-[560px] mx-auto px-4 py-1 space-y-6">
-      {/* 1. KARTU SALDO (Tinggi sekitar 150px, padding 20px, radius 24px, #0052FF solid, tanpa garis pemisah) */}
+    <div className="w-full max-w-[560px] mx-auto px-4 py-1 space-y-6">
+      {/* 1. KARTU SALDO (Tinggi sekitar 150px, padding 20px, radius 24px, #0052FF solid, satu-satunya gaya card yang diizinkan) */}
       <section
         aria-label="Balance Summary"
-        className="relative bg-[#0052FF] rounded-[24px] p-5 text-white overflow-hidden shadow-xs min-h-[150px] flex flex-col justify-between animate-fade-up"
+        className="relative bg-[#0052FF] rounded-[24px] p-5 text-white overflow-hidden min-h-[150px] flex flex-col justify-between animate-fade-up"
       >
         {/* Watermark: pukico-logo-white.png 120px, opasitas 0.08 di kanan bawah terpotong sebagian */}
         <div
@@ -251,7 +251,7 @@ export function HomeView({
               ref={sendButtonRef}
               type="button"
               onClick={() => setActiveSheet('send')}
-              className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-all cursor-pointer active:scale-[0.98] shadow-2xs"
+              className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-all cursor-pointer active:scale-[0.98]"
               aria-label="Send"
             >
               <Send className="w-[18px] h-[18px] text-[#0A0B0D]" />
@@ -267,7 +267,7 @@ export function HomeView({
               ref={receiveButtonRef}
               type="button"
               onClick={() => setActiveSheet('receive')}
-              className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-all cursor-pointer active:scale-[0.98] shadow-2xs"
+              className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-all cursor-pointer active:scale-[0.98]"
               aria-label="Receive"
             >
               <ArrowDownLeft className="w-[18px] h-[18px] text-[#0A0B0D]" />
@@ -283,7 +283,7 @@ export function HomeView({
               ref={faucetButtonRef}
               type="button"
               onClick={() => setActiveSheet('faucet')}
-              className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-all cursor-pointer active:scale-[0.98] shadow-2xs"
+              className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-all cursor-pointer active:scale-[0.98]"
               aria-label="Get test USDC"
             >
               <Droplet className="w-[18px] h-[18px] text-[#0052FF]" />
@@ -295,16 +295,16 @@ export function HomeView({
         </div>
       </section>
 
-      {/* 3. DAFTAR ASET (Lencana token 44px, nama 15px, sub 12px, saldo 15px) */}
+      {/* 3. DAFTAR ASET (Datar langsung di latar #F7F8FA dengan border-b #E5E7EB, lencana 44px) */}
       <section aria-label="Asset List" className="animate-fade-up [animation-delay:120ms]">
-        <div className="mb-2.5">
+        <div className="mb-2">
           <h2 className="text-[18px] font-bold text-[#0A0B0D] leading-tight">Asset List</h2>
           <p className="text-xs text-[#5B6577] mt-0.5">Assets on Base Sepolia</p>
         </div>
 
-        <div className="bg-white rounded-[20px] border border-[#E5E7EB] divide-y divide-[#E5E7EB] overflow-hidden shadow-2xs">
+        <div className="divide-y divide-[#E5E7EB] border-b border-[#E5E7EB]">
           {/* Row 1: USDC */}
-          <div className="flex items-center justify-between p-3.5 hover:bg-[#F9FAFB] transition-colors">
+          <div className="flex items-center justify-between py-3.5">
             <div className="flex items-center gap-3 min-w-0">
               {/* Lencana token 44px */}
               <div className="w-11 h-11 rounded-[14px] bg-[#EEF4FF] flex items-center justify-center shrink-0">
@@ -341,7 +341,7 @@ export function HomeView({
           </div>
 
           {/* Row 2: ETH */}
-          <div className="flex items-center justify-between p-3.5 hover:bg-[#F9FAFB] transition-colors">
+          <div className="flex items-center justify-between py-3.5">
             <div className="flex items-center gap-3 min-w-0">
               {/* Lencana token 44px */}
               <div className="w-11 h-11 rounded-[14px] bg-[#EEF4FF] flex items-center justify-center shrink-0">
@@ -379,9 +379,9 @@ export function HomeView({
         </div>
       </section>
 
-      {/* 4. AKTIVITAS TERBARU (Kotak ikon 40px) */}
+      {/* 4. AKTIVITAS TERBARU (Datar langsung di latar #F7F8FA, border-b #E5E7EB, kotak ikon 40px) */}
       <section aria-label="Recent Activity" className="animate-fade-up [animation-delay:180ms]">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="text-[18px] font-bold text-[#0A0B0D]">Recent activity</h2>
           <button
             type="button"
@@ -393,17 +393,17 @@ export function HomeView({
           </button>
         </div>
 
-        {/* Real mode: honest empty state */}
+        {/* Real mode: honest empty state (flat on background, border-b #E5E7EB) */}
         {!isDemoMode ? (
-          <div className="p-7 bg-white rounded-[20px] border border-[#E5E7EB] text-center shadow-2xs">
-            <p className="text-xs sm:text-sm text-[#3B4455] max-w-xs mx-auto leading-relaxed">
+          <div className="py-7 border-b border-[#E5E7EB] text-center">
+            <p className="text-xs sm:text-sm text-[#5B6577] max-w-xs mx-auto leading-relaxed">
               No activity yet. Transactions you send or receive will show up here.
             </p>
           </div>
         ) : (
           /* Demo Mode: 2 sample rows using ActivityRow with DEMO DATA indicator */
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1 text-[11px] text-[#B45309]">
+          <div>
+            <div className="flex items-center justify-between py-1 text-[11px] text-[#B45309]">
               <span className="font-semibold uppercase tracking-wider">Preview Feed</span>
               <span className="px-1.5 py-0.5 rounded bg-[#FFFBEB] font-bold border border-[#FDE68A]">
                 DEMO DATA

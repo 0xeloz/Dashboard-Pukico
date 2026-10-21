@@ -67,9 +67,9 @@ export function SettingsView({
         <p className="text-xs text-[#5B6577]">Profile and connection details</p>
       </div>
 
-      <div className="bg-white rounded-[20px] border border-[#E5E7EB] divide-y divide-[#E5E7EB] overflow-hidden shadow-2xs">
-        {/* Pukico ID Card (Read-only as required: no edit or delete option) */}
-        <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="divide-y divide-[#E5E7EB] border-b border-[#E5E7EB]">
+        {/* Pukico ID Item (Read-only as required: no edit or delete option) */}
+        <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
               <UserCheck className="w-5 h-5 text-[#0052FF]" />
@@ -87,7 +87,7 @@ export function SettingsView({
         </div>
 
         {/* Email */}
-        <div className="p-5 flex items-start sm:items-center justify-between gap-3">
+        <div className="py-4 flex items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
               <Mail className="w-5 h-5 text-[#0052FF]" />
@@ -105,7 +105,7 @@ export function SettingsView({
         </div>
 
         {/* Wallet Address */}
-        <div className="p-5">
+        <div className="py-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
@@ -119,7 +119,7 @@ export function SettingsView({
             <button
               type="button"
               onClick={handleCopyWallet}
-              className="px-2.5 py-1.5 rounded-xl border border-[#E5E7EB] bg-[#F7F8FA] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center gap-1.5 transition-colors cursor-pointer active:scale-[0.98]"
+              className="px-2.5 py-1.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center gap-1.5 transition-colors cursor-pointer active:scale-[0.98]"
             >
               {copied ? (
                 <>
@@ -134,13 +134,13 @@ export function SettingsView({
               )}
             </button>
           </div>
-          <div className="p-3 bg-[#F7F8FA] rounded-xl border border-[#E5E7EB] font-mono text-xs text-[#0A0B0D] break-all select-all font-semibold">
+          <div className="font-mono text-xs text-[#0A0B0D] break-all select-all font-semibold pt-1">
             {profile.wallet_address}
           </div>
         </div>
 
         {/* Network */}
-        <div className="p-5 flex items-center justify-between gap-3">
+        <div className="py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
               <Network className="w-5 h-5 text-[#0052FF]" />
@@ -154,7 +154,7 @@ export function SettingsView({
         </div>
 
         {/* Role */}
-        <div className="p-5 flex items-center justify-between gap-3">
+        <div className="py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
               <Shield className="w-5 h-5 text-[#0052FF]" />
@@ -168,7 +168,7 @@ export function SettingsView({
             className={`text-xs px-2.5 py-1 rounded-full font-medium ${
               profile.role === 'admin'
                 ? 'bg-[#EEF4FF] text-[#0052FF]'
-                : 'bg-[#F3F4F6] text-[#3B4455]'
+                : 'bg-[#E5E7EB] text-[#3B4455]'
             }`}
           >
             {profile.role === 'admin' ? 'Administrator' : 'Standard User'}
@@ -178,25 +178,25 @@ export function SettingsView({
 
       {/* Demo Mode Testing Toggles (Only in Demo Mode to test UI variants without database) */}
       {isDemoMode && onToggleRole && onTogglePukicoId && (
-        <div className="bg-[#FFFBEB] rounded-[20px] border border-[#FDE68A] p-5 shadow-2xs">
-          <div className="text-xs font-bold text-[#92400E] uppercase tracking-wider mb-2">
+        <div className="py-4 border-b border-[#E5E7EB]">
+          <div className="text-xs font-bold text-[#92400E] uppercase tracking-wider mb-1">
             Demo Mode Controls (Preview Only)
           </div>
-          <p className="text-xs text-[#B45309] mb-4">
+          <p className="text-xs text-[#B45309] mb-3">
             Test how the dashboard responds to different role permissions and Pukico ID states:
           </p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => onToggleRole(profile.role === 'admin' ? 'user' : 'admin')}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-[#FDE68A] text-[#92400E] hover:bg-[#FEF3C7] transition-colors cursor-pointer"
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-[#92400E] hover:bg-[#FEF3C7] transition-colors cursor-pointer"
             >
               Toggle Role: Currently {profile.role}
             </button>
             <button
               type="button"
               onClick={() => onTogglePukicoId(!profile.pukico_id)}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-[#FDE68A] text-[#92400E] hover:bg-[#FEF3C7] transition-colors cursor-pointer"
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-[#92400E] hover:bg-[#FEF3C7] transition-colors cursor-pointer"
             >
               Toggle Pukico ID: Currently {profile.pukico_id ? 'Assigned' : 'Empty'}
             </button>
@@ -204,8 +204,8 @@ export function SettingsView({
         </div>
       )}
 
-      {/* Logout Action */}
-      <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-5 shadow-2xs">
+      {/* Logout Action (Datar langsung di latar, tanpa kartu putih) */}
+      <div className="pt-2">
         <button
           type="button"
           onClick={handleLogoutClick}

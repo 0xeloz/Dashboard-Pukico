@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 
 interface BottomSheetProps {
@@ -16,66 +16,108 @@ export function BottomSheet({
   triggerRef,
   children,
 }: BottomSheetProps) {
+  // Store onClose in a ref so useEffect does NOT re-run when parent re-renders
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const triggerRefCurrent = useRef(triggerRef);
+  triggerRefCurrent.current = triggerRef;
+
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<number | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-  const isHistoryPushed = useRef<boolean>(false);
 
-  // Focus management & body scroll lock
+  // Animation states: mounted and closing
+  const [mounted, setMounted] = useState<boolean>(open);
+  const [closing, setClosing] = useState<boolean>(false);
+
+  // Manage mounted / closing states
   useEffect(() => {
     if (open) {
-      previousActiveElement.current = (triggerRef?.current || document.activeElement) as HTMLElement | null;
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
+      setMounted(true);
+      setClosing(false);
+    } else if (mounted) {
+      // Check prefers-reduced-motion
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      // Push history state so Android/browser back button closes sheet
-      if (!isHistoryPushed.current) {
-        window.history.pushState({ pukicoSheet: true }, '');
-        isHistoryPushed.current = true;
+      if (prefersReducedMotion) {
+        setMounted(false);
+        setClosing(false);
+      } else {
+        setClosing(true);
+        const timer = setTimeout(() => {
+          setMounted(false);
+          setClosing(false);
+        }, 220);
+        return () => clearTimeout(timer);
       }
-
-      const handlePopState = (e: PopStateEvent) => {
-        isHistoryPushed.current = false;
-        onClose();
-      };
-      window.addEventListener('popstate', handlePopState);
-
-      // Focus sheet after animation
-      const focusTimer = setTimeout(() => {
-        sheetRef.current?.focus();
-      }, 50);
-
-      return () => {
-        clearTimeout(focusTimer);
-        document.body.style.overflow = originalOverflow;
-        window.removeEventListener('popstate', handlePopState);
-        if (isHistoryPushed.current) {
-          isHistoryPushed.current = false;
-          // Clean up state if closed by other means without extra back-step
-          try {
-            if (window.history.state?.pukicoSheet) {
-              window.history.back();
-            }
-          } catch {
-            // ignore
-          }
-        }
-        previousActiveElement.current?.focus();
-      };
     }
-  }, [open, onClose, triggerRef]);
+  }, [open, mounted]);
 
-  // Escape key handler
+  // Effect for history state, scroll locking, and focus trap - DEPENDS ONLY ON [open]
   useEffect(() => {
     if (!open) return;
+
+    let pushed = false;
+    const previousActiveElement = (triggerRefCurrent.current?.current || document.activeElement) as HTMLElement | null;
+
+    // 1. Lock scroll
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // 2. History push
+    try {
+      window.history.pushState({ pukicoSheet: true }, '');
+      pushed = true;
+    } catch {
+      // ignore
+    }
+
+    // 3. Popstate listener
+    const handlePopState = () => {
+      pushed = false;
+      onCloseRef.current();
+    };
+    window.addEventListener('popstate', handlePopState);
+
+    // 4. Focus sheet
+    const focusTimer = setTimeout(() => {
+      sheetRef.current?.focus();
+    }, 50);
+
+    // Cleanup: called only when open changes from true to false or unmount
+    return () => {
+      clearTimeout(focusTimer);
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('popstate', handlePopState);
+
+      // ONLY if pushed is still true (closed via X, backdrop, Escape, or "Got it", NOT via Back)
+      if (pushed) {
+        pushed = false;
+        try {
+          window.history.back();
+        } catch {
+          // ignore
+        }
+      }
+
+      previousActiveElement?.focus();
+    };
+  }, [open]);
+
+  // Escape key & tab key trap
+  useEffect(() => {
+    if (!open) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
-      // Basic focus trap
+
       if (e.key === 'Tab' && sheetRef.current) {
         const focusables = sheetRef.current.querySelectorAll<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -95,7 +137,7 @@ export function BottomSheet({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  }, [open]);
 
   // Touch drag to dismiss on mobile
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -115,13 +157,13 @@ export function BottomSheet({
   const handleTouchEnd = () => {
     setIsDragging(false);
     if (dragOffset > 80) {
-      onClose();
+      onCloseRef.current();
     }
     setDragOffset(0);
     dragStartRef.current = null;
   };
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
     <div
@@ -132,17 +174,23 @@ export function BottomSheet({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-[#0A0B0D]/40 backdrop-blur-xs transition-opacity duration-200"
-        onClick={onClose}
+        className={`fixed inset-0 bg-[#0A0B0D]/40 backdrop-blur-xs ${
+          closing ? 'animate-backdrop-out' : 'animate-backdrop-in'
+        }`}
+        onClick={() => onCloseRef.current()}
         aria-hidden="true"
       />
 
-      {/* Sheet / Modal Container */}
+      {/* Sheet (Mobile) / Modal (Desktop) */}
       <div
         ref={sheetRef}
         tabIndex={-1}
-        className={`relative z-10 w-full lg:max-w-[420px] max-h-[85dvh] bg-white rounded-t-[24px] lg:rounded-[24px] shadow-2xl flex flex-col overflow-hidden outline-none ${
-          isDragging ? '' : 'transition-transform duration-320 ease-[cubic-bezier(0.16,1,0.3,1)]'
+        className={`relative z-10 w-full max-w-[560px] max-h-[85dvh] bg-white rounded-t-[24px] lg:rounded-[24px] shadow-2xl flex flex-col overflow-hidden outline-none ${
+          isDragging
+            ? ''
+            : closing
+            ? 'animate-sheet-out lg:animate-modal-out'
+            : 'animate-sheet-in lg:animate-modal-in'
         }`}
         style={{
           transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
@@ -150,7 +198,7 @@ export function BottomSheet({
       >
         {/* Mobile Drag Handle Bar */}
         <div
-          className="lg:hidden w-full pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none"
+          className="lg:hidden w-full pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none select-none"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -158,7 +206,7 @@ export function BottomSheet({
           <div className="w-9 h-1 bg-[#D1D5DB] rounded-full mx-auto" />
         </div>
 
-        {/* Header (18px bold title left, 36px close button right) */}
+        {/* Header (18px bold title left, 36px close button X right) */}
         <div
           className="flex items-center justify-between px-5 py-3 border-b border-[#E5E7EB] shrink-0"
           onTouchStart={handleTouchStart}
@@ -170,7 +218,7 @@ export function BottomSheet({
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => onCloseRef.current()}
             className="w-9 h-9 rounded-full hover:bg-[#EEF4FF] text-[#5B6577] hover:text-[#0A0B0D] flex items-center justify-center transition-colors cursor-pointer active:scale-[0.95]"
             aria-label="Close dialog"
           >

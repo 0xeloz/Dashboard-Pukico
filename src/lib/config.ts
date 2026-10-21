@@ -9,27 +9,21 @@
 export function isValidPrivyAppId(id: unknown): id is string {
   if (typeof id !== 'string') return false;
   const trimmed = id.trim();
-  if (trimmed.length !== 25) return false;
-  const lower = trimmed.toLowerCase();
-  if (lower === 'mock' || lower.includes('placeholder')) return false;
-  return true;
+  return trimmed.length === 25;
 }
 
-const rawDemoMode = (import.meta.env.VITE_DEMO_MODE || '').toString().toLowerCase().trim();
 const rawPrivyAppId = (import.meta.env.VITE_PRIVY_APP_ID || '').toString().trim();
-
-// Demo Mode is active if VITE_DEMO_MODE is 'true' or 'mock', or if no valid Privy App ID is provided
-const isDemoModeActive =
-  rawDemoMode === 'true' ||
-  rawDemoMode === 'mock' ||
-  !isValidPrivyAppId(rawPrivyAppId);
+// Demo Mode only active if VITE_DEMO_MODE is strictly "true"
+const isDemoModeActive = import.meta.env.VITE_DEMO_MODE === 'true';
+const isValidAppId = isValidPrivyAppId(rawPrivyAppId);
 
 export const ENV = {
   PRIVY_APP_ID: rawPrivyAppId,
   SUPABASE_URL: (import.meta.env.VITE_SUPABASE_URL || '').toString().trim(),
   SUPABASE_ANON_KEY: (import.meta.env.VITE_SUPABASE_ANON_KEY || '').toString().trim(),
-  DEMO_MODE_DEFAULT: isDemoModeActive,
-  IS_VALID_PRIVY_APP_ID: isValidPrivyAppId(rawPrivyAppId),
+  IS_DEMO_MODE: isDemoModeActive,
+  IS_VALID_PRIVY_APP_ID: isValidAppId,
+  IS_CONFIG_MISSING: !isDemoModeActive && !isValidAppId,
 };
 
 export const CHAIN_CONFIG = {

@@ -101,75 +101,75 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
         </button>
       </div>
 
-      {/* Diagnostics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-        <div className="p-4 bg-white rounded-[20px] border border-[#E5E7EB] shadow-2xs">
-          <div className="text-xs font-medium text-[#5B6577] mb-1">Privy DID</div>
-          <div className="font-mono text-xs text-[#0A0B0D] break-all select-all font-semibold">
+      {/* Diagnostics (Datar langsung di latar #F7F8FA dengan garis pemisah border-b #E5E7EB) */}
+      <div className="divide-y divide-[#E5E7EB] border-b border-[#E5E7EB]">
+        <div className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+          <span className="text-xs font-medium text-[#5B6577]">Privy DID</span>
+          <span className="font-mono text-xs text-[#0A0B0D] break-all select-all font-semibold">
             {profile.privy_did}
-          </div>
+          </span>
         </div>
 
-        <div className="p-4 bg-white rounded-[20px] border border-[#E5E7EB] shadow-2xs">
-          <div className="text-xs font-medium text-[#5B6577] mb-1">Wallet Address</div>
-          <div className="font-mono text-xs text-[#0A0B0D] break-all select-all font-semibold">
+        <div className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+          <span className="text-xs font-medium text-[#5B6577]">Wallet Address</span>
+          <span className="font-mono text-xs text-[#0A0B0D] break-all select-all font-semibold">
             {profile.wallet_address}
-          </div>
+          </span>
         </div>
 
-        <div className="p-4 bg-white rounded-[20px] border border-[#E5E7EB] shadow-2xs">
-          <div className="text-xs font-medium text-[#5B6577] mb-1">Chain ID & Target</div>
-          <div className="flex items-baseline gap-2">
-            <span className="font-mono text-base font-bold text-[#0A0B0D] tabular-nums">
+        <div className="py-3 flex items-center justify-between gap-2">
+          <span className="text-xs font-medium text-[#5B6577]">Chain ID & Target</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-mono text-sm font-bold text-[#0A0B0D] tabular-nums">
               {CHAIN_CONFIG.id}
             </span>
             <span className="text-xs text-[#5B6577]">({CHAIN_CONFIG.name})</span>
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded-[20px] border border-[#E5E7EB] shadow-2xs">
-          <div className="text-xs font-medium text-[#5B6577] mb-1">Application Version</div>
-          <div className="font-mono text-base font-bold text-[#0A0B0D]">
+        <div className="py-3 flex items-center justify-between gap-2">
+          <span className="text-xs font-medium text-[#5B6577]">Application Version</span>
+          <span className="font-mono text-sm font-bold text-[#0A0B0D]">
             {APP_METADATA.version}
-          </div>
+          </span>
         </div>
       </div>
 
-      {/* RPC Status Banner */}
-      <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-5 shadow-2xs">
-        <div className="flex items-center justify-between mb-3">
+      {/* RPC Status Section (Datar) */}
+      <div className="py-4 border-b border-[#E5E7EB] space-y-3">
+        <div className="flex items-center justify-between">
           <div className="text-sm font-semibold text-[#0A0B0D]">Base Sepolia Public RPC Status</div>
           {rpcInfo.status === 'connected' ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#047857] text-xs font-medium">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#047857] text-xs font-medium">
               <CheckCircle2 className="w-3.5 h-3.5" />
               Connected
             </span>
           ) : rpcInfo.status === 'checking' ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FFFBEB] text-[#B45309] text-xs font-medium">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FFFBEB] text-[#B45309] text-xs font-medium">
               Pinging...
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FEF2F2] text-[#B91C1C] text-xs font-medium">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FEF2F2] text-[#B91C1C] text-xs font-medium">
               RPC Error
             </span>
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-          <div className="p-3 rounded-xl bg-[#F7F8FA] border border-[#E5E7EB]">
-            <span className="text-[#5B6577] block mb-0.5">RPC Endpoint</span>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs pt-1">
+          <div className="py-1">
+            <span className="text-[#5B6577] block text-[11px] mb-0.5">RPC Endpoint</span>
             <span className="font-mono text-[#0A0B0D] font-medium truncate block">
               {CHAIN_CONFIG.rpcUrl}
             </span>
           </div>
-          <div className="p-3 rounded-xl bg-[#F7F8FA] border border-[#E5E7EB]">
-            <span className="text-[#5B6577] block mb-0.5">Latest Block</span>
+          <div className="py-1">
+            <span className="text-[#5B6577] block text-[11px] mb-0.5">Latest Block</span>
             <span className="font-mono text-[#0A0B0D] font-medium tabular-nums block">
               {rpcInfo.blockNumber ? rpcInfo.blockNumber.toString() : '—'}
             </span>
           </div>
-          <div className="p-3 rounded-xl bg-[#F7F8FA] border border-[#E5E7EB] col-span-2 sm:col-span-1">
-            <span className="text-[#5B6577] block mb-0.5">Roundtrip Latency</span>
+          <div className="py-1 col-span-2 sm:col-span-1">
+            <span className="text-[#5B6577] block text-[11px] mb-0.5">Roundtrip Latency</span>
             <span className="font-mono text-[#0A0B0D] font-medium tabular-nums block">
               {rpcInfo.latencyMs !== null ? `${rpcInfo.latencyMs} ms` : '—'}
             </span>
@@ -177,15 +177,15 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
         </div>
 
         {rpcInfo.error && (
-          <div className="mt-3 p-3 rounded-xl bg-[#FEF2F2] text-[#B91C1C] text-xs font-mono">
+          <div className="text-[#B91C1C] text-xs font-mono pt-1">
             {rpcInfo.error}
           </div>
         )}
       </div>
 
-      {/* JSON Profile */}
-      <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-5 shadow-2xs">
-        <div className="flex items-center justify-between mb-3">
+      {/* JSON Profile (Blok kode tetap diizinkan) */}
+      <div className="py-4 space-y-2.5">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Terminal className="w-4 h-4 text-[#0052FF]" />
             <h3 className="text-sm font-semibold text-[#0A0B0D]">Session Profile JSON</h3>

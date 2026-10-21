@@ -27,12 +27,12 @@ export function ActivityRow({ activity }: ActivityRowProps) {
       : 'text-[#B91C1C]';
 
   return (
-    <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] transition-colors">
+    <div className="flex items-center justify-between py-3 border-b border-[#E5E7EB]">
       <div className="flex items-center gap-3 min-w-0">
         {/* Kotak ikon 40px (radius 14px) */}
         <div
           className={`w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 ${
-            isIncoming ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#F3F4F6] text-[#0A0B0D]'
+            isIncoming ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#E5E7EB] text-[#0A0B0D]'
           }`}
         >
           {isIncoming ? (

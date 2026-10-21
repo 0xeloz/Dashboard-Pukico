@@ -7,10 +7,7 @@ import {
   RefreshCw,
   AlertTriangle,
   Send,
-  ArrowDownLeft,
-  Sparkles,
 } from 'lucide-react';
-import { CHAIN_CONFIG } from '../../../lib/config';
 import type { UserProfile } from '../../../types';
 
 interface SendSheetContentProps {
@@ -26,33 +23,35 @@ export function SendSheetContent({ onClose }: SendSheetContentProps) {
 
   return (
     <div className="space-y-5">
-      {/* Notice card */}
-      <div className="p-4 rounded-2xl bg-[#EEF4FF] border border-[#0052FF]/20 flex items-start gap-3">
-        <Send className="w-5 h-5 text-[#0052FF] shrink-0 mt-0.5" />
+      {/* Notice header - flat text style */}
+      <div className="flex items-start gap-2.5 text-[#0052FF]">
+        <Send className="w-5 h-5 shrink-0 mt-0.5" />
         <div>
-          <h3 className="text-sm font-semibold text-[#0A0B0D]">Coming soon</h3>
-          <p className="text-xs text-[#3B4455] mt-0.5 leading-relaxed">
-            Sending by Pukico ID is coming soon.
+          <h3 className="text-sm font-semibold text-[#0A0B0D]">Sending by Pukico ID is coming soon.</h3>
+          <p className="text-xs text-[#5B6577] mt-0.5 leading-relaxed">
+            Direct peer-to-peer transfers using human-readable Pukico IDs will be activated in Phase 2.
           </p>
         </div>
       </div>
 
-      {/* 3 Numbered Steps */}
-      <div className="space-y-3">
+      {/* 3 Numbered Steps - Flat List */}
+      <div className="space-y-3 pt-2">
         <div className="text-xs font-bold text-[#5B6577] uppercase tracking-wider">
           How Transfers Will Work
         </div>
-        {steps.map((s) => (
-          <div key={s.num} className="flex items-start gap-3 p-3 rounded-xl bg-[#F7F8FA] border border-[#E5E7EB]">
-            <div className="w-6 h-6 rounded-full bg-[#0052FF] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-              {s.num}
+        <div className="divide-y divide-[#E5E7EB]">
+          {steps.map((s) => (
+            <div key={s.num} className="flex items-start gap-3 py-3 first:pt-1">
+              <div className="w-6 h-6 rounded-full bg-[#0052FF] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                {s.num}
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-[#0A0B0D]">{s.title}</div>
+                <div className="text-xs text-[#5B6577] mt-0.5">{s.desc}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-sm font-semibold text-[#0A0B0D]">{s.title}</div>
-              <div className="text-xs text-[#5B6577] mt-0.5">{s.desc}</div>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Single "Got it" button to close */}
@@ -84,11 +83,11 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
   useEffect(() => {
     if (profile.wallet_address) {
       QRCode.toDataURL(profile.wallet_address, {
-        width: 200,
-        margin: 2,
+        width: 180,
+        margin: 0,
         color: {
           dark: '#0A0B0D',
-          light: '#FFFFFF',
+          light: '#00000000', // transparent
         },
       })
         .then((url) => setQrDataUrl(url))
@@ -137,34 +136,32 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
         )}
       </div>
 
-      {/* QR Code Container (Local client-generated) */}
-      <div className="flex justify-center my-1">
-        <div className="p-2.5 bg-white rounded-2xl border border-[#E5E7EB] shadow-2xs inline-block">
-          {qrDataUrl ? (
-            <img
-              src={qrDataUrl}
-              alt="Base Sepolia Wallet QR"
-              className="w-40 h-40 mx-auto block rounded-lg"
-            />
-          ) : (
-            <div className="w-40 h-40 bg-[#EEF4FF] rounded-lg flex items-center justify-center text-xs text-[#5B6577]">
-              Generating QR...
-            </div>
-          )}
-        </div>
+      {/* QR Code tanpa bingkai (border-0, p-0, bg-transparent) */}
+      <div className="flex justify-center my-2">
+        {qrDataUrl ? (
+          <img
+            src={qrDataUrl}
+            alt="Base Sepolia Wallet QR"
+            className="w-44 h-44 mx-auto block"
+          />
+        ) : (
+          <div className="w-44 h-44 flex items-center justify-center text-xs text-[#5B6577]">
+            Generating QR...
+          </div>
+        )}
       </div>
 
-      {/* Pukico ID Row (if available) */}
+      {/* Pukico ID Row (jika ada, gaya datar) */}
       {formattedPukicoId && (
-        <div className="p-3 bg-[#F7F8FA] rounded-xl border border-[#E5E7EB] flex items-center justify-between text-left">
+        <div className="py-2.5 border-b border-[#E5E7EB] flex items-center justify-between text-left">
           <div>
             <div className="text-[11px] font-medium text-[#5B6577]">Pukico ID</div>
-            <div className="font-mono text-xs font-bold text-[#0A0B0D]">{formattedPukicoId}</div>
+            <div className="font-mono text-sm font-bold text-[#0A0B0D]">{formattedPukicoId}</div>
           </div>
           <button
             type="button"
             onClick={() => handleCopy(formattedPukicoId, 'id')}
-            className="px-2.5 py-1 rounded-lg bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-medium text-[#0A0B0D] flex items-center gap-1 transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-medium text-[#0A0B0D] flex items-center gap-1 transition-colors cursor-pointer"
           >
             {copiedId ? (
               <>
@@ -181,14 +178,14 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
         </div>
       )}
 
-      {/* Full 0x Wallet Address */}
-      <div className="p-3 bg-[#F7F8FA] rounded-xl border border-[#E5E7EB] text-left">
+      {/* Alamat 0x sebagai teks monospace dengan tombol Copy (gaya datar) */}
+      <div className="py-2.5 border-b border-[#E5E7EB] text-left">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[11px] font-medium text-[#5B6577]">Wallet Address (0x)</span>
+          <span className="text-[11px] font-medium text-[#5B6577]">Wallet Address</span>
           <button
             type="button"
             onClick={() => handleCopy(profile.wallet_address, 'address')}
-            className="px-2.5 py-1 rounded-lg bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-medium text-[#0A0B0D] flex items-center gap-1 transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-medium text-[#0A0B0D] flex items-center gap-1 transition-colors cursor-pointer"
           >
             {copiedAddress ? (
               <>
@@ -208,10 +205,10 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
         </div>
       </div>
 
-      {/* Amber Warning per specs */}
-      <div className="p-3.5 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-left flex items-start gap-2.5">
+      {/* Peringatan sebagai teks amber dengan ikon tanpa kotak berlatar */}
+      <div className="pt-2 text-left flex items-start gap-2 text-xs text-[#B45309]">
         <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
-        <p className="text-xs text-[#92400E] leading-relaxed">
+        <p className="leading-relaxed">
           Only send Base Sepolia testnet assets (USDC, ETH). Anything else may be lost.
         </p>
       </div>
@@ -251,26 +248,26 @@ export function FaucetSheetContent({
 
   return (
     <div className="space-y-4">
-      {/* Step 1: Copy your address */}
-      <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E7EB]">
+      {/* Langkah 1: Copy your address (daftar datar) */}
+      <div className="py-2.5 border-b border-[#E5E7EB]">
         <div className="flex items-center gap-2 mb-1.5">
-          <span className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center text-xs font-bold">
+          <span className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center text-xs font-bold shrink-0">
             1
           </span>
           <span className="text-sm font-semibold text-[#0A0B0D]">Copy your address</span>
         </div>
-        <div className="font-mono text-xs text-[#0A0B0D] break-all bg-white p-2.5 rounded-lg border border-[#E5E7EB] mb-2 select-all font-medium">
+        <div className="font-mono text-xs text-[#0A0B0D] break-all py-1 select-all font-medium">
           {walletAddress}
         </div>
         <button
           type="button"
           onClick={handleCopy}
-          className="w-full py-2 px-3 rounded-lg bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          className="mt-1.5 py-1.5 px-3 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >
           {copied ? (
             <>
               <Check className="w-3.5 h-3.5 text-[#047857]" />
-              <span className="text-[#047857]">Copied to Clipboard</span>
+              <span className="text-[#047857]">Copied</span>
             </>
           ) : (
             <>
@@ -281,54 +278,54 @@ export function FaucetSheetContent({
         </button>
       </div>
 
-      {/* Step 2: Open Circle Faucet */}
-      <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E7EB]">
+      {/* Langkah 2: Open Circle Faucet */}
+      <div className="py-2.5 border-b border-[#E5E7EB]">
         <div className="flex items-center gap-2 mb-1.5">
-          <span className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center text-xs font-bold">
+          <span className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center text-xs font-bold shrink-0">
             2
           </span>
           <span className="text-sm font-semibold text-[#0A0B0D]">
             Open Circle Faucet and choose Base Sepolia and USDC
           </span>
         </div>
-        <p className="text-xs text-[#5B6577] mb-3">
-          Paste your address on Circle&apos;s official testnet faucet to receive 10.00 test USDC.
+        <p className="text-xs text-[#5B6577] mb-2.5">
+          Paste your address on Circle&apos;s faucet to request 10.00 test USDC.
         </p>
         <a
           href="https://faucet.circle.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full py-2.5 px-4 rounded-lg bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold transition-colors cursor-pointer"
         >
           <span>Open faucet</span>
           <ExternalLink className="w-3.5 h-3.5" />
         </a>
       </div>
 
-      {/* Step 3: Come back and refresh */}
-      <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E7EB]">
+      {/* Langkah 3: Come back and refresh */}
+      <div className="py-2.5 border-b border-[#E5E7EB]">
         <div className="flex items-center gap-2 mb-1.5">
-          <span className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center text-xs font-bold">
+          <span className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center text-xs font-bold shrink-0">
             3
           </span>
           <span className="text-sm font-semibold text-[#0A0B0D]">Come back and refresh</span>
         </div>
-        <p className="text-xs text-[#5B6577] mb-3">
-          Once Circle submits the transfer to Base Sepolia, reload your wallet balance.
+        <p className="text-xs text-[#5B6577] mb-2.5">
+          Once the transaction confirms on Base Sepolia, refresh your balance.
         </p>
         <button
           type="button"
           onClick={onRefreshBalance}
           disabled={isRefreshing}
-          className="w-full py-2.5 px-4 rounded-lg bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0052FF] flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0052FF] transition-colors cursor-pointer disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           <span>{isRefreshing ? 'Updating balance...' : 'Refresh balance'}</span>
         </button>
       </div>
 
-      {/* Small gray note per specs */}
-      <p className="text-xs text-[#5B6577] leading-relaxed px-1">
+      {/* Catatan abu kecil tanpa kotak berlatar */}
+      <p className="text-xs text-[#5B6577] leading-relaxed pt-1">
         You also need a little test ETH to pay network fees. An ETH faucet isn&apos;t connected yet.
       </p>
     </div>

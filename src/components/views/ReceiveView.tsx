@@ -62,84 +62,72 @@ export function ReceiveView({ walletAddress, onBack }: ReceiveViewProps) {
         </div>
       </div>
 
-      {/* Main card (rounded-[20px], white, border #E5E7EB) */}
-      <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-6 text-center shadow-2xs">
-        {/* Network indicator */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#EEF4FF] border border-[#E5E7EB] mb-5">
+      {/* Main Content (Datar langsung di latar #F7F8FA tanpa kartu, border keliling, atau shadow) */}
+      <div className="space-y-4 text-center">
+        {/* Network indicator chip */}
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EEF4FF] text-[#0052FF]">
           <span className="w-2 h-2 rounded-full bg-[#0052FF]" />
-          <span className="text-xs font-semibold text-[#0052FF]">Network: {CHAIN_CONFIG.name}</span>
+          <span className="text-xs font-semibold">Network: {CHAIN_CONFIG.name}</span>
           <span className="text-xs text-[#5B6577]">· ID {CHAIN_CONFIG.id}</span>
         </div>
 
-        {/* QR Code Container */}
-        <div className="flex justify-center mb-6">
-          <div className="p-3 bg-white rounded-2xl border border-[#E5E7EB] inline-block shadow-2xs">
-            {qrDataUrl ? (
-              <img
-                src={qrDataUrl}
-                alt="Wallet QR Code"
-                className="w-48 h-48 sm:w-56 sm:h-56 mx-auto block"
-              />
-            ) : (
-              <div className="w-48 h-48 sm:w-56 sm:h-56 bg-[#EEF4FF] rounded-xl flex items-center justify-center text-xs text-[#5B6577]">
-                Generating QR...
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Address and Copy */}
-        <div className="mb-4 text-left">
-          <label className="block text-xs font-medium text-[#5B6577] mb-1.5">
-            Your Wallet Address
-          </label>
-          <div className="p-3.5 bg-[#F7F8FA] rounded-xl border border-[#E5E7EB] flex items-center justify-between gap-3">
-            <span className="font-mono text-xs sm:text-sm text-[#0A0B0D] break-all select-all font-semibold">
-              {walletAddress}
-            </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleCopy}
-          className={`w-full py-3.5 px-4 rounded-xl font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] ${
-            copied
-              ? 'bg-[#ECFDF5] text-[#047857] border border-[#047857]/30'
-              : 'bg-[#0052FF] hover:bg-[#0042D6] text-white shadow-xs'
-          }`}
-        >
-          {copied ? (
-            <>
-              <Check className="w-4 h-4" />
-              <span>Copied to Clipboard</span>
-            </>
+        {/* QR Code Container - tanpa bingkai */}
+        <div className="flex justify-center my-3">
+          {qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt="Wallet QR Code"
+              className="w-48 h-48 sm:w-56 sm:h-56 mx-auto block"
+            />
           ) : (
-            <>
-              <Copy className="w-4 h-4" />
-              <span>Copy Address</span>
-            </>
+            <div className="w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center text-xs text-[#5B6577]">
+              Generating QR...
+            </div>
           )}
-        </button>
-      </div>
+        </div>
 
-      {/* Mandatory Warning */}
-      <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-[20px] p-4 flex items-start gap-3 text-left">
-        <AlertTriangle className="w-5 h-5 text-[#B91C1C] shrink-0 mt-0.5" />
-        <div>
-          <h4 className="text-sm font-semibold text-[#B91C1C] mb-0.5">Testnet Assets Only</h4>
-          <p className="text-xs text-[#B91C1C]/90 leading-relaxed">
-            Only send Base Sepolia testnet assets to this address. Sending mainnet funds or assets from other networks will result in permanent loss.
+        {/* Address and Copy - teks monospace dengan tombol copy dan garis pemisah tipis */}
+        <div className="py-3 border-b border-[#E5E7EB] text-left">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-[#5B6577]">Your Wallet Address</span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center gap-1.5 transition-colors cursor-pointer active:scale-[0.98]"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-[#047857]" />
+                  <span className="text-[#047857]">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy Address</span>
+                </>
+              )}
+            </button>
+          </div>
+          <div className="font-mono text-xs sm:text-sm text-[#0A0B0D] break-all select-all font-semibold leading-relaxed">
+            {walletAddress}
+          </div>
+        </div>
+
+        {/* Mandatory Warning - teks amber dengan ikon tanpa kotak berlatar */}
+        <div className="pt-1 flex items-start gap-2.5 text-left text-xs text-[#B45309]">
+          <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            Only send Base Sepolia testnet assets (USDC, ETH) to this address. Sending mainnet funds or assets from other networks will result in permanent loss.
           </p>
         </div>
-      </div>
 
-      {/* Testnet Faucet Note */}
-      <div className="p-4 rounded-[20px] bg-white border border-[#E5E7EB] flex items-center gap-3 text-left shadow-2xs">
-        <ShieldCheck className="w-5 h-5 text-[#047857] shrink-0" />
-        <p className="text-xs text-[#5B6577]">
-          Need test ETH or USDC? You can request funds from public Base Sepolia faucets.
-        </p>
+        {/* Testnet Faucet Note - teks datar */}
+        <div className="pt-2 flex items-center gap-2.5 text-left text-xs text-[#5B6577]">
+          <ShieldCheck className="w-4 h-4 text-[#047857] shrink-0" />
+          <p>
+            Need test ETH or USDC? You can request funds from public Base Sepolia faucets.
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -35,9 +35,9 @@ export function ComingSoonView({ tab }: ComingSoonViewProps) {
 
   return (
     <div className="w-full max-w-[560px] mx-auto px-4 sm:px-6 py-6 space-y-5 animate-fade-up">
-      {/* Main card (rounded-[20px], white, border #E5E7EB) */}
-      <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-8 text-center shadow-2xs flex flex-col items-center">
-        <div className="w-16 h-16 rounded-[20px] bg-[#EEF4FF] border border-[#E5E7EB] flex items-center justify-center mb-4">
+      {/* Datar langsung di latar #F7F8FA tanpa kartu, border keliling, atau shadow */}
+      <div className="py-6 text-center flex flex-col items-center">
+        <div className="w-16 h-16 rounded-[20px] bg-[#EEF4FF] flex items-center justify-center mb-4">
           <IconComponent className="w-8 h-8 text-[#0052FF]" />
         </div>
 
@@ -48,7 +48,7 @@ export function ComingSoonView({ tab }: ComingSoonViewProps) {
         <h2 className="text-xl font-bold text-[#0A0B0D] mb-2">{config.title}</h2>
         <p className="text-sm text-[#5B6577] leading-relaxed max-w-sm mb-6">{config.desc}</p>
 
-        <div className="p-4 bg-[#F7F8FA] rounded-2xl border border-[#E5E7EB] w-full text-left">
+        <div className="pt-4 border-t border-[#E5E7EB] w-full text-left">
           <div className="text-xs font-bold text-[#0A0B0D] mb-1 uppercase tracking-wider">
             Phase 1 Scope
           </div>

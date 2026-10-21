@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { PrivyProvider, usePrivy, useWallets } from '@privy-io/react-auth';
 import { baseSepolia } from 'viem/chains';
-import { ENV, CHAIN_CONFIG, isValidPrivyAppId } from '../lib/config';
+import { ENV, isValidPrivyAppId } from '../lib/config';
 import { syncSessionWithSupabase, SessionSyncError } from '../lib/sessionApi';
 import type { UserProfile, SessionErrorInfo } from '../types';
 
@@ -18,7 +18,6 @@ interface AuthContextType {
   login: () => void;
   logout: () => Promise<void>;
   retrySession: () => void;
-  toggleDemoMode: (enable?: boolean) => void;
   setDemoProfileField: <K extends keyof UserProfile>(field: K, value: UserProfile[K]) => void;
 }
 
@@ -26,14 +25,13 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const DEFAULT_DEMO_PROFILE: UserProfile = {
   privy_did: 'did:privy:clx9a8b7c6d5e4f3a2b1c0d9e',
-  email_hint: 'beta***@pukico.xyz',
+  email_hint: 'andika***@pukico.xyz',
   wallet_address: '0x35B16F71C941A5a50785B8Fa85B9E7804100bF20',
   wallet_verified: true,
   pukico_id: 'andika',
   role: 'admin',
 };
 
-// Privy SDK configuration complying with docs.privy.io
 const privyConfig = {
   loginMethods: ['email' as const],
   embeddedWallets: {
@@ -51,15 +49,9 @@ const privyConfig = {
 };
 
 /**
- * Inner component that consumes Privy hooks when PrivyProvider is present with valid appId
+ * Live Privy-connected consumer
  */
-function PrivyConnectedAuthConsumer({
-  children,
-  initialDemoMode,
-}: {
-  children: React.ReactNode;
-  initialDemoMode: boolean;
-}) {
+function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode }) {
   const {
     ready: isPrivyReady,
     authenticated: isPrivyAuthenticated,
@@ -71,13 +63,10 @@ function PrivyConnectedAuthConsumer({
 
   const { wallets } = useWallets();
 
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(initialDemoMode);
-  const [demoProfile, setDemoProfile] = useState<UserProfile>(DEFAULT_DEMO_PROFILE);
-  const [profile, setProfile] = useState<UserProfile | null>(initialDemoMode ? DEFAULT_DEMO_PROFILE : null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState<boolean>(false);
   const [sessionError, setSessionError] = useState<SessionErrorInfo | null>(null);
 
-  // Extract embedded wallet address
   const embeddedWallet =
     wallets.find((w) => w.walletClientType === 'privy' || w.connectorType === 'embedded') ||
     wallets[0] ||
@@ -86,17 +75,13 @@ function PrivyConnectedAuthConsumer({
 
   const embeddedWalletAddress = embeddedWallet ? embeddedWallet.address : null;
 
-  // Extract user email
   const userEmail =
     privyUser?.email?.address ||
     (privyUser?.linkedAccounts.find((a) => a.type === 'email') as { address?: string } | undefined)?.address ||
     null;
 
-  // Session sync worker
   const runSessionSync = useCallback(async () => {
-    if (!isPrivyAuthenticated || isDemoMode) {
-      return;
-    }
+    if (!isPrivyAuthenticated) return;
 
     if (!userEmail) {
       setSessionError({
@@ -107,7 +92,6 @@ function PrivyConnectedAuthConsumer({
     }
 
     if (!embeddedWalletAddress) {
-      // Wallet creation might still be in progress
       setIsLoadingSession(true);
       return;
     }
@@ -146,17 +130,9 @@ function PrivyConnectedAuthConsumer({
     } finally {
       setIsLoadingSession(false);
     }
-  }, [isPrivyAuthenticated, isDemoMode, userEmail, embeddedWalletAddress, getAccessToken]);
+  }, [isPrivyAuthenticated, userEmail, embeddedWalletAddress, getAccessToken]);
 
-  // Synchronize whenever authenticated state or wallet changes
   useEffect(() => {
-    if (isDemoMode) {
-      setIsLoadingSession(false);
-      setSessionError(null);
-      setProfile(demoProfile);
-      return;
-    }
-
     if (isPrivyAuthenticated && isPrivyReady) {
       if (embeddedWalletAddress && userEmail) {
         runSessionSync();
@@ -166,102 +142,43 @@ function PrivyConnectedAuthConsumer({
       setSessionError(null);
       setIsLoadingSession(false);
     }
-  }, [isPrivyAuthenticated, isPrivyReady, embeddedWalletAddress, userEmail, isDemoMode, runSessionSync, demoProfile]);
-
-  const handleLogin = useCallback(() => {
-    if (isDemoMode) {
-      return;
-    }
-    setSessionError(null);
-    privyLogin();
-  }, [isDemoMode, privyLogin]);
-
-  const handleLogout = useCallback(async () => {
-    if (isDemoMode) {
-      setIsDemoMode(false);
-      setProfile(null);
-      return;
-    }
-    setProfile(null);
-    setSessionError(null);
-    await privyLogout();
-  }, [isDemoMode, privyLogout]);
-
-  const handleRetrySession = useCallback(() => {
-    runSessionSync();
-  }, [runSessionSync]);
-
-  const handleToggleDemoMode = useCallback((enable?: boolean) => {
-    setIsDemoMode((prev) => {
-      const next = typeof enable === 'boolean' ? enable : !prev;
-      if (next) {
-        setProfile(demoProfile);
-      } else {
-        setProfile(null);
-      }
-      return next;
-    });
-  }, [demoProfile]);
-
-  const handleSetDemoProfileField = useCallback(
-    <K extends keyof UserProfile>(field: K, value: UserProfile[K]) => {
-      setDemoProfile((prev) => {
-        const updated = {
-          ...prev,
-          [field]: value,
-        };
-        if (isDemoMode) {
-          setProfile(updated);
-        }
-        return updated;
-      });
-    },
-    [isDemoMode]
-  );
+  }, [isPrivyAuthenticated, isPrivyReady, embeddedWalletAddress, userEmail, runSessionSync]);
 
   const value: AuthContextType = {
-    isDemoMode,
+    isDemoMode: false,
     hasPrivyConfigured: true,
     isPrivyReady,
-    isAuthenticated: isDemoMode ? true : isPrivyAuthenticated && !!profile,
-    isLoadingSession: isDemoMode ? false : isLoadingSession,
-    sessionError: isDemoMode ? null : sessionError,
-    profile: isDemoMode ? demoProfile : profile,
-    embeddedWalletAddress: isDemoMode ? demoProfile.wallet_address : embeddedWalletAddress,
-    userEmail: isDemoMode ? demoProfile.email_hint : userEmail,
-    login: handleLogin,
-    logout: handleLogout,
-    retrySession: handleRetrySession,
-    toggleDemoMode: handleToggleDemoMode,
-    setDemoProfileField: handleSetDemoProfileField,
+    isAuthenticated: isPrivyAuthenticated && !!profile,
+    isLoadingSession,
+    sessionError,
+    profile,
+    embeddedWalletAddress,
+    userEmail,
+    login: () => {
+      setSessionError(null);
+      privyLogin();
+    },
+    logout: async () => {
+      setProfile(null);
+      setSessionError(null);
+      await privyLogout();
+    },
+    retrySession: runSessionSync,
+    setDemoProfileField: () => {},
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 /**
- * Fallback Provider when VITE_PRIVY_APP_ID is not configured or invalid
- * This prevents the fatal PrivyProvider crash while enabling full Demo Mode testing
+ * Pure Demo Mode Provider (only active when VITE_DEMO_MODE === 'true')
  */
-function FallbackAuthProvider({
-  children,
-  initialDemoMode,
-}: {
-  children: React.ReactNode;
-  initialDemoMode: boolean;
-}) {
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(initialDemoMode);
-  const [demoProfile, setDemoProfile] = useState<UserProfile>(DEFAULT_DEMO_PROFILE);
-  const [sessionError, setSessionError] = useState<SessionErrorInfo | null>(null);
-
-  const handleToggleDemoMode = useCallback((enable?: boolean) => {
-    setIsDemoMode((prev) => (typeof enable === 'boolean' ? enable : !prev));
-    setSessionError(null);
-  }, []);
+function DemoAuthProvider({ children }: { children: React.ReactNode }) {
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_DEMO_PROFILE);
 
   const handleSetDemoProfileField = useCallback(
     <K extends keyof UserProfile>(field: K, value: UserProfile[K]) => {
-      setDemoProfile((prev) => ({
+      setProfile((prev) => ({
         ...prev,
         [field]: value,
       }));
@@ -269,37 +186,19 @@ function FallbackAuthProvider({
     []
   );
 
-  const handleLogin = useCallback(() => {
-    // If not in demo mode and user tries to log in without a valid Privy App ID
-    if (!isValidPrivyAppId(ENV.PRIVY_APP_ID)) {
-      setSessionError({
-        type: 'server',
-        message:
-          'Live login requires a valid 25-character Privy App ID in VITE_PRIVY_APP_ID. You can test all features right now in Demo Mode.',
-      });
-      return;
-    }
-  }, []);
-
-  const handleLogout = useCallback(async () => {
-    setIsDemoMode(false);
-    setSessionError(null);
-  }, []);
-
   const value: AuthContextType = {
-    isDemoMode,
-    hasPrivyConfigured: false,
+    isDemoMode: true,
+    hasPrivyConfigured: isValidPrivyAppId(ENV.PRIVY_APP_ID),
     isPrivyReady: true,
-    isAuthenticated: isDemoMode,
+    isAuthenticated: true,
     isLoadingSession: false,
-    sessionError,
-    profile: isDemoMode ? demoProfile : null,
-    embeddedWalletAddress: isDemoMode ? demoProfile.wallet_address : null,
-    userEmail: isDemoMode ? demoProfile.email_hint : null,
-    login: handleLogin,
-    logout: handleLogout,
+    sessionError: null,
+    profile,
+    embeddedWalletAddress: profile.wallet_address,
+    userEmail: profile.email_hint,
+    login: () => {},
+    logout: async () => {},
     retrySession: () => {},
-    toggleDemoMode: handleToggleDemoMode,
     setDemoProfileField: handleSetDemoProfileField,
   };
 
@@ -307,25 +206,37 @@ function FallbackAuthProvider({
 }
 
 /**
- * Main Auth Provider wrapping with PrivyProvider only if appId is strictly valid
+ * Minimal screen when VITE_DEMO_MODE is not "true" and VITE_PRIVY_APP_ID is missing/invalid
+ */
+function ConfigurationMissingScreen() {
+  return (
+    <div className="min-h-screen bg-[#F7F8FA] flex flex-col items-center justify-center p-6 text-center">
+      <div className="max-w-md w-full space-y-2">
+        <h1 className="text-base font-bold text-[#0A0B0D]">Configuration missing</h1>
+        <p className="text-sm text-[#3B4455]">This app is missing VITE_PRIVY_APP_ID.</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Main Auth Provider entrypoint
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const hasValidPrivyAppId = isValidPrivyAppId(ENV.PRIVY_APP_ID);
-  const initialDemoMode = ENV.DEMO_MODE_DEFAULT;
-
-  if (!hasValidPrivyAppId) {
-    return (
-      <FallbackAuthProvider initialDemoMode={initialDemoMode}>
-        {children}
-      </FallbackAuthProvider>
-    );
+  // 1. Strict demo mode check
+  if (ENV.IS_DEMO_MODE) {
+    return <DemoAuthProvider>{children}</DemoAuthProvider>;
   }
 
+  // 2. Missing configuration check
+  if (ENV.IS_CONFIG_MISSING) {
+    return <ConfigurationMissingScreen />;
+  }
+
+  // 3. Live Privy provider
   return (
     <PrivyProvider appId={ENV.PRIVY_APP_ID} config={privyConfig}>
-      <PrivyConnectedAuthConsumer initialDemoMode={initialDemoMode}>
-        {children}
-      </PrivyConnectedAuthConsumer>
+      <PrivyConnectedAuthConsumer>{children}</PrivyConnectedAuthConsumer>
     </PrivyProvider>
   );
 }
