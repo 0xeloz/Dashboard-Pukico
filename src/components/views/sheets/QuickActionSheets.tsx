@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Send,
 } from 'lucide-react';
+import { useBalance } from '../../../context/BalanceContext';
 import type { UserProfile } from '../../../types';
 
 interface SendSheetContentProps {
@@ -58,7 +59,7 @@ export function SendSheetContent({ onClose }: SendSheetContentProps) {
       <button
         type="button"
         onClick={onClose}
-        className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-[#0052FF] hover:bg-[#0042D6] text-white transition-colors cursor-pointer active:scale-[0.98]"
+        className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-[#0052FF] hover:bg-[#0042D6] text-white transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
       >
         Got it
       </button>
@@ -100,10 +101,10 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
       await navigator.clipboard.writeText(text);
       if (type === 'address') {
         setCopiedAddress(true);
-        setTimeout(() => setCopiedAddress(false), 2000);
+        setTimeout(() => setCopiedAddress(false), 1500);
       } else {
         setCopiedId(true);
-        setTimeout(() => setCopiedId(false), 2000);
+        setTimeout(() => setCopiedId(false), 1500);
       }
     } catch {
       const input = document.createElement('input');
@@ -114,10 +115,10 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
       document.body.removeChild(input);
       if (type === 'address') {
         setCopiedAddress(true);
-        setTimeout(() => setCopiedAddress(false), 2000);
+        setTimeout(() => setCopiedAddress(false), 1500);
       } else {
         setCopiedId(true);
-        setTimeout(() => setCopiedId(false), 2000);
+        setTimeout(() => setCopiedId(false), 1500);
       }
     }
   };
@@ -161,18 +162,18 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
           <button
             type="button"
             onClick={() => handleCopy(formattedPukicoId, 'id')}
-            className="px-2.5 py-1 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-medium text-[#0A0B0D] flex items-center gap-1 transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-medium text-[#0A0B0D] flex items-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
           >
             {copiedId ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-[#047857]" />
-                <span className="text-[#047857]">Copied</span>
-              </>
+              <span className="inline-flex items-center gap-1 text-[#047857] transition-opacity duration-150">
+                <Check className="w-3.5 h-3.5" />
+                <span>Copied</span>
+              </span>
             ) : (
-              <>
+              <span className="inline-flex items-center gap-1 transition-opacity duration-150">
                 <Copy className="w-3.5 h-3.5" />
                 <span>Copy</span>
-              </>
+              </span>
             )}
           </button>
         </div>
@@ -192,18 +193,18 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
           <button
             type="button"
             onClick={() => handleCopy(profile.wallet_address, 'address')}
-            className="px-2.5 py-1 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-medium text-[#0A0B0D] flex items-center gap-1 transition-colors cursor-pointer"
+            className="px-2.5 py-1 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-medium text-[#0A0B0D] flex items-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
           >
             {copiedAddress ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-[#047857]" />
-                <span className="text-[#047857]">Copied</span>
-              </>
+              <span className="inline-flex items-center gap-1 text-[#047857] transition-opacity duration-150">
+                <Check className="w-3.5 h-3.5" />
+                <span>Copied</span>
+              </span>
             ) : (
-              <>
+              <span className="inline-flex items-center gap-1 transition-opacity duration-150">
                 <Copy className="w-3.5 h-3.5" />
                 <span>Copy</span>
-              </>
+              </span>
             )}
           </button>
         </div>
@@ -225,8 +226,8 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
 
 interface FaucetSheetContentProps {
   walletAddress: string;
-  onRefreshBalance: () => Promise<void> | void;
-  isRefreshing: boolean;
+  onRefreshBalance?: () => Promise<void> | void;
+  isRefreshing?: boolean;
   isDemoMode?: boolean;
 }
 
@@ -237,12 +238,16 @@ export function FaucetSheetContent({
   isDemoMode = false,
 }: FaucetSheetContentProps) {
   const [copied, setCopied] = useState(false);
+  const balanceCtx = useBalance();
+
+  const handleRefresh = onRefreshBalance ?? balanceCtx.refresh;
+  const isRefreshingActive = isRefreshing ?? balanceCtx.refreshing;
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(walletAddress);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
       input.value = walletAddress;
@@ -251,7 +256,7 @@ export function FaucetSheetContent({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 1500);
     }
   };
 
@@ -276,18 +281,18 @@ export function FaucetSheetContent({
         <button
           type="button"
           onClick={handleCopy}
-          className="mt-1.5 py-1.5 px-3 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          className="mt-1.5 py-1.5 px-3 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center justify-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
         >
           {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-[#047857]" />
-              <span className="text-[#047857]">Copied</span>
-            </>
+            <span className="inline-flex items-center gap-1.5 text-[#047857] transition-opacity duration-150">
+              <Check className="w-3.5 h-3.5" />
+              <span>Copied</span>
+            </span>
           ) : (
-            <>
+            <span className="inline-flex items-center gap-1.5 transition-opacity duration-150">
               <Copy className="w-3.5 h-3.5" />
               <span>Copy Address</span>
-            </>
+            </span>
           )}
         </button>
       </div>
@@ -309,7 +314,7 @@ export function FaucetSheetContent({
           href="https://faucet.circle.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
         >
           <span>Open faucet</span>
           <ExternalLink className="w-3.5 h-3.5" />
@@ -329,12 +334,12 @@ export function FaucetSheetContent({
         </p>
         <button
           type="button"
-          onClick={onRefreshBalance}
-          disabled={isRefreshing}
-          className="inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0052FF] transition-colors cursor-pointer disabled:opacity-50"
+          onClick={handleRefresh}
+          disabled={isRefreshingActive}
+          className="inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0052FF] transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] disabled:opacity-50"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-          <span>{isRefreshing ? 'Updating balance...' : 'Refresh balance'}</span>
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingActive ? 'animate-spin' : ''}`} />
+          <span>{isRefreshingActive ? 'Updating balance...' : 'Refresh balance'}</span>
         </button>
       </div>
 

@@ -28,9 +28,9 @@ export function LoginView() {
               className="w-full h-full object-contain rounded-2xl"
             />
           ) : (
-            <div className="w-full h-full rounded-2xl bg-[#0052FF] flex items-center justify-center text-white font-bold text-2xl tracking-tight">
-              P
-            </div>
+            <span className="text-2xl font-bold text-[#0052FF] tracking-tight">
+              Pukico
+            </span>
           )}
         </div>
 

@@ -32,7 +32,7 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
     try {
       await navigator.clipboard.writeText(walletAddress);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
       input.value = walletAddress;
@@ -41,7 +41,7 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 1500);
     }
   };
 
@@ -52,7 +52,7 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
         <button
           type="button"
           onClick={onBack}
-          className="w-10 h-10 rounded-2xl border border-[#E5E7EB] bg-white text-[#3B4455] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] flex items-center justify-center transition-all active:scale-[0.98] cursor-pointer"
+          className="w-10 h-10 rounded-2xl border border-[#E5E7EB] bg-white text-[#3B4455] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] flex items-center justify-center transition-transform duration-[var(--dur-tap)] active:scale-[0.97] cursor-pointer"
           aria-label="Back to home"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -101,18 +101,18 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
             <button
               type="button"
               onClick={handleCopy}
-              className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center gap-1.5 transition-colors cursor-pointer active:scale-[0.98]"
+              className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
             >
               {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-[#047857]" />
-                  <span className="text-[#047857]">Copied</span>
-                </>
+                <span className="inline-flex items-center gap-1.5 text-[#047857] transition-opacity duration-150">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Copied</span>
+                </span>
               ) : (
-                <>
+                <span className="inline-flex items-center gap-1.5 transition-opacity duration-150">
                   <Copy className="w-3.5 h-3.5" />
                   <span>Copy Address</span>
-                </>
+                </span>
               )}
             </button>
           </div>

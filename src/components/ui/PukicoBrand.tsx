@@ -1,59 +1,5 @@
 import React from 'react';
 
-interface PukicoLogoProps {
-  className?: string;
-  size?: number;
-  color?: string;
-}
-
-/**
- * Pukico brandmark icon (SVG)
- * Modern geometric monogram emblem representing Pukico
- */
-export function PukicoLogo({ className = 'w-6 h-6', size, color = 'currentColor' }: PukicoLogoProps) {
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      style={size ? { width: size, height: size } : undefined}
-      aria-hidden="true"
-    >
-      {/* Outer rounded container shape */}
-      <rect width="100" height="100" rx="30" fill={color} />
-      {/* Stylized P emblem in contrast */}
-      <path
-        d="M32 25H56C67.0457 25 76 33.9543 76 45C76 56.0457 67.0457 65 56 65H46V75H32V25Z"
-        fill="white"
-        fillOpacity="0.95"
-      />
-      <circle cx="54" cy="45" r="8" fill={color} />
-    </svg>
-  );
-}
-
-/**
- * Monochromatic white Pukico emblem for watermark / overlay
- */
-export function PukicoWatermark({ className = 'w-32 h-32' }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden="true"
-    >
-      <path
-        d="M20 15H58C73.464 15 86 27.536 86 43C86 58.464 73.464 71 58 71H42V85H20V15Z"
-        fill="white"
-      />
-      <circle cx="56" cy="43" r="14" fill="#0052FF" />
-    </svg>
-  );
-}
-
 /**
  * Generic testnet network indicator icon
  * (Strictly generic node icon, no third-party branding)

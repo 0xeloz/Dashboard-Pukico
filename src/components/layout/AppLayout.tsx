@@ -24,6 +24,16 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+const TAB_INDEX_MAP: Record<ActiveTab, number> = {
+  home: 0,
+  receive: 0,
+  friends: 1,
+  discover: 2,
+  history: 3,
+  settings: 4,
+  dev: 4,
+};
+
 export function AppLayout({
   currentTab,
   onTabChange,
@@ -36,7 +46,6 @@ export function AppLayout({
   const [copiedId, setCopiedId] = useState(false);
 
   // Pukico ID validation: only a-z, 0-9, and _
-  const hasPukicoId = Boolean(profile.pukico_id && profile.pukico_id.trim().length > 0);
   const sanitizedId = profile.pukico_id ? profile.pukico_id.replace(/^@/, '').replace(/[^a-zA-Z0-9_]/g, '') : '';
   const formattedPukicoId = sanitizedId ? `@${sanitizedId}` : '';
 
@@ -45,7 +54,7 @@ export function AppLayout({
     try {
       await navigator.clipboard.writeText(formattedPukicoId);
       setCopiedId(true);
-      setTimeout(() => setCopiedId(false), 2000);
+      setTimeout(() => setCopiedId(false), 1500);
     } catch {
       const input = document.createElement('input');
       input.value = formattedPukicoId;
@@ -54,14 +63,14 @@ export function AppLayout({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopiedId(true);
-      setTimeout(() => setCopiedId(false), 2000);
+      setTimeout(() => setCopiedId(false), 1500);
     }
   };
 
   const isAdmin = profile.role === 'admin';
-
-  // Demo banner: tampil jika isDemoMode true (hapus pengecekan nilai 'Mock')
   const showDemoBanner = isDemoMode;
+  const activeIndex = TAB_INDEX_MAP[currentTab] ?? 0;
+  const isDiscover = currentTab === 'discover';
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] flex flex-col lg:flex-row text-[#3B4455]">
@@ -77,9 +86,9 @@ export function AppLayout({
           {/* Brand Wordmark & Identity */}
           <div className="flex items-center gap-2.5 px-3 py-3 mb-6">
             <img
-              src="/pukico-logo-white.png"
+              src="/pukico-logo.png"
               alt="Pukico"
-              className="w-[22px] h-[22px] object-contain invert brightness-0"
+              className="w-[22px] h-[22px] object-contain"
             />
             <span className="font-semibold text-base text-[#0A0B0D] tracking-tight">
               Pukico
@@ -95,7 +104,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('home')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'home' || currentTab === 'receive'
                   ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
                   : 'text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6]'
@@ -109,7 +118,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('friends')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'friends'
                   ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
                   : 'text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6]'
@@ -123,7 +132,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('discover')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'discover'
                   ? 'bg-[#0052FF] text-white'
                   : 'bg-[#EEF4FF] text-[#0052FF] hover:bg-[#E0ECFF]'
@@ -142,7 +151,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('history')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'history'
                   ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
                   : 'text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6]'
@@ -156,7 +165,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('settings')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'settings'
                   ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
                   : 'text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6]'
@@ -171,7 +180,7 @@ export function AppLayout({
               <button
                 type="button"
                 onClick={() => onTabChange('dev')}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                   currentTab === 'dev'
                     ? 'bg-[#0A0B0D] text-white font-semibold'
                     : 'text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6]'
@@ -221,34 +230,34 @@ export function AppLayout({
             <div className="h-9 px-3 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-2">
               {formattedPukicoId ? (
                 <>
-                  {/* Titik hijau #10B981 (hanya saat session sukses) */}
                   <span className="w-2 h-2 rounded-full bg-[#10B981] shrink-0" />
-                  {/* @pukico_id dalam monospace teks 13px */}
                   <span className="font-mono text-[13px] font-semibold text-[#0A0B0D] select-all">
                     {formattedPukicoId}
                   </span>
-                  {/* Tombol Copy kecil dengan umpan balik "Copied" */}
                   <button
                     type="button"
                     onClick={handleCopyId}
-                    className="p-1 text-[#5B6577] hover:text-[#0A0B0D] rounded-full transition-colors cursor-pointer"
+                    className="p-1 text-[#5B6577] hover:text-[#0A0B0D] rounded-full transition-transform duration-[var(--dur-tap)] active:scale-[0.97] cursor-pointer"
                     aria-label={copiedId ? 'Copied' : 'Copy Pukico ID'}
                     title={copiedId ? 'Copied!' : 'Copy Pukico ID'}
                   >
                     {copiedId ? (
-                      <Check className="w-3.5 h-3.5 text-[#047857]" />
+                      <span className="inline-flex items-center text-[#047857] transition-opacity duration-150">
+                        <Check className="w-3.5 h-3.5" />
+                      </span>
                     ) : (
-                      <Copy className="w-3.5 h-3.5" />
+                      <span className="inline-flex items-center transition-opacity duration-150">
+                        <Copy className="w-3.5 h-3.5" />
+                      </span>
                     )}
                   </button>
                   {copiedId && (
-                    <span className="text-[10px] font-semibold text-[#047857] animate-fade-up">
+                    <span className="text-[10px] font-semibold text-[#047857] transition-opacity duration-150">
                       Copied
                     </span>
                   )}
                 </>
               ) : (
-                /* Jika pukico_id kosong, tampilkan "No Pukico ID yet" tanpa tombol copy dan tanpa titik hijau */
                 <span className="text-[13px] font-medium text-[#5B6577]">
                   No Pukico ID yet
                 </span>
@@ -257,21 +266,17 @@ export function AppLayout({
 
             {/* Kanan: pil jaringan tinggi 36px, lalu lonceng 36x36 (jarak 8px) */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* Network Pill tinggi 36px */}
               <div className="h-9 px-2.5 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-1.5">
-                {/* Generic blue circle network icon */}
                 <GenericNetworkIcon className="w-3.5 h-3.5 shrink-0" />
-                {/* Chip "Testnet" (latar #EEF4FF, teks #0052FF) */}
                 <span className="px-1.5 py-0.5 rounded-full bg-[#EEF4FF] text-[#0052FF] text-[11px] font-semibold">
                   Testnet
                 </span>
               </div>
 
-              {/* Lonceng 36x36 bulat */}
               <button
                 type="button"
                 onClick={() => setIsNotificationOpen(true)}
-                className="w-9 h-9 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] transition-all cursor-pointer active:scale-[0.98]"
+                className="w-9 h-9 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
                 aria-label="Notifications"
               >
                 <Bell className="w-4 h-4" />
@@ -286,7 +291,7 @@ export function AppLayout({
         </main>
       </div>
 
-      {/* NAVBAR BAWAH (Mobile floating pill, tinggi 60px, radius 30px, margin sisi 12px, grid 5 kolom sama lebar, tiap sel 44px) */}
+      {/* NAVBAR BAWAH (Mobile floating pill dengan SATU pil meluncur 52x34) */}
       <div
         className={`lg:hidden fixed bottom-3 left-0 right-0 z-40 px-3 pointer-events-none pb-safe transition-all duration-250 ease-out ${
           isSheetOpen || isNotificationOpen
@@ -298,32 +303,39 @@ export function AppLayout({
       >
         <nav
           aria-label="Mobile Navigation"
-          className="w-full max-w-[560px] mx-auto h-[60px] rounded-[30px] bg-white border border-[#E5E7EB] shadow-[0_4px_16px_rgba(10,11,13,0.06)] grid grid-cols-5 items-center pointer-events-auto"
+          className="relative w-full max-w-[560px] mx-auto h-[60px] rounded-[30px] bg-white border border-[#E5E7EB] shadow-[0_4px_16px_rgba(10,11,13,0.06)] grid grid-cols-5 items-center pointer-events-auto"
+          style={{ '--active-idx': activeIndex } as React.CSSProperties}
         >
+          {/* SATU pil 52x34 (#EEF4FF, rounded-full) meluncur ke kolom item aktif */}
+          <div
+            aria-hidden="true"
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-1/5 flex items-center justify-center pointer-events-none"
+            style={{
+              transform: `translate3d(calc(var(--active-idx) * 100%), -50%, 0)`,
+              opacity: isDiscover ? 0 : 1,
+              transitionProperty: 'transform, opacity',
+              transitionDuration: 'var(--dur-base)',
+              transitionTimingFunction: 'var(--ease-out)',
+            }}
+          >
+            <div className="w-[52px] h-[34px] rounded-full bg-[#EEF4FF]" />
+          </div>
+
           {/* 1. Home */}
           <div className="h-[44px] flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('home')}
               aria-label="Home"
-              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer active:scale-[0.98]"
+              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
-              <span
-                className={`absolute inset-0 rounded-full transition-colors duration-150 ${
-                  currentTab === 'home' || currentTab === 'receive'
-                    ? 'bg-[#EEF4FF]'
-                    : 'bg-transparent'
-                }`}
-              />
-              <span
-                className={`relative z-10 transition-colors duration-150 ${
+              <LayoutGrid
+                className={`w-5 h-5 transition-colors duration-150 ${
                   currentTab === 'home' || currentTab === 'receive'
                     ? 'text-[#0052FF]'
                     : 'text-[#5B6577] hover:text-[#0A0B0D]'
                 }`}
-              >
-                <LayoutGrid className="w-5 h-5" />
-              </span>
+              />
             </button>
           </div>
 
@@ -333,22 +345,15 @@ export function AppLayout({
               type="button"
               onClick={() => onTabChange('friends')}
               aria-label="Friends"
-              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer active:scale-[0.98]"
+              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
-              <span
-                className={`absolute inset-0 rounded-full transition-colors duration-150 ${
-                  currentTab === 'friends' ? 'bg-[#EEF4FF]' : 'bg-transparent'
-                }`}
-              />
-              <span
-                className={`relative z-10 transition-colors duration-150 ${
+              <Users
+                className={`w-5 h-5 transition-colors duration-150 ${
                   currentTab === 'friends'
                     ? 'text-[#0052FF]'
                     : 'text-[#5B6577] hover:text-[#0A0B0D]'
                 }`}
-              >
-                <Users className="w-5 h-5" />
-              </span>
+              />
             </button>
           </div>
 
@@ -359,7 +364,11 @@ export function AppLayout({
                 type="button"
                 onClick={() => onTabChange('discover')}
                 aria-label="Discover"
-                className="w-11 h-11 rounded-full bg-[#0052FF] hover:bg-[#0042D6] text-white flex items-center justify-center ring-4 ring-white shadow-md shadow-[#0052FF]/25 cursor-pointer active:scale-[0.95]"
+                className={`w-11 h-11 rounded-full bg-[#0052FF] hover:bg-[#0042D6] text-white flex items-center justify-center shadow-md shadow-[#0052FF]/25 cursor-pointer transition-all duration-150 active:scale-[0.97] ${
+                  isDiscover
+                    ? 'ring-4 ring-[#EEF4FF] ring-offset-2 ring-offset-white'
+                    : 'ring-4 ring-white'
+                }`}
               >
                 <Compass className="w-5 h-5" />
               </button>
@@ -372,22 +381,15 @@ export function AppLayout({
               type="button"
               onClick={() => onTabChange('history')}
               aria-label="History"
-              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer active:scale-[0.98]"
+              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
-              <span
-                className={`absolute inset-0 rounded-full transition-colors duration-150 ${
-                  currentTab === 'history' ? 'bg-[#EEF4FF]' : 'bg-transparent'
-                }`}
-              />
-              <span
-                className={`relative z-10 transition-colors duration-150 ${
+              <History
+                className={`w-5 h-5 transition-colors duration-150 ${
                   currentTab === 'history'
                     ? 'text-[#0052FF]'
                     : 'text-[#5B6577] hover:text-[#0A0B0D]'
                 }`}
-              >
-                <History className="w-5 h-5" />
-              </span>
+              />
             </button>
           </div>
 
@@ -397,24 +399,15 @@ export function AppLayout({
               type="button"
               onClick={() => onTabChange('settings')}
               aria-label="Settings"
-              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer active:scale-[0.98]"
+              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
-              <span
-                className={`absolute inset-0 rounded-full transition-colors duration-150 ${
-                  currentTab === 'settings' || currentTab === 'dev'
-                    ? 'bg-[#EEF4FF]'
-                    : 'bg-transparent'
-                }`}
-              />
-              <span
-                className={`relative z-10 transition-colors duration-150 ${
+              <Settings
+                className={`w-5 h-5 transition-colors duration-150 ${
                   currentTab === 'settings' || currentTab === 'dev'
                     ? 'text-[#0052FF]'
                     : 'text-[#5B6577] hover:text-[#0A0B0D]'
                 }`}
-              >
-                <Settings className="w-5 h-5" />
-              </span>
+              />
             </button>
           </div>
         </nav>

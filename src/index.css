@@ -2,6 +2,11 @@
 
 :root {
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-tap: 90ms;
+  --dur-fast: 150ms;
+  --dur-base: 240ms;
+  --dur-sheet: 320ms;
 }
 
 @theme {
@@ -17,6 +22,10 @@
 }
 
 @layer base {
+  html, body {
+    overscroll-behavior-y: contain;
+  }
+
   body {
     font-family: var(--font-sans);
     color: #3B4455;
@@ -37,6 +46,38 @@
 
 .sheet-body-pad {
   padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Tab active entrance animation */
+@keyframes tabEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-view-active {
+  animation: tabEnter var(--dur-base) var(--ease-out) forwards;
+}
+
+/* Balance number update animation */
+@keyframes balanceChange {
+  from {
+    opacity: 0.4;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-balance-change {
+  animation: balanceChange 200ms var(--ease-out) forwards;
 }
 
 /* Keyframes for Bottom Sheet & Modal animations */
@@ -123,18 +164,29 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-tap: 0.01ms;
+    --dur-fast: 0.01ms;
+    --dur-base: 0.01ms;
+    --dur-sheet: 0.01ms;
+  }
+
   *, ::before, ::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+    transform: none !important;
   }
+
   .animate-sheet-in,
   .animate-sheet-out,
   .animate-backdrop-in,
   .animate-backdrop-out,
   .animate-modal-in,
-  .animate-modal-out {
+  .animate-modal-out,
+  .tab-view-active,
+  .animate-balance-change {
     animation: none !important;
   }
 }
