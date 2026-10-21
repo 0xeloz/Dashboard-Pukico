@@ -1,0 +1,6 @@
+{
+  "name": "Pukico Dashboard",
+  "description": "Pukico mobile-first web dashboard on Base Sepolia testnet with Privy authentication, profile management, and testnet balance tracker.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
