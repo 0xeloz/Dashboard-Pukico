@@ -10,6 +10,7 @@ export function LoginView() {
     retrySession,
     isLoadingSession,
     sessionError,
+    isDemoMode,
   } = useAuth();
 
   const [logoFailed, setLogoFailed] = useState(false);
@@ -106,6 +107,11 @@ export function LoginView() {
               <Mail className="w-4 h-4" />
               <span>Continue with email</span>
             </button>
+            {isDemoMode && (
+              <p className="text-xs text-[#5B6577] text-center pt-1 font-medium">
+                Demo preview active · Instant one-click sign in
+              </p>
+            )}
           </div>
         )}
 

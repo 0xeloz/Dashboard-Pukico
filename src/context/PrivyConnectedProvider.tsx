@@ -1,0 +1,150 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { PrivyProvider, usePrivy, useWallets } from '@privy-io/react-auth';
+import { baseSepolia } from 'viem/chains';
+import { ENV } from '../lib/config';
+import { syncSessionWithSupabase, SessionSyncError } from '../lib/sessionApi';
+import type { UserProfile, SessionErrorInfo } from '../types';
+import { AuthContext, type AuthContextType } from './AuthContext';
+
+const privyConfig = {
+  loginMethods: ['email' as const],
+  embeddedWallets: {
+    ethereum: {
+      createOnLogin: 'users-without-wallets' as const,
+    },
+  },
+  defaultChain: baseSepolia,
+  supportedChains: [baseSepolia],
+  appearance: {
+    theme: 'light' as const,
+    accentColor: '#0052FF' as `#${string}`,
+    logo: '/pukico-logo.png',
+  },
+};
+
+function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode }) {
+  const {
+    ready: isPrivyReady,
+    authenticated: isPrivyAuthenticated,
+    user: privyUser,
+    login: privyLogin,
+    logout: privyLogout,
+    getAccessToken,
+  } = usePrivy();
+
+  const { wallets } = useWallets();
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState<boolean>(false);
+  const [sessionError, setSessionError] = useState<SessionErrorInfo | null>(null);
+
+  const embeddedWallet =
+    wallets.find((w) => w.walletClientType === 'privy' || w.connectorType === 'embedded') ||
+    wallets[0] ||
+    privyUser?.linkedAccounts.find((a) => a.type === 'wallet' && a.walletClientType === 'privy') ||
+    privyUser?.wallet;
+
+  const embeddedWalletAddress = embeddedWallet ? embeddedWallet.address : null;
+
+  const userEmail =
+    privyUser?.email?.address ||
+    (privyUser?.linkedAccounts.find((a) => a.type === 'email') as { address?: string } | undefined)?.address ||
+    null;
+
+  const runSessionSync = useCallback(async () => {
+    if (!isPrivyAuthenticated) return;
+
+    if (!userEmail) {
+      setSessionError({
+        type: 'unauthorized',
+        message: 'No email found in Privy account. Please sign in with email.',
+      });
+      return;
+    }
+
+    if (!embeddedWalletAddress) {
+      setIsLoadingSession(true);
+      return;
+    }
+
+    setIsLoadingSession(true);
+    setSessionError(null);
+
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new SessionSyncError('unauthorized', 'Unable to retrieve Privy access token.');
+      }
+
+      const syncedProfile = await syncSessionWithSupabase({
+        privyToken: token,
+        email: userEmail,
+        walletAddress: embeddedWalletAddress,
+      });
+
+      setProfile(syncedProfile);
+      setSessionError(null);
+    } catch (err) {
+      if (err instanceof SessionSyncError) {
+        setSessionError({
+          type: err.type,
+          message: err.message,
+          statusCode: err.statusCode,
+        });
+      } else {
+        setSessionError({
+          type: 'server',
+          message: err instanceof Error ? err.message : 'Unknown session error occurred.',
+        });
+      }
+      setProfile(null);
+    } finally {
+      setIsLoadingSession(false);
+    }
+  }, [isPrivyAuthenticated, userEmail, embeddedWalletAddress, getAccessToken]);
+
+  useEffect(() => {
+    if (isPrivyAuthenticated && isPrivyReady) {
+      if (embeddedWalletAddress && userEmail) {
+        runSessionSync();
+      }
+    } else {
+      setProfile(null);
+      setSessionError(null);
+      setIsLoadingSession(false);
+    }
+  }, [isPrivyAuthenticated, isPrivyReady, embeddedWalletAddress, userEmail, runSessionSync]);
+
+  const value: AuthContextType = {
+    isDemoMode: false,
+    hasPrivyConfigured: true,
+    isPrivyReady,
+    isAuthenticated: isPrivyAuthenticated && !!profile,
+    isLoadingSession,
+    sessionError,
+    profile,
+    embeddedWalletAddress,
+    userEmail,
+    login: () => {
+      setSessionError(null);
+      privyLogin();
+    },
+    logout: async () => {
+      setProfile(null);
+      setSessionError(null);
+      await privyLogout();
+    },
+    retrySession: runSessionSync,
+    setDemoProfileField: () => {},
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export default function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <PrivyProvider appId={ENV.PRIVY_APP_ID} config={privyConfig}>
+      <PrivyConnectedAuthConsumer>{children}</PrivyConnectedAuthConsumer>
+    </PrivyProvider>
+  );
+}

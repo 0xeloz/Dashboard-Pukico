@@ -13,9 +13,11 @@ export function isValidPrivyAppId(id: unknown): id is string {
 }
 
 const rawPrivyAppId = (import.meta.env.VITE_PRIVY_APP_ID || '').toString().trim();
-// Demo Mode only active if VITE_DEMO_MODE is strictly "true"
-const isDemoModeActive = import.meta.env.VITE_DEMO_MODE === 'true';
 const isValidAppId = isValidPrivyAppId(rawPrivyAppId);
+const demoEnvVar = (import.meta.env.VITE_DEMO_MODE || '').toString().toLowerCase();
+
+// Demo Mode is active if explicitly set to "true", or as an automatic mock fallback when Privy App ID is not configured (unless explicitly disabled with VITE_DEMO_MODE="false")
+const isDemoModeActive = demoEnvVar === 'true' || (!isValidAppId && demoEnvVar !== 'false');
 
 export const ENV = {
   PRIVY_APP_ID: rawPrivyAppId,

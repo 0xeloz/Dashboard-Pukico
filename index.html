@@ -14,7 +14,31 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // AI Studio Iframe Compatibility
+      try {
+        if (typeof window !== 'undefined') {
+          var originalFetch = window.fetch ? window.fetch.bind(window) : undefined;
+          if (originalFetch) {
+            var activeFetch = originalFetch;
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return activeFetch; },
+              set: function(fn) { if (typeof fn === 'function') activeFetch = fn; },
+              configurable: true,
+              enumerable: true
+            });
+          }
+          if (typeof window.ethereum === 'undefined') {
+            window.ethereum = {
+              isMetaMask: false,
+              request: function() { return Promise.reject(new Error('No injected wallet in iframe')); },
+              on: function() {},
+              removeListener: function() {}
+            };
+          }
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
