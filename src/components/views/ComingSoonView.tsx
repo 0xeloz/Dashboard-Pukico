@@ -9,7 +9,7 @@ interface ComingSoonViewProps {
 const TAB_CONFIG: Record<string, { title: string; desc: string; icon: React.ElementType }> = {
   friends: {
     title: 'Friends',
-    desc: 'Social contacts, ENS/Pukico lookups, and P2P transfers are scheduled for Phase 2.',
+    desc: 'Social contacts, ENS/Pukico lookups, and P2P transfers are coming soon.',
     icon: Users,
   },
   discover: {

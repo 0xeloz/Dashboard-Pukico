@@ -28,15 +28,18 @@ export function BottomSheet({
   const [dragOffset, setDragOffset] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  // Animation states: mounted and closing
+  // Animation states: mounted, entered, and closing
   const [mounted, setMounted] = useState<boolean>(open);
   const [closing, setClosing] = useState<boolean>(false);
+  const [entered, setEntered] = useState<boolean>(false);
 
   // Manage mounted / closing states
   useEffect(() => {
     if (open) {
       setMounted(true);
       setClosing(false);
+      setEntered(false);
+      setDragOffset(0);
     } else if (mounted) {
       // Check prefers-reduced-motion
       const prefersReducedMotion =
@@ -46,11 +49,13 @@ export function BottomSheet({
       if (prefersReducedMotion) {
         setMounted(false);
         setClosing(false);
+        setEntered(false);
       } else {
         setClosing(true);
         const timer = setTimeout(() => {
           setMounted(false);
           setClosing(false);
+          setEntered(false);
         }, 220);
         return () => clearTimeout(timer);
       }
@@ -156,14 +161,37 @@ export function BottomSheet({
 
   const handleTouchEnd = () => {
     setIsDragging(false);
-    if (dragOffset > 80) {
-      onCloseRef.current();
-    }
-    setDragOffset(0);
     dragStartRef.current = null;
+    if (dragOffset > 80) {
+      // Dragged more than 80px: close sheet.
+      // Do NOT reset dragOffset to 0 before unmount so sheetOut keyframe starts from --drag-y.
+      onCloseRef.current();
+    } else {
+      // Released less than 80px: reset dragOffset to 0.
+      // Since entered is true, it uses transition-transform 200ms to return to 0 without replaying entrance animation.
+      setDragOffset(0);
+    }
+  };
+
+  const handleAnimationEnd = (e: React.AnimationEvent) => {
+    if (e.target === sheetRef.current && !closing) {
+      setEntered(true);
+    }
   };
 
   if (!mounted) return null;
+
+  let animClass = '';
+  if (isDragging) {
+    animClass = '';
+  } else if (closing) {
+    animClass = 'animate-sheet-out lg:animate-modal-out';
+  } else if (!entered) {
+    animClass = 'animate-sheet-in lg:animate-modal-in';
+  } else {
+    // After entrance animation ends, use 200ms transition for smooth return when released
+    animClass = 'transition-transform duration-200 ease-out';
+  }
 
   return (
     <div
@@ -172,9 +200,9 @@ export function BottomSheet({
       aria-modal="true"
       aria-labelledby="bottom-sheet-title"
     >
-      {/* Backdrop */}
+      {/* Backdrop (tanpa blur, cukup bg rgba(10,11,13,0.4)) */}
       <div
-        className={`fixed inset-0 bg-[#0A0B0D]/40 backdrop-blur-xs ${
+        className={`fixed inset-0 bg-[#0A0B0D]/40 ${
           closing ? 'animate-backdrop-out' : 'animate-backdrop-in'
         }`}
         onClick={() => onCloseRef.current()}
@@ -185,15 +213,11 @@ export function BottomSheet({
       <div
         ref={sheetRef}
         tabIndex={-1}
-        className={`relative z-10 w-full max-w-[560px] max-h-[85dvh] bg-white rounded-t-[24px] lg:rounded-[24px] shadow-2xl flex flex-col overflow-hidden outline-none ${
-          isDragging
-            ? ''
-            : closing
-            ? 'animate-sheet-out lg:animate-modal-out'
-            : 'animate-sheet-in lg:animate-modal-in'
-        }`}
+        onAnimationEnd={handleAnimationEnd}
+        className={`relative z-10 w-full max-w-[560px] max-h-[85dvh] bg-white rounded-t-[24px] lg:rounded-[24px] shadow-2xl flex flex-col overflow-hidden outline-none ${animClass}`}
         style={{
-          transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
+          transform: dragOffset > 0 && !closing ? `translateY(${dragOffset}px)` : undefined,
+          ['--drag-y' as any]: `${dragOffset}px`,
         }}
       >
         {/* Mobile Drag Handle Bar */}
@@ -226,8 +250,8 @@ export function BottomSheet({
           </button>
         </div>
 
-        {/* Scrollable Content Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 pb-safe space-y-4">
+        {/* Scrollable Content Body (menggunakan sheet-body-pad, bukan pb-safe) */}
+        <div className="flex-1 overflow-y-auto px-5 pt-5 sheet-body-pad space-y-4">
           {children}
         </div>
       </div>

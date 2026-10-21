@@ -26,7 +26,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const DEFAULT_DEMO_PROFILE: UserProfile = {
   privy_did: 'did:privy:clx9a8b7c6d5e4f3a2b1c0d9e',
   email_hint: 'andika***@pukico.xyz',
-  wallet_address: '0x35B16F71C941A5a50785B8Fa85B9E7804100bF20',
+  wallet_address: '0x1111111111111111111111111111111111111111',
   wallet_verified: true,
   pukico_id: 'andika',
   role: 'admin',

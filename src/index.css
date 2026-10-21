@@ -35,6 +35,10 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+.sheet-body-pad {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
 /* Keyframes for Bottom Sheet & Modal animations */
 @keyframes sheetIn {
   from {
@@ -47,7 +51,7 @@
 
 @keyframes sheetOut {
   from {
-    transform: translateY(0);
+    transform: translateY(var(--drag-y, 0px));
   }
   to {
     transform: translateY(100%);

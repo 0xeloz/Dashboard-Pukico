@@ -448,6 +448,7 @@ export function HomeView({
           walletAddress={profile.wallet_address}
           onRefreshBalance={fetchAllBalances}
           isRefreshing={isRefreshingAll}
+          isDemoMode={isDemoMode}
         />
       </BottomSheet>
     </div>

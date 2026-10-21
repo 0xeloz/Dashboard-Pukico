@@ -6,9 +6,10 @@ import { CHAIN_CONFIG } from '../../lib/config';
 interface ReceiveViewProps {
   walletAddress: string;
   onBack: () => void;
+  isDemoMode?: boolean;
 }
 
-export function ReceiveView({ walletAddress, onBack }: ReceiveViewProps) {
+export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: ReceiveViewProps) {
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
@@ -89,7 +90,14 @@ export function ReceiveView({ walletAddress, onBack }: ReceiveViewProps) {
         {/* Address and Copy - teks monospace dengan tombol copy dan garis pemisah tipis */}
         <div className="py-3 border-b border-[#E5E7EB] text-left">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-medium text-[#5B6577]">Your Wallet Address</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-[#5B6577]">Your Wallet Address</span>
+              {(isDemoMode || walletAddress === '0x1111111111111111111111111111111111111111') && (
+                <span className="text-[10px] font-semibold text-[#B45309] bg-[#FFFBEB] px-1.5 py-0.5 rounded border border-[#FDE68A]">
+                  Example address
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleCopy}

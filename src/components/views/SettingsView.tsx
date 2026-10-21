@@ -112,7 +112,14 @@ export function SettingsView({
                 <Wallet className="w-5 h-5 text-[#0052FF]" />
               </div>
               <div>
-                <div className="text-xs text-[#5B6577] font-medium">Embedded Wallet</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-[#5B6577] font-medium">Embedded Wallet</span>
+                  {(isDemoMode || profile.wallet_address === '0x1111111111111111111111111111111111111111') && (
+                    <span className="text-[10px] font-semibold text-[#B45309] bg-[#FFFBEB] px-1.5 py-0.5 rounded border border-[#FDE68A]">
+                      Example address
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-[#5B6577]">Ethereum (Base Sepolia)</div>
               </div>
             </div>

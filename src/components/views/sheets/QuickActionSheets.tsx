@@ -29,7 +29,7 @@ export function SendSheetContent({ onClose }: SendSheetContentProps) {
         <div>
           <h3 className="text-sm font-semibold text-[#0A0B0D]">Sending by Pukico ID is coming soon.</h3>
           <p className="text-xs text-[#5B6577] mt-0.5 leading-relaxed">
-            Direct peer-to-peer transfers using human-readable Pukico IDs will be activated in Phase 2.
+            Direct transfers using Pukico IDs are coming soon.
           </p>
         </div>
       </div>
@@ -181,7 +181,14 @@ export function ReceiveSheetContent({ profile, isDemoMode }: ReceiveSheetContent
       {/* Alamat 0x sebagai teks monospace dengan tombol Copy (gaya datar) */}
       <div className="py-2.5 border-b border-[#E5E7EB] text-left">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[11px] font-medium text-[#5B6577]">Wallet Address</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-[#5B6577]">Wallet Address</span>
+            {(isDemoMode || profile.wallet_address === '0x1111111111111111111111111111111111111111') && (
+              <span className="text-[10px] font-semibold text-[#B45309] bg-[#FFFBEB] px-1.5 py-0.5 rounded border border-[#FDE68A]">
+                Example address
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => handleCopy(profile.wallet_address, 'address')}
@@ -220,12 +227,14 @@ interface FaucetSheetContentProps {
   walletAddress: string;
   onRefreshBalance: () => Promise<void> | void;
   isRefreshing: boolean;
+  isDemoMode?: boolean;
 }
 
 export function FaucetSheetContent({
   walletAddress,
   onRefreshBalance,
   isRefreshing,
+  isDemoMode = false,
 }: FaucetSheetContentProps) {
   const [copied, setCopied] = useState(false);
 
@@ -255,6 +264,11 @@ export function FaucetSheetContent({
             1
           </span>
           <span className="text-sm font-semibold text-[#0A0B0D]">Copy your address</span>
+          {(isDemoMode || walletAddress === '0x1111111111111111111111111111111111111111') && (
+            <span className="text-[10px] font-semibold text-[#B45309] bg-[#FFFBEB] px-1.5 py-0.5 rounded border border-[#FDE68A]">
+              Example address
+            </span>
+          )}
         </div>
         <div className="font-mono text-xs text-[#0A0B0D] break-all py-1 select-all font-medium">
           {walletAddress}
@@ -289,7 +303,7 @@ export function FaucetSheetContent({
           </span>
         </div>
         <p className="text-xs text-[#5B6577] mb-2.5">
-          Paste your address on Circle&apos;s faucet to request 10.00 test USDC.
+          Paste your address on Circle&apos;s faucet to request test USDC.
         </p>
         <a
           href="https://faucet.circle.com"

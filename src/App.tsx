@@ -80,6 +80,7 @@ function Dashboard() {
           <ReceiveView
             walletAddress={profile.wallet_address}
             onBack={() => handleTabChange('home')}
+            isDemoMode={isDemoMode}
           />
         )}
 
