@@ -94,10 +94,18 @@ export function HomeView({
   const receiveButtonRef = useRef<HTMLButtonElement>(null);
   const faucetButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Notify parent of sheet open/close state to hide bottom navbar
+  // Notify parent of sheet open/close state to smoothly hide/show bottom navbar
   useEffect(() => {
-    onSheetOpenChange?.(Boolean(activeSheet));
+    if (activeSheet) {
+      onSheetOpenChange?.(true);
+    }
   }, [activeSheet, onSheetOpenChange]);
+
+  const handleSheetClosed = () => {
+    if (!activeSheet) {
+      onSheetOpenChange?.(false);
+    }
+  };
 
   const toggleBalanceVisibility = () => {
     setIsBalanceHidden((prev) => {
@@ -512,32 +520,43 @@ export function HomeView({
       <BottomSheet
         open={activeSheet === 'send'}
         onClose={() => setActiveSheet(null)}
+        onClosed={handleSheetClosed}
         title="Send"
         triggerRef={sendButtonRef}
       >
-        <SendSheetContent onClose={() => setActiveSheet(null)} />
+        <SendSheetContent
+          onClose={() => setActiveSheet(null)}
+          isDemoMode={isDemoMode}
+        />
       </BottomSheet>
 
       {/* Sheet 2: Receive */}
       <BottomSheet
         open={activeSheet === 'receive'}
         onClose={() => setActiveSheet(null)}
+        onClosed={handleSheetClosed}
         title="Receive"
         triggerRef={receiveButtonRef}
       >
-        <ReceiveSheetContent profile={profile} isDemoMode={isDemoMode} />
+        <ReceiveSheetContent
+          profile={profile}
+          isDemoMode={isDemoMode}
+          onClose={() => setActiveSheet(null)}
+        />
       </BottomSheet>
 
       {/* Sheet 3: Get test USDC */}
       <BottomSheet
         open={activeSheet === 'faucet'}
         onClose={() => setActiveSheet(null)}
+        onClosed={handleSheetClosed}
         title="Get test USDC"
         triggerRef={faucetButtonRef}
       >
         <FaucetSheetContent
           walletAddress={profile.wallet_address}
           isDemoMode={isDemoMode}
+          onClose={() => setActiveSheet(null)}
         />
       </BottomSheet>
     </div>

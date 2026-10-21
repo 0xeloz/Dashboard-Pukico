@@ -211,7 +211,7 @@ export function AppLayout({
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 pb-24 lg:pb-8">
+      <div className="flex-1 flex flex-col min-w-0 pb-[calc(88px+env(safe-area-inset-bottom,0px))] lg:pb-8">
         {/* Banner demo tipis: tinggi 28px, teks 12px, hanya dirender saat VITE_DEMO_MODE=true */}
         {showDemoBanner && (
           <div
@@ -322,92 +322,102 @@ export function AppLayout({
           </div>
 
           {/* 1. Home */}
-          <div className="h-[44px] flex items-center justify-center">
+          <div className="h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('home')}
               aria-label="Home"
-              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
+              className="w-full h-full flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
-              <LayoutGrid
-                className={`w-5 h-5 transition-colors duration-150 ${
-                  currentTab === 'home' || currentTab === 'receive'
-                    ? 'text-[#0052FF]'
-                    : 'text-[#5B6577] hover:text-[#0A0B0D]'
-                }`}
-              />
+              <div className="w-[52px] h-[34px] flex items-center justify-center">
+                <LayoutGrid
+                  className={`w-5 h-5 transition-colors duration-150 ${
+                    currentTab === 'home' || currentTab === 'receive'
+                      ? 'text-[#0052FF]'
+                      : 'text-[#5B6577] hover:text-[#0A0B0D]'
+                  }`}
+                />
+              </div>
             </button>
           </div>
 
           {/* 2. Friends */}
-          <div className="h-[44px] flex items-center justify-center">
+          <div className="h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('friends')}
               aria-label="Friends"
-              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
+              className="w-full h-full flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
-              <Users
-                className={`w-5 h-5 transition-colors duration-150 ${
-                  currentTab === 'friends'
-                    ? 'text-[#0052FF]'
-                    : 'text-[#5B6577] hover:text-[#0A0B0D]'
-                }`}
-              />
+              <div className="w-[52px] h-[34px] flex items-center justify-center">
+                <Users
+                  className={`w-5 h-5 transition-colors duration-150 ${
+                    currentTab === 'friends'
+                      ? 'text-[#0052FF]'
+                      : 'text-[#5B6577] hover:text-[#0A0B0D]'
+                  }`}
+                />
+              </div>
             </button>
           </div>
 
           {/* 3. Discover (Tombol tengah 44px, terangkat 10px di atas pil di dalam sel ke-3) */}
-          <div className="relative h-[44px] flex items-center justify-center">
-            <div className="absolute -top-2.5 flex items-center justify-center">
-              <button
-                type="button"
-                onClick={() => onTabChange('discover')}
-                aria-label="Discover"
-                className={`w-11 h-11 rounded-full bg-[#0052FF] hover:bg-[#0042D6] text-white flex items-center justify-center shadow-md shadow-[#0052FF]/25 cursor-pointer transition-all duration-150 active:scale-[0.97] ${
+          <div className="relative h-full flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => onTabChange('discover')}
+              aria-label="Discover"
+              className="w-full h-full flex items-center justify-center cursor-pointer"
+            >
+              <div
+                className={`w-11 h-11 -mt-4 rounded-full bg-[#0052FF] hover:bg-[#0042D6] text-white flex items-center justify-center shadow-md shadow-[#0052FF]/25 cursor-pointer transition-all duration-150 active:scale-[0.97] ${
                   isDiscover
                     ? 'ring-4 ring-[#EEF4FF] ring-offset-2 ring-offset-white'
                     : 'ring-4 ring-white'
                 }`}
               >
                 <Compass className="w-5 h-5" />
-              </button>
-            </div>
+              </div>
+            </button>
           </div>
 
           {/* 4. History */}
-          <div className="h-[44px] flex items-center justify-center">
+          <div className="h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('history')}
               aria-label="History"
-              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
+              className="w-full h-full flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
-              <History
-                className={`w-5 h-5 transition-colors duration-150 ${
-                  currentTab === 'history'
-                    ? 'text-[#0052FF]'
-                    : 'text-[#5B6577] hover:text-[#0A0B0D]'
-                }`}
-              />
+              <div className="w-[52px] h-[34px] flex items-center justify-center">
+                <History
+                  className={`w-5 h-5 transition-colors duration-150 ${
+                    currentTab === 'history'
+                      ? 'text-[#0052FF]'
+                      : 'text-[#5B6577] hover:text-[#0A0B0D]'
+                  }`}
+                />
+              </div>
             </button>
           </div>
 
           {/* 5. Settings */}
-          <div className="h-[44px] flex items-center justify-center">
+          <div className="h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('settings')}
               aria-label="Settings"
-              className="relative w-[52px] h-[34px] flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
+              className="w-full h-full flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
-              <Settings
-                className={`w-5 h-5 transition-colors duration-150 ${
-                  currentTab === 'settings' || currentTab === 'dev'
-                    ? 'text-[#0052FF]'
-                    : 'text-[#5B6577] hover:text-[#0A0B0D]'
-                }`}
-              />
+              <div className="w-[52px] h-[34px] flex items-center justify-center">
+                <Settings
+                  className={`w-5 h-5 transition-colors duration-150 ${
+                    currentTab === 'settings' || currentTab === 'dev'
+                      ? 'text-[#0052FF]'
+                      : 'text-[#5B6577] hover:text-[#0A0B0D]'
+                  }`}
+                />
+              </div>
             </button>
           </div>
         </nav>

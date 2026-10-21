@@ -139,6 +139,30 @@
   }
 }
 
+@utility animate-sheet-in {
+  animation: sheetIn 320ms var(--ease-out) forwards;
+}
+
+@utility animate-sheet-out {
+  animation: sheetOut 220ms ease-in forwards;
+}
+
+@utility animate-backdrop-in {
+  animation: backdropIn 200ms ease-out forwards;
+}
+
+@utility animate-backdrop-out {
+  animation: backdropOut 200ms ease-in forwards;
+}
+
+@utility animate-modal-in {
+  animation: modalIn 200ms var(--ease-out) forwards;
+}
+
+@utility animate-modal-out {
+  animation: modalOut 180ms ease-in forwards;
+}
+
 .animate-sheet-in {
   animation: sheetIn 320ms var(--ease-out) forwards;
 }

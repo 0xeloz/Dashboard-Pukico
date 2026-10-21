@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface BottomSheetProps {
   open: boolean;
   onClose: () => void;
+  onClosed?: () => void;
   title: string;
   triggerRef?: React.RefObject<HTMLElement | null>;
   children: React.ReactNode;
@@ -12,13 +14,17 @@ interface BottomSheetProps {
 export function BottomSheet({
   open,
   onClose,
+  onClosed,
   title,
   triggerRef,
   children,
 }: BottomSheetProps) {
-  // Store onClose in a ref so useEffect does NOT re-run when parent re-renders
+  // Store onClose in a ref so effects do NOT re-run when parent re-renders
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
 
   const triggerRefCurrent = useRef(triggerRef);
   triggerRefCurrent.current = triggerRef;
@@ -32,16 +38,20 @@ export function BottomSheet({
   const [mounted, setMounted] = useState<boolean>(open);
   const [closing, setClosing] = useState<boolean>(false);
   const [entered, setEntered] = useState<boolean>(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Manage mounted / closing states
   useEffect(() => {
     if (open) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
       setMounted(true);
       setClosing(false);
       setEntered(false);
       setDragOffset(0);
     } else if (mounted) {
-      // Check prefers-reduced-motion
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -50,66 +60,42 @@ export function BottomSheet({
         setMounted(false);
         setClosing(false);
         setEntered(false);
+        onClosedRef.current?.();
       } else {
         setClosing(true);
-        const timer = setTimeout(() => {
+        closeTimerRef.current = setTimeout(() => {
           setMounted(false);
           setClosing(false);
           setEntered(false);
+          closeTimerRef.current = null;
+          onClosedRef.current?.();
         }, 220);
-        return () => clearTimeout(timer);
       }
     }
+
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+    };
   }, [open, mounted]);
 
-  // Effect for history state, scroll locking, and focus trap - DEPENDS ONLY ON [open]
+  // Lock body scroll and manage focus
   useEffect(() => {
     if (!open) return;
 
-    let pushed = false;
     const previousActiveElement = (triggerRefCurrent.current?.current || document.activeElement) as HTMLElement | null;
-
-    // 1. Lock scroll
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    // 2. History push
-    try {
-      window.history.pushState({ pukicoSheet: true }, '');
-      pushed = true;
-    } catch {
-      // ignore
-    }
-
-    // 3. Popstate listener
-    const handlePopState = () => {
-      pushed = false;
-      onCloseRef.current();
-    };
-    window.addEventListener('popstate', handlePopState);
-
-    // 4. Focus sheet
     const focusTimer = setTimeout(() => {
       sheetRef.current?.focus();
     }, 50);
 
-    // Cleanup: called only when open changes from true to false or unmount
     return () => {
       clearTimeout(focusTimer);
       document.body.style.overflow = originalOverflow;
-      window.removeEventListener('popstate', handlePopState);
-
-      // ONLY if pushed is still true (closed via X, backdrop, Escape, or "Got it", NOT via Back)
-      if (pushed) {
-        pushed = false;
-        try {
-          window.history.back();
-        } catch {
-          // ignore
-        }
-      }
-
-      previousActiveElement?.focus();
+      previousActiveElement?.focus?.();
     };
   }, [open]);
 
@@ -163,12 +149,10 @@ export function BottomSheet({
     setIsDragging(false);
     dragStartRef.current = null;
     if (dragOffset > 80) {
-      // Dragged more than 80px: close sheet.
-      // Do NOT reset dragOffset to 0 before unmount so sheetOut keyframe starts from --drag-y.
+      // Dragged more than 80px: close sheet without resetting dragOffset so exit starts from dragged position
       onCloseRef.current();
     } else {
-      // Released less than 80px: reset dragOffset to 0.
-      // Since entered is true, it uses transition-transform 200ms to return to 0 without replaying entrance animation.
+      // Released less than 80px: return smoothly to 0
       setDragOffset(0);
     }
   };
@@ -179,7 +163,7 @@ export function BottomSheet({
     }
   };
 
-  if (!mounted) return null;
+  if (!mounted || typeof document === 'undefined') return null;
 
   let animClass = '';
   if (isDragging) {
@@ -189,18 +173,17 @@ export function BottomSheet({
   } else if (!entered) {
     animClass = 'animate-sheet-in lg:animate-modal-in';
   } else {
-    // After entrance animation ends, use 200ms transition for smooth return when released
     animClass = 'transition-transform duration-200 ease-out';
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end lg:items-center justify-center"
+      className="fixed inset-0 z-50 flex items-end lg:items-center justify-center pointer-events-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="bottom-sheet-title"
     >
-      {/* Backdrop (tanpa blur, cukup bg rgba(10,11,13,0.4)) */}
+      {/* Backdrop (bg rgba(10,11,13,0.4)) */}
       <div
         className={`fixed inset-0 bg-[#0A0B0D]/40 ${
           closing ? 'animate-backdrop-out' : 'animate-backdrop-in'
@@ -214,6 +197,7 @@ export function BottomSheet({
         ref={sheetRef}
         tabIndex={-1}
         onAnimationEnd={handleAnimationEnd}
+        onClick={(e) => e.stopPropagation()}
         className={`relative z-10 w-full max-w-[560px] max-h-[85dvh] bg-white rounded-t-[24px] lg:rounded-[24px] shadow-2xl flex flex-col overflow-hidden outline-none ${animClass}`}
         style={{
           transform: dragOffset > 0 && !closing ? `translateY(${dragOffset}px)` : undefined,
@@ -243,18 +227,19 @@ export function BottomSheet({
           <button
             type="button"
             onClick={() => onCloseRef.current()}
-            className="w-9 h-9 rounded-full hover:bg-[#EEF4FF] text-[#5B6577] hover:text-[#0A0B0D] flex items-center justify-center transition-colors cursor-pointer active:scale-[0.95]"
+            className="w-9 h-9 rounded-full hover:bg-[#EEF4FF] text-[#5B6577] hover:text-[#0A0B0D] flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Scrollable Content Body (menggunakan sheet-body-pad, bukan pb-safe) */}
+        {/* Scrollable Content Body */}
         <div className="flex-1 overflow-y-auto px-5 pt-5 sheet-body-pad space-y-4">
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
