@@ -220,11 +220,10 @@ export function HomeView({
       {(pullDistance > 0 || isPullRefreshing || isPullReturning) && (
         <div
           aria-hidden="true"
-          className={`absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none flex items-center justify-center ${
-            isPullReturning ? 'transition-all duration-200 ease-[var(--ease-out)]' : ''
-          }`}
+          className="absolute inset-x-0 pointer-events-none flex items-center justify-center z-20 overflow-hidden"
           style={{
-            top: `${Math.max(-42, pullDistance - 44)}px`,
+            top: `-${pullDistance}px`,
+            height: `${pullDistance}px`,
             opacity: isPullRefreshing ? 1 : Math.min(1, pullDistance / 48),
           }}
         >
@@ -320,19 +319,13 @@ export function HomeView({
           )}
         </div>
 
-        {/* Bawah: Chip "Testnet · Base Sepolia" plus spinner 14px saat refresh latar */}
+        {/* Bawah: Chip "Testnet · Base Sepolia" */}
         <div className="relative z-10 flex items-center justify-between gap-2 pt-1 text-xs">
           <div className="flex items-center gap-2">
             <div className="h-7 px-2.5 rounded-full border border-white/30 text-xs font-medium text-white flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-white" />
               <span>Testnet · Base Sepolia</span>
             </div>
-            {refreshing && (
-              <RefreshCw
-                className="w-3.5 h-3.5 text-white/90 animate-[spin_700ms_linear_infinite] shrink-0"
-                aria-label="Updating balance in background"
-              />
-            )}
           </div>
 
           <span className="text-[#DCE8FF] text-xs font-medium">No monetary value</span>

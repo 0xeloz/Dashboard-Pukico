@@ -309,9 +309,9 @@ export function AppLayout({
           {/* SATU pil 52x34 (#EEF4FF, rounded-full) meluncur ke kolom item aktif */}
           <div
             aria-hidden="true"
-            className="absolute left-0 top-1/2 -translate-y-1/2 w-1/5 flex items-center justify-center pointer-events-none"
+            className="absolute inset-y-0 left-0 w-1/5 flex items-center justify-center pointer-events-none"
             style={{
-              transform: `translate3d(calc(var(--active-idx) * 100%), -50%, 0)`,
+              transform: `translate3d(calc(var(--active-idx) * 100%), 0, 0)`,
               opacity: isDiscover ? 0 : 1,
               transitionProperty: 'transform, opacity',
               transitionDuration: 'var(--dur-base)',

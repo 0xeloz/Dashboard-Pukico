@@ -186,6 +186,17 @@ export function SendSheetContent({ onClose, isDemoMode = false }: SendSheetConte
   // ACTIVE SEND FORM
   return (
     <div className="space-y-4">
+      {/* Notice header */}
+      <div className="flex items-start gap-2.5 text-[#0052FF]">
+        <Send className="w-5 h-5 shrink-0 mt-0.5" />
+        <div>
+          <h3 className="text-sm font-semibold text-[#0A0B0D]">Sending by Pukico ID is coming soon.</h3>
+          <p className="text-xs text-[#5B6577] mt-0.5 leading-relaxed">
+            Soon you&apos;ll send to a username like @andika instead of a 0x address.
+          </p>
+        </div>
+      </div>
+
       {/* 1. ASSET PICKER */}
       <div>
         <label className="block text-xs font-semibold text-[#5B6577] uppercase tracking-wider mb-2">
@@ -416,7 +427,7 @@ export function SendSheetContent({ onClose, isDemoMode = false }: SendSheetConte
 
       {/* Direct transfers note */}
       <p className="text-[11px] text-[#5B6577] text-center leading-relaxed">
-        Direct transfers using Pukico IDs are active on Base Sepolia testnet.
+        Soon you&apos;ll send to a username like @andika instead of a 0x address.
       </p>
     </div>
   );

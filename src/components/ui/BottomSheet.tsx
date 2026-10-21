@@ -82,7 +82,7 @@ export function BottomSheet({
 
   // Lock body scroll and manage focus
   useEffect(() => {
-    if (!open) return;
+    if (!mounted) return;
 
     const previousActiveElement = (triggerRefCurrent.current?.current || document.activeElement) as HTMLElement | null;
     const originalOverflow = document.body.style.overflow;
@@ -97,7 +97,7 @@ export function BottomSheet({
       document.body.style.overflow = originalOverflow;
       previousActiveElement?.focus?.();
     };
-  }, [open]);
+  }, [mounted]);
 
   // Escape key & tab key trap
   useEffect(() => {
