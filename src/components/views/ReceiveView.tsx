@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { ArrowLeft, Copy, Check, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { useT } from '../../i18n';
 import { CHAIN_CONFIG } from '../../lib/config';
 
 interface ReceiveViewProps {
@@ -10,6 +11,7 @@ interface ReceiveViewProps {
 }
 
 export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: ReceiveViewProps) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
@@ -53,48 +55,48 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
           type="button"
           onClick={onBack}
           className="w-10 h-10 rounded-2xl border border-[#E5E7EB] bg-white text-[#3B4455] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] flex items-center justify-center transition-transform duration-[var(--dur-tap)] active:scale-[0.97] cursor-pointer"
-          aria-label="Back to home"
+          aria-label={t.sheets.receive.backToHome}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-[#0A0B0D]">Receive Assets</h1>
-          <p className="text-xs text-[#5B6577]">Base Sepolia Testnet</p>
+          <h1 className="text-xl font-bold text-[#0A0B0D]">{t.sheets.receive.receiveAssets}</h1>
+          <p className="text-xs text-[#5B6577]">{t.common.testnetBaseSepolia}</p>
         </div>
       </div>
 
-      {/* Main Content (Datar langsung di latar #F7F8FA tanpa kartu, border keliling, atau shadow) */}
+      {/* Main Content */}
       <div className="space-y-4 text-center">
         {/* Network indicator chip */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EEF4FF] text-[#0052FF]">
           <span className="w-2 h-2 rounded-full bg-[#0052FF]" />
-          <span className="text-xs font-semibold">Network: {CHAIN_CONFIG.name}</span>
+          <span className="text-xs font-semibold">{t.sheets.receive.networkPrefix} {CHAIN_CONFIG.name}</span>
           <span className="text-xs text-[#5B6577]">· ID {CHAIN_CONFIG.id}</span>
         </div>
 
-        {/* QR Code Container - tanpa bingkai */}
+        {/* QR Code Container */}
         <div className="flex justify-center my-3">
           {qrDataUrl ? (
             <img
               src={qrDataUrl}
-              alt="Wallet QR Code"
+              alt={t.sheets.receive.walletQrCode}
               className="w-48 h-48 sm:w-56 sm:h-56 mx-auto block"
             />
           ) : (
             <div className="w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center text-xs text-[#5B6577]">
-              Generating QR...
+              {t.sheets.receive.generatingQr}
             </div>
           )}
         </div>
 
-        {/* Address and Copy - teks monospace dengan tombol copy dan garis pemisah tipis */}
+        {/* Address and Copy */}
         <div className="py-3 border-b border-[#E5E7EB] text-left">
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-[#5B6577]">Your Wallet Address</span>
+              <span className="text-xs font-medium text-[#5B6577]">{t.sheets.receive.yourWalletAddress}</span>
               {(isDemoMode || walletAddress === '0x1111111111111111111111111111111111111111') && (
                 <span className="text-[10px] font-semibold text-[#B45309] bg-[#FFFBEB] px-1.5 py-0.5 rounded border border-[#FDE68A]">
-                  Example address
+                  {t.common.exampleAddress}
                 </span>
               )}
             </div>
@@ -106,12 +108,12 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
               {copied ? (
                 <span className="inline-flex items-center gap-1.5 text-[#047857] transition-opacity duration-150">
                   <Check className="w-3.5 h-3.5" />
-                  <span>Copied</span>
+                  <span>{t.common.copied}</span>
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 transition-opacity duration-150">
                   <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Address</span>
+                  <span>{t.common.copyAddress}</span>
                 </span>
               )}
             </button>
@@ -121,22 +123,23 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
           </div>
         </div>
 
-        {/* Mandatory Warning - teks amber dengan ikon tanpa kotak berlatar */}
+        {/* Mandatory Warning */}
         <div className="pt-1 flex items-start gap-2.5 text-left text-xs text-[#B45309]">
           <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
           <p className="leading-relaxed">
-            Only send Base Sepolia testnet assets (USDC, ETH) to this address. Sending mainnet funds or assets from other networks will result in permanent loss.
+            {t.sheets.receive.warningLong}
           </p>
         </div>
 
-        {/* Testnet Faucet Note - teks datar */}
+        {/* Testnet Faucet Note */}
         <div className="pt-2 flex items-center gap-2.5 text-left text-xs text-[#5B6577]">
           <ShieldCheck className="w-4 h-4 text-[#047857] shrink-0" />
           <p>
-            Need test ETH or USDC? You can request funds from public Base Sepolia faucets.
+            {t.sheets.receive.needTestFunds}
           </p>
         </div>
       </div>
     </div>
   );
 }
+

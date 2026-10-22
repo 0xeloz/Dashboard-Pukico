@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Copy, Check, LogOut, Shield, Mail, Wallet, Network, UserCheck } from 'lucide-react';
+import { LanguagePopover } from '../ui/LanguagePopover';
+import { useT } from '../../i18n';
 import { CHAIN_CONFIG } from '../../lib/config';
 import type { UserProfile } from '../../types';
 
@@ -18,11 +20,12 @@ export function SettingsView({
   onToggleRole,
   onTogglePukicoId,
 }: SettingsViewProps) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const maskEmail = (emailStr: string) => {
-    if (!emailStr) return 'No email associated';
+    if (!emailStr) return t.settings.noEmail;
     const parts = emailStr.split('@');
     if (parts.length !== 2) return emailStr;
     const [user, domain] = parts;
@@ -63,26 +66,29 @@ export function SettingsView({
   return (
     <div className="w-full max-w-[560px] mx-auto px-4 sm:px-6 py-2 space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-xl font-bold text-[#0A0B0D]">Account Settings</h1>
-        <p className="text-xs text-[#5B6577]">Profile and connection details</p>
+        <h1 className="text-xl font-bold text-[#0A0B0D]">{t.settings.title}</h1>
+        <p className="text-xs text-[#5B6577]">{t.settings.subtitle}</p>
       </div>
 
       <div className="divide-y divide-[#E5E7EB] border-b border-[#E5E7EB]">
-        {/* Pukico ID Item (Read-only as required: no edit or delete option) */}
+        {/* Language selector popover - 52px flat row */}
+        <LanguagePopover />
+
+        {/* Pukico ID Item */}
         <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
               <UserCheck className="w-5 h-5 text-[#0052FF]" />
             </div>
             <div>
-              <div className="text-xs text-[#5B6577] font-medium">Pukico ID</div>
+              <div className="text-xs text-[#5B6577] font-medium">{t.settings.pukicoId}</div>
               <div className="font-semibold text-sm text-[#0A0B0D] font-mono">
-                {profile.pukico_id ? `@${profile.pukico_id.replace(/^@/, '')}` : 'No Pukico ID yet'}
+                {profile.pukico_id ? `@${profile.pukico_id.replace(/^@/, '')}` : t.common.noPukicoId}
               </div>
             </div>
           </div>
           <span className="text-[11px] text-[#5B6577] italic sm:text-right">
-            ID assignment is managed automatically
+            {t.settings.pukicoIdAuto}
           </span>
         </div>
 
@@ -93,14 +99,14 @@ export function SettingsView({
               <Mail className="w-5 h-5 text-[#0052FF]" />
             </div>
             <div className="min-w-0">
-              <div className="text-xs text-[#5B6577] font-medium">Email Address</div>
+              <div className="text-xs text-[#5B6577] font-medium">{t.settings.emailAddress}</div>
               <div className="font-medium text-sm text-[#0A0B0D] truncate">
                 {displayEmail}
               </div>
             </div>
           </div>
           <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#047857] font-semibold shrink-0">
-            Verified
+            {t.common.verified}
           </span>
         </div>
 
@@ -113,10 +119,10 @@ export function SettingsView({
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-[#5B6577] font-medium">Embedded Wallet</span>
+                  <span className="text-xs text-[#5B6577] font-medium">{t.settings.embeddedWallet}</span>
                   {(isDemoMode || profile.wallet_address === '0x1111111111111111111111111111111111111111') && (
                     <span className="text-[10px] font-semibold text-[#B45309] bg-[#FFFBEB] px-1.5 py-0.5 rounded border border-[#FDE68A]">
-                      Example address
+                      {t.common.exampleAddress}
                     </span>
                   )}
                 </div>
@@ -131,12 +137,12 @@ export function SettingsView({
               {copied ? (
                 <span className="inline-flex items-center gap-1 text-[#047857] transition-opacity duration-150">
                   <Check className="w-3.5 h-3.5" />
-                  <span>Copied</span>
+                  <span>{t.common.copied}</span>
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 transition-opacity duration-150">
                   <Copy className="w-3.5 h-3.5" />
-                  <span>Copy</span>
+                  <span>{t.common.copy}</span>
                 </span>
               )}
             </button>
@@ -153,11 +159,13 @@ export function SettingsView({
               <Network className="w-5 h-5 text-[#0052FF]" />
             </div>
             <div>
-              <div className="text-xs text-[#5B6577] font-medium">Network</div>
+              <div className="text-xs text-[#5B6577] font-medium">{t.settings.network}</div>
               <div className="font-semibold text-sm text-[#0A0B0D]">{CHAIN_CONFIG.name}</div>
             </div>
           </div>
-          <span className="text-xs text-[#5B6577] font-mono font-medium">Chain ID: {CHAIN_CONFIG.id}</span>
+          <span className="text-xs text-[#5B6577] font-mono font-medium">
+            {t.settings.chainIdPrefix} {CHAIN_CONFIG.id}
+          </span>
         </div>
 
         {/* Role */}
@@ -167,8 +175,10 @@ export function SettingsView({
               <Shield className="w-5 h-5 text-[#0052FF]" />
             </div>
             <div>
-              <div className="text-xs text-[#5B6577] font-medium">Role</div>
-              <div className="font-semibold text-sm capitalize text-[#0A0B0D]">{profile.role}</div>
+              <div className="text-xs text-[#5B6577] font-medium">{t.settings.role}</div>
+              <div className="font-semibold text-sm capitalize text-[#0A0B0D]">
+                {profile.role === 'admin' ? t.settings.adminRole : t.settings.userRole}
+              </div>
             </div>
           </div>
           <span
@@ -178,19 +188,19 @@ export function SettingsView({
                 : 'bg-[#E5E7EB] text-[#3B4455]'
             }`}
           >
-            {profile.role === 'admin' ? 'Administrator' : 'Standard User'}
+            {profile.role === 'admin' ? t.settings.adminRole : t.settings.userRole}
           </span>
         </div>
       </div>
 
-      {/* Demo Mode Testing Toggles (Only in Demo Mode to test UI variants without database) */}
+      {/* Demo Mode Testing Toggles */}
       {isDemoMode && onToggleRole && onTogglePukicoId && (
         <div className="py-4 border-b border-[#E5E7EB]">
           <div className="text-[13px] font-semibold text-[#5B6577] mb-1">
-            Demo mode controls (preview only)
+            {t.settings.demoControls}
           </div>
           <p className="text-xs text-[#B45309] mb-3">
-            Test how the dashboard responds to different role permissions and Pukico ID states:
+            {t.settings.demoControlsDesc}
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -198,20 +208,20 @@ export function SettingsView({
               onClick={() => onToggleRole(profile.role === 'admin' ? 'user' : 'admin')}
               className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-[#92400E] hover:bg-[#FEF3C7] transition-colors cursor-pointer"
             >
-              Toggle Role: Currently {profile.role}
+              {t.settings.toggleRole} {profile.role}
             </button>
             <button
               type="button"
               onClick={() => onTogglePukicoId(!profile.pukico_id)}
               className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-[#92400E] hover:bg-[#FEF3C7] transition-colors cursor-pointer"
             >
-              Toggle Pukico ID: Currently {profile.pukico_id ? 'Assigned' : 'Empty'}
+              {t.settings.togglePukicoId} {profile.pukico_id ? t.settings.assigned : t.settings.empty}
             </button>
           </div>
         </div>
       )}
 
-      {/* Logout Action (Datar langsung di latar, tanpa kartu putih) */}
+      {/* Logout Action */}
       <div className="pt-2">
         <button
           type="button"
@@ -220,9 +230,10 @@ export function SettingsView({
           className="w-full py-3.5 px-4 rounded-xl font-medium text-sm text-[#B91C1C] bg-[#FEF2F2] hover:bg-[#FEE2E2] border border-[#FECACA] flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
         >
           <LogOut className="w-4 h-4" />
-          <span>{isLoggingOut ? 'Logging out...' : 'Log out'}</span>
+          <span>{isLoggingOut ? t.settings.loggingOut : t.settings.logOut}</span>
         </button>
       </div>
     </div>
   );
 }
+

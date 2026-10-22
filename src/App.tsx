@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { LangProvider } from './i18n';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BalanceProvider } from './context/BalanceContext';
 import { AppLayout } from './components/layout/AppLayout';
@@ -198,8 +199,11 @@ function Dashboard() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Dashboard />
-    </AuthProvider>
+    <LangProvider>
+      <AuthProvider>
+        <Dashboard />
+      </AuthProvider>
+    </LangProvider>
   );
 }
+

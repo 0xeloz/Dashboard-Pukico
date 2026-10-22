@@ -16,6 +16,7 @@ import {
   ReceiveSheetContent,
   FaucetSheetContent,
 } from './sheets/QuickActionSheets';
+import { useT } from '../../i18n';
 import type { UserProfile } from '../../types';
 
 interface HomeViewProps {
@@ -30,7 +31,7 @@ const DEMO_ACTIVITIES: ActivityItem[] = [
     id: 'demo-1',
     type: 'outgoing',
     targetId: 'rina',
-    timestamp: '31m ago',
+    timestamp: '31m',
     network: 'Base Sepolia',
     amount: '0.01',
     currency: 'ETH',
@@ -40,7 +41,7 @@ const DEMO_ACTIVITIES: ActivityItem[] = [
     id: 'demo-2',
     type: 'incoming',
     targetId: 'rina',
-    timestamp: '51m ago',
+    timestamp: '51m',
     network: 'Base Sepolia',
     amount: '0.02',
     currency: 'ETH',
@@ -57,8 +58,11 @@ export function HomeView({
   onNavigateToHistory,
   onSheetOpenChange,
 }: HomeViewProps) {
+  const { t, formatNumber } = useT();
+
   // Global SWR balances
   const { usdc, eth, refreshing, refresh } = useBalance();
+
 
   // Balance visibility state saved in localStorage
   const [isBalanceHidden, setIsBalanceHidden] = useState<boolean>(() => {
@@ -166,7 +170,7 @@ export function HomeView({
       // Threshold met: stop indicator at 48px
       setPullDistance(48);
       setIsPullRefreshing(true);
-      setLiveAnnouncement('Refreshing');
+      setLiveAnnouncement(t.home.refreshing);
 
       const startTime = Date.now();
       try {
@@ -175,7 +179,7 @@ export function HomeView({
         const elapsed = Date.now() - startTime;
         const remaining = Math.max(0, 600 - elapsed); // Hold for minimum 600ms
         setTimeout(() => {
-          setLiveAnnouncement('Updated');
+          setLiveAnnouncement(t.home.updated);
           setIsPullRefreshing(false);
           setIsPullReturning(true);
           setPullDistance(0);
@@ -240,9 +244,9 @@ export function HomeView({
         </div>
       )}
 
-      {/* 1. KARTU SALDO (Tinggi sekitar 150px, padding 20px, radius 24px, #0052FF solid) */}
+      {/* 1. KARTU SALDO */}
       <section
-        aria-label="Balance Summary"
+        aria-label={t.home.balanceSummaryAria}
         className="relative bg-[#0052FF] rounded-[24px] p-5 text-white overflow-hidden min-h-[150px] flex flex-col justify-between"
       >
         {/* Watermark: pukico-logo-white.png 120px, opasitas 0.08 di kanan bawah */}
@@ -257,7 +261,7 @@ export function HomeView({
           />
         </div>
 
-        {/* Baris Atas: Logo 22px plus teks Pukico 16px semibold dan tombol mata */}
+        {/* Baris Atas */}
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img
@@ -274,44 +278,44 @@ export function HomeView({
             type="button"
             onClick={toggleBalanceVisibility}
             className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/20 text-white flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
-            aria-label={isBalanceHidden ? 'Show balance' : 'Hide balance'}
+            aria-label={isBalanceHidden ? t.home.showBalance : t.home.hideBalance}
           >
             {isBalanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* Tengah: Saldo 30px bold dengan crossfade 150ms untuk sensor mata */}
+        {/* Tengah: Saldo */}
         <div className="relative z-10 my-auto py-1">
           {isUsdcInitialLoading ? (
             <div className="h-8 w-40 bg-white/20 rounded-lg animate-pulse" />
           ) : isUsdcError ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-white/90">Couldn&apos;t load balance</span>
+              <span className="text-xs font-medium text-white/90">{t.home.couldntLoadBalance}</span>
               <button
                 type="button"
                 onClick={() => refresh()}
                 className="px-2 py-0.5 text-xs font-semibold rounded-md bg-white text-[#0052FF] hover:bg-[#EEF4FF] transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
               >
-                Retry
+                {t.common.retry}
               </button>
             </div>
           ) : (
             <div className="flex flex-col">
               <div key={balanceAnimKey} className="animate-balance-change flex items-baseline gap-2">
                 <span className="text-[30px] font-bold tracking-tight text-white font-mono tabular-nums leading-tight transition-opacity duration-150">
-                  {isBalanceHidden ? '••••' : usdc.value ?? '0.00'}
+                  {isBalanceHidden ? '••••' : formatNumber(usdc.value, { minDecimals: 2, maxDecimals: 2 })}
                 </span>
                 <span className="text-base font-semibold text-white/80">USDC</span>
               </div>
               {usdc.error && usdc.value !== null && (
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[11px] text-[#FDE68A] font-medium">{usdc.error}</span>
+                  <span className="text-[11px] text-[#FDE68A] font-medium">{t.home.couldntRefresh}</span>
                   <button
                     type="button"
                     onClick={() => refresh()}
                     className="text-[11px] font-semibold text-white underline hover:no-underline cursor-pointer"
                   >
-                    Retry
+                    {t.common.retry}
                   </button>
                 </div>
               )}
@@ -324,16 +328,16 @@ export function HomeView({
           <div className="flex items-center gap-2">
             <div className="h-7 px-2.5 rounded-full border border-white/30 text-xs font-medium text-white flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-white" />
-              <span>Testnet · Base Sepolia</span>
+              <span>{t.common.testnetBaseSepolia}</span>
             </div>
           </div>
 
-          <span className="text-[#DCE8FF] text-xs font-medium">No monetary value</span>
+          <span className="text-[#DCE8FF] text-xs font-medium">{t.common.noMonetaryValue}</span>
         </div>
       </section>
 
-      {/* 2. AKSI CEPAT (Grid 3 kolom sama lebar, tile di tengah, 44x44 radius 14px, ikon 18px, label 13px weight 500 mt-1.5) */}
-      <section aria-label="Quick Actions">
+      {/* 2. AKSI CEPAT */}
+      <section aria-label={t.home.quickActionsAria}>
         <div className="grid grid-cols-3 w-full">
           {/* Action 1: Send */}
           <div className="flex flex-col items-center">
@@ -342,12 +346,12 @@ export function HomeView({
               type="button"
               onClick={() => setActiveSheet('send')}
               className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
-              aria-label="Send"
+              aria-label={t.home.send}
             >
               <Send className="w-[18px] h-[18px] text-[#0A0B0D]" />
             </button>
             <span className="text-[13px] font-medium text-[#0A0B0D] mt-1.5 whitespace-nowrap text-center">
-              Send
+              {t.home.send}
             </span>
           </div>
 
@@ -358,12 +362,12 @@ export function HomeView({
               type="button"
               onClick={() => setActiveSheet('receive')}
               className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
-              aria-label="Receive"
+              aria-label={t.home.receive}
             >
               <ArrowDownLeft className="w-[18px] h-[18px] text-[#0A0B0D]" />
             </button>
             <span className="text-[13px] font-medium text-[#0A0B0D] mt-1.5 whitespace-nowrap text-center">
-              Receive
+              {t.home.receive}
             </span>
           </div>
 
@@ -374,25 +378,25 @@ export function HomeView({
               type="button"
               onClick={() => setActiveSheet('faucet')}
               className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
-              aria-label="Get test USDC"
+              aria-label={t.home.getTestUsdc}
             >
               <Droplet className="w-[18px] h-[18px] text-[#0052FF]" />
             </button>
             <span className="text-[13px] font-medium text-[#0A0B0D] mt-1.5 whitespace-nowrap text-center">
-              Get test USDC
+              {t.home.getTestUsdc}
             </span>
           </div>
         </div>
       </section>
 
-      {/* 3. DAFTAR ASET (Stagger hanya pemuatan pertama sesi) */}
+      {/* 3. DAFTAR ASET */}
       <section
-        aria-label="Asset List"
+        aria-label={t.home.assetList}
         className={isInitialSession ? 'animate-fade-up [animation-delay:40ms]' : ''}
       >
         <div className="mb-2">
-          <h2 className="text-[18px] font-bold text-[#0A0B0D] leading-tight">Asset List</h2>
-          <p className="text-xs text-[#5B6577] mt-0.5">Assets on Base Sepolia</p>
+          <h2 className="text-[18px] font-bold text-[#0A0B0D] leading-tight">{t.home.assetList}</h2>
+          <p className="text-xs text-[#5B6577] mt-0.5">{t.home.assetsOnBaseSepolia}</p>
         </div>
 
         <div className="divide-y divide-[#E5E7EB] border-b border-[#E5E7EB]">
@@ -403,9 +407,9 @@ export function HomeView({
                 <UsdcTokenIcon className="w-6 h-6" />
               </div>
               <div className="min-w-0">
-                <div className="font-semibold text-[15px] text-[#0A0B0D]">USD Coin</div>
+                <div className="font-semibold text-[15px] text-[#0A0B0D]">{t.home.usdCoin}</div>
                 <div className="text-xs text-[#5B6577] mt-0.5">
-                  USDC · <span className="text-[#0052FF] font-medium">Base Sepolia</span>
+                  USDC · <span className="text-[#0052FF] font-medium">{t.common.baseSepolia}</span>
                 </div>
               </div>
             </div>
@@ -419,14 +423,14 @@ export function HomeView({
                   onClick={() => refresh()}
                   className="text-xs text-[#B91C1C] hover:underline"
                 >
-                  Retry
+                  {t.common.retry}
                 </button>
               ) : (
                 <>
                   <div className="font-mono text-[15px] font-bold text-[#0A0B0D] tabular-nums transition-opacity duration-150">
-                    {isBalanceHidden ? '••••' : `${usdc.value ?? '0.00'} USDC`}
+                    {isBalanceHidden ? '••••' : `${formatNumber(usdc.value, { minDecimals: 2, maxDecimals: 2 })} USDC`}
                   </div>
-                  <div className="text-[11px] text-[#5B6577] mt-0.5">Testnet</div>
+                  <div className="text-[11px] text-[#5B6577] mt-0.5">{t.common.testnet}</div>
                 </>
               )}
             </div>
@@ -439,9 +443,9 @@ export function HomeView({
                 <EthTokenIcon className="w-6 h-6" />
               </div>
               <div className="min-w-0">
-                <div className="font-semibold text-[15px] text-[#0A0B0D]">Ether</div>
+                <div className="font-semibold text-[15px] text-[#0A0B0D]">{t.home.ether}</div>
                 <div className="text-xs text-[#5B6577] mt-0.5">
-                  ETH · <span className="text-[#0052FF] font-medium">Base Sepolia</span>
+                  ETH · <span className="text-[#0052FF] font-medium">{t.common.baseSepolia}</span>
                 </div>
               </div>
             </div>
@@ -455,14 +459,14 @@ export function HomeView({
                   onClick={() => refresh()}
                   className="text-xs text-[#B91C1C] hover:underline"
                 >
-                  Retry
+                  {t.common.retry}
                 </button>
               ) : (
                 <>
                   <div className="font-mono text-[15px] font-bold text-[#0A0B0D] tabular-nums transition-opacity duration-150">
-                    {isBalanceHidden ? '••••' : `${eth.value ?? '0.0000'} ETH`}
+                    {isBalanceHidden ? '••••' : `${formatNumber(eth.value, { minDecimals: 2, maxDecimals: 4 })} ETH`}
                   </div>
-                  <div className="text-[11px] text-[#5B6577] mt-0.5">Testnet</div>
+                  <div className="text-[11px] text-[#5B6577] mt-0.5">{t.common.testnet}</div>
                 </>
               )}
             </div>
@@ -470,19 +474,19 @@ export function HomeView({
         </div>
       </section>
 
-      {/* 4. AKTIVITAS TERBARU (Stagger hanya pemuatan pertama sesi) */}
+      {/* 4. AKTIVITAS TERBARU */}
       <section
-        aria-label="Recent Activity"
+        aria-label={t.home.recentActivity}
         className={isInitialSession ? 'animate-fade-up [animation-delay:80ms]' : ''}
       >
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-[18px] font-bold text-[#0A0B0D]">Recent activity</h2>
+          <h2 className="text-[18px] font-bold text-[#0A0B0D]">{t.home.recentActivity}</h2>
           <button
             type="button"
             onClick={onNavigateToHistory}
             className="text-xs font-semibold text-[#0052FF] hover:text-[#0042D6] flex items-center gap-1 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
           >
-            <span>Full history</span>
+            <span>{t.home.fullHistory}</span>
             <span aria-hidden="true">&rsaquo;</span>
           </button>
         </div>
@@ -490,15 +494,15 @@ export function HomeView({
         {!isDemoMode ? (
           <div className="py-7 border-b border-[#E5E7EB] text-center">
             <p className="text-xs sm:text-sm text-[#5B6577] max-w-xs mx-auto leading-relaxed">
-              No activity yet. Transactions you send or receive will show up here.
+              {t.home.noActivity}
             </p>
           </div>
         ) : (
           <div>
             <div className="flex items-center justify-between py-1 text-[11px] text-[#B45309]">
-              <span className="text-[13px] font-semibold text-[#5B6577]">Preview feed</span>
+              <span className="text-[13px] font-semibold text-[#5B6577]">{t.home.previewFeed}</span>
               <span className="px-1.5 py-0.5 rounded bg-[#FFFBEB] font-bold border border-[#FDE68A]">
-                DEMO DATA
+                {t.common.demoData}
               </span>
             </div>
             {DEMO_ACTIVITIES.map((act) => (
@@ -514,7 +518,7 @@ export function HomeView({
         open={activeSheet === 'send'}
         onClose={() => setActiveSheet(null)}
         onClosed={handleSheetClosed}
-        title="Send"
+        title={t.sheets.send.title}
         triggerRef={sendButtonRef}
       >
         <SendSheetContent
@@ -528,7 +532,7 @@ export function HomeView({
         open={activeSheet === 'receive'}
         onClose={() => setActiveSheet(null)}
         onClosed={handleSheetClosed}
-        title="Receive"
+        title={t.sheets.receive.title}
         triggerRef={receiveButtonRef}
       >
         <ReceiveSheetContent
@@ -543,7 +547,7 @@ export function HomeView({
         open={activeSheet === 'faucet'}
         onClose={() => setActiveSheet(null)}
         onClosed={handleSheetClosed}
-        title="Get test USDC"
+        title={t.sheets.faucet.title}
         triggerRef={faucetButtonRef}
       >
         <FaucetSheetContent
@@ -555,3 +559,4 @@ export function HomeView({
     </div>
   );
 }
+

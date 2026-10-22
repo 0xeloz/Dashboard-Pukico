@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, Suspense, lazy } from 'react';
 import { ENV, isValidPrivyAppId } from '../lib/config';
+import { useT } from '../i18n';
 import type { UserProfile, SessionErrorInfo } from '../types';
 
 export interface AuthContextType {
@@ -80,21 +81,31 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
  * Screen when VITE_PRIVY_APP_ID is missing and demo mode was explicitly disabled
  */
 function ConfigurationMissingScreen({ onEnableDemo }: { onEnableDemo?: () => void }) {
+  const { t } = useT();
   return (
     <div className="min-h-screen bg-[#F7F8FA] flex flex-col items-center justify-center p-6 text-center">
       <div className="max-w-md w-full space-y-4">
-        <h1 className="text-base font-bold text-[#0A0B0D]">Configuration missing</h1>
-        <p className="text-sm text-[#3B4455]">This app is missing VITE_PRIVY_APP_ID.</p>
+        <h1 className="text-base font-bold text-[#0A0B0D]">{t.missingConfig.title}</h1>
+        <p className="text-sm text-[#3B4455]">{t.missingConfig.message}</p>
         {onEnableDemo && (
           <button
             type="button"
             onClick={onEnableDemo}
             className="w-full py-3 px-4 rounded-xl font-medium text-sm bg-[#0052FF] hover:bg-[#0042D6] text-white transition-all cursor-pointer shadow-sm"
           >
-            Launch in Demo Mode
+            {t.missingConfig.launchDemo}
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function AuthLoadingScreen() {
+  const { t } = useT();
+  return (
+    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-6 text-sm text-[#5B6577]">
+      {t.missingConfig.connectingAuth}
     </div>
   );
 }
@@ -117,17 +128,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // 3. Live Privy provider (lazy loaded)
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-6 text-sm text-[#5B6577]">
-          Connecting authentication...
-        </div>
-      }
-    >
+    <Suspense fallback={<AuthLoadingScreen />}>
       <LazyPrivyAuthProvider>{children}</LazyPrivyAuthProvider>
     </Suspense>
   );
 }
+
 
 export function useAuth() {
   const context = useContext(AuthContext);

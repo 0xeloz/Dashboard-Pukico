@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { useT } from '../../i18n';
 
 export interface ActivityItem {
   id: string;
@@ -17,6 +18,7 @@ interface ActivityRowProps {
 }
 
 export function ActivityRow({ activity }: ActivityRowProps) {
+  const { t, formatNumber } = useT();
   const isIncoming = activity.type === 'incoming';
 
   const statusColorClass =
@@ -25,6 +27,16 @@ export function ActivityRow({ activity }: ActivityRowProps) {
       : activity.status === 'Pending'
       ? 'text-[#B45309]'
       : 'text-[#B91C1C]';
+
+  const localizedStatus =
+    activity.status === 'Confirmed'
+      ? t.activity.confirmed
+      : activity.status === 'Pending'
+      ? t.activity.pending
+      : t.activity.failed;
+
+  const prefix = isIncoming ? t.activity.from : t.activity.to;
+  const formattedAmount = formatNumber(activity.amount, { minDecimals: 2, maxDecimals: 4 });
 
   return (
     <div className="flex items-center justify-between py-3 border-b border-[#E5E7EB]">
@@ -45,7 +57,7 @@ export function ActivityRow({ activity }: ActivityRowProps) {
         {/* Text information */}
         <div className="min-w-0">
           <div className="font-semibold text-sm text-[#0A0B0D] truncate">
-            {isIncoming ? `From @${activity.targetId.replace(/^@/, '')}` : `To @${activity.targetId.replace(/^@/, '')}`}
+            {prefix} @{activity.targetId.replace(/^@/, '')}
           </div>
           <div className="text-xs text-[#5B6577] mt-0.5">
             {activity.timestamp} · {activity.network}
@@ -60,12 +72,13 @@ export function ActivityRow({ activity }: ActivityRowProps) {
             isIncoming ? 'text-[#047857]' : 'text-[#0A0B0D]'
           }`}
         >
-          {isIncoming ? `+${activity.amount}` : `-${activity.amount}`} {activity.currency}
+          {isIncoming ? `+${formattedAmount}` : `-${formattedAmount}`} {activity.currency}
         </div>
         <div className={`text-xs mt-0.5 font-medium ${statusColorClass}`}>
-          {activity.status}
+          {localizedStatus}
         </div>
       </div>
     </div>
   );
 }
+

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { NotificationPanel } from '../ui/NotificationPanel';
 import { GenericNetworkIcon } from '../ui/PukicoBrand';
+import { useT } from '../../i18n';
 import type { ActiveTab, UserProfile } from '../../types';
 
 interface AppLayoutProps {
@@ -42,6 +43,7 @@ export function AppLayout({
   isSheetOpen = false,
   children,
 }: AppLayoutProps) {
+  const { t, phase } = useT();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
 
@@ -94,7 +96,7 @@ export function AppLayout({
               Pukico
             </span>
             <span className="text-[11px] font-medium text-[#0052FF] bg-[#EEF4FF] px-1.5 py-0.5 rounded-full ml-auto">
-              Testnet
+              {t.common.testnet}
             </span>
           </div>
 
@@ -111,7 +113,7 @@ export function AppLayout({
               }`}
             >
               <LayoutGrid className="w-5 h-5 shrink-0" />
-              <span>Home</span>
+              <span>{t.nav.home}</span>
             </button>
 
             {/* 2. Friends */}
@@ -125,10 +127,10 @@ export function AppLayout({
               }`}
             >
               <Users className="w-5 h-5 shrink-0" />
-              <span>Friends</span>
+              <span>{t.nav.friends}</span>
             </button>
 
-            {/* 3. Discover (Highlighted blue in the center of list) */}
+            {/* 3. Discover */}
             <button
               type="button"
               onClick={() => onTabChange('discover')}
@@ -140,10 +142,10 @@ export function AppLayout({
             >
               <div className="flex items-center gap-3.5">
                 <Compass className="w-5 h-5 shrink-0" />
-                <span>Discover</span>
+                <span>{t.nav.discover}</span>
               </div>
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/20 font-semibold">
-                Hub
+                {t.nav.hub}
               </span>
             </button>
 
@@ -158,7 +160,7 @@ export function AppLayout({
               }`}
             >
               <History className="w-5 h-5 shrink-0" />
-              <span>History</span>
+              <span>{t.nav.history}</span>
             </button>
 
             {/* 5. Settings */}
@@ -172,10 +174,10 @@ export function AppLayout({
               }`}
             >
               <Settings className="w-5 h-5 shrink-0" />
-              <span>Settings</span>
+              <span>{t.nav.settings}</span>
             </button>
 
-            {/* /dev for Admin */}
+            {/* /dev for Admin (remains English) */}
             {isAdmin && (
               <button
                 type="button"
@@ -188,10 +190,10 @@ export function AppLayout({
               >
                 <div className="flex items-center gap-3.5">
                   <Terminal className="w-5 h-5 shrink-0" />
-                  <span>/dev Console</span>
+                  <span>{t.nav.devConsole}</span>
                 </div>
                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-[#B45309] font-semibold">
-                  Admin
+                  {t.common.admin}
                 </span>
               </button>
             )}
@@ -200,9 +202,9 @@ export function AppLayout({
 
         {/* Desktop Profile Summary - Flat style with top border */}
         <div className="pt-4 border-t border-[#E5E7EB]">
-          <div className="text-[11px] font-medium text-[#5B6577] mb-1">Current Session</div>
+          <div className="text-[11px] font-medium text-[#5B6577] mb-1">{t.nav.currentSession}</div>
           <div className="font-mono text-xs font-bold text-[#0A0B0D] truncate">
-            {formattedPukicoId ? formattedPukicoId : 'No Pukico ID yet'}
+            {formattedPukicoId ? formattedPukicoId : t.common.noPukicoId}
           </div>
           <div className="font-mono text-[10px] text-[#5B6577] truncate mt-1">
             {profile.wallet_address.slice(0, 6)}...{profile.wallet_address.slice(-4)}
@@ -212,21 +214,21 @@ export function AppLayout({
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 pb-[calc(88px+env(safe-area-inset-bottom,0px))] lg:pb-8">
-        {/* Banner demo tipis: tinggi 28px, teks 12px, hanya dirender saat VITE_DEMO_MODE=true */}
+        {/* Banner demo tipis */}
         {showDemoBanner && (
           <div
             role="status"
             className="w-full h-7 bg-[#FFFBEB] border-b border-[#FDE68A] px-4 text-[#92400E] text-xs font-medium flex items-center justify-center gap-1.5 shrink-0 select-none"
           >
             <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-[#B45309]" />
-            <span className="font-bold tracking-tight">DEMO DATA, not connected</span>
+            <span className="font-bold tracking-tight">{t.common.demoBanner}</span>
           </div>
         )}
 
-        {/* TOPBAR (Tidak sticky, tinggi 56px, padding 16px, jarak elemen 8px) */}
+        {/* TOPBAR (sisi kanan tetap diam walau lebar pil Pukico ID di kiri berubah) */}
         <header className="w-full h-14 px-4 py-2 shrink-0">
           <div className="w-full max-w-[560px] mx-auto flex items-center justify-between gap-2 h-full">
-            {/* Kiri: pil ID tinggi 36px, teks 13px */}
+            {/* Kiri: pil ID */}
             <div className="h-9 px-3 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-2">
               {formattedPukicoId ? (
                 <>
@@ -238,8 +240,8 @@ export function AppLayout({
                     type="button"
                     onClick={handleCopyId}
                     className="p-1 text-[#5B6577] hover:text-[#0A0B0D] rounded-full transition-transform duration-[var(--dur-tap)] active:scale-[0.97] cursor-pointer"
-                    aria-label={copiedId ? 'Copied' : 'Copy Pukico ID'}
-                    title={copiedId ? 'Copied!' : 'Copy Pukico ID'}
+                    aria-label={copiedId ? t.common.copied : t.common.copyPukicoId}
+                    title={copiedId ? t.common.copiedWithExclamation : t.common.copyPukicoId}
                   >
                     {copiedId ? (
                       <span className="inline-flex items-center text-[#047857] transition-opacity duration-150">
@@ -253,23 +255,23 @@ export function AppLayout({
                   </button>
                   {copiedId && (
                     <span className="text-[10px] font-semibold text-[#047857] transition-opacity duration-150">
-                      Copied
+                      {t.common.copied}
                     </span>
                   )}
                 </>
               ) : (
                 <span className="text-[13px] font-medium text-[#5B6577]">
-                  No Pukico ID yet
+                  {t.common.noPukicoId}
                 </span>
               )}
             </div>
 
-            {/* Kanan: pil jaringan tinggi 36px, lalu lonceng 36x36 (jarak 8px) */}
+            {/* Kanan: pil jaringan lalu lonceng (shrink-0 untuk mencegah pergeseran) */}
             <div className="flex items-center gap-2 shrink-0">
               <div className="h-9 px-2.5 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-1.5">
                 <GenericNetworkIcon className="w-3.5 h-3.5 shrink-0" />
                 <span className="px-1.5 py-0.5 rounded-full bg-[#EEF4FF] text-[#0052FF] text-[11px] font-semibold">
-                  Testnet
+                  {t.common.testnet}
                 </span>
               </div>
 
@@ -277,7 +279,7 @@ export function AppLayout({
                 type="button"
                 onClick={() => setIsNotificationOpen(true)}
                 className="w-9 h-9 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
-                aria-label="Notifications"
+                aria-label={t.notifications.title}
               >
                 <Bell className="w-4 h-4" />
               </button>
@@ -285,13 +287,15 @@ export function AppLayout({
           </div>
         </header>
 
-        {/* Viewport Content */}
+        {/* Viewport Content dibungkus .lang-content[data-phase] */}
         <main className="flex-1 w-full pt-1">
-          {children}
+          <div className="lang-content w-full" data-phase={phase}>
+            {children}
+          </div>
         </main>
       </div>
 
-      {/* NAVBAR BAWAH (Mobile floating pill dengan SATU pil meluncur 52x34) */}
+      {/* NAVBAR BAWAH */}
       <div
         className={`lg:hidden fixed bottom-3 left-0 right-0 z-40 px-3 pointer-events-none pb-safe transition-all duration-250 ease-out ${
           isSheetOpen || isNotificationOpen
@@ -306,7 +310,7 @@ export function AppLayout({
           className="relative isolate w-full max-w-[560px] mx-auto h-[60px] rounded-[30px] bg-white border border-[#E5E7EB] shadow-[0_4px_16px_rgba(10,11,13,0.06)] grid grid-cols-5 items-center pointer-events-auto"
           style={{ '--active-idx': activeIndex } as React.CSSProperties}
         >
-          {/* SATU pil 52x34 (#EEF4FF, rounded-full) meluncur ke kolom item aktif */}
+          {/* SATU pil 52x34 meluncur */}
           <div
             aria-hidden="true"
             className="absolute inset-y-0 left-0 w-1/5 flex items-center justify-center pointer-events-none z-0"
@@ -326,7 +330,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('home')}
-              aria-label="Home"
+              aria-label={t.nav.home}
               className="w-full h-full flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
               <div className="w-[52px] h-[34px] flex items-center justify-center">
@@ -346,7 +350,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('friends')}
-              aria-label="Friends"
+              aria-label={t.nav.friends}
               className="w-full h-full flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
               <div className="w-[52px] h-[34px] flex items-center justify-center">
@@ -361,12 +365,12 @@ export function AppLayout({
             </button>
           </div>
 
-          {/* 3. Discover (Tombol tengah 44px, terangkat 10px di atas pil di dalam sel ke-3) */}
+          {/* 3. Discover */}
           <div className="relative z-10 h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('discover')}
-              aria-label="Discover"
+              aria-label={t.nav.discover}
               className="w-full h-full flex items-center justify-center cursor-pointer"
             >
               <div
@@ -386,7 +390,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('history')}
-              aria-label="History"
+              aria-label={t.nav.history}
               className="w-full h-full flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
               <div className="w-[52px] h-[34px] flex items-center justify-center">
@@ -406,7 +410,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('settings')}
-              aria-label="Settings"
+              aria-label={t.nav.settings}
               className="w-full h-full flex items-center justify-center cursor-pointer transition-transform duration-[var(--dur-tap)] active:scale-[0.97]"
             >
               <div className="w-[52px] h-[34px] flex items-center justify-center">
@@ -425,3 +429,4 @@ export function AppLayout({
     </div>
   );
 }
+

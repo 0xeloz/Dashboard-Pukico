@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useT } from '../../i18n';
 
 interface BottomSheetProps {
   open: boolean;
@@ -19,6 +20,8 @@ export function BottomSheet({
   triggerRef,
   children,
 }: BottomSheetProps) {
+  const { t } = useT();
+
   // Store onClose in a ref so effects do NOT re-run when parent re-renders
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -228,7 +231,7 @@ export function BottomSheet({
             type="button"
             onClick={() => onCloseRef.current()}
             className="w-9 h-9 rounded-full hover:bg-[#EEF4FF] text-[#5B6577] hover:text-[#0A0B0D] flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
-            aria-label="Close dialog"
+            aria-label={t.common.closeDialog}
           >
             <X className="w-5 h-5" />
           </button>
