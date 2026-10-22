@@ -11,6 +11,7 @@ import { DevView } from './components/views/DevView';
 import { ComingSoonView } from './components/views/ComingSoonView';
 import { OnboardingView } from './components/views/OnboardingView';
 import { SplashScreen } from './components/ui/SplashScreen';
+import { resubmitPendingTransactions } from './lib/txApi';
 import type { ActiveTab } from './types';
 
 function Dashboard() {
@@ -23,6 +24,7 @@ function Dashboard() {
     logout,
     setDemoProfileField,
     updateProfileId,
+    getAccessToken,
   } = useAuth();
 
   const [currentTab, setCurrentTab] = useState<ActiveTab>('home');
@@ -49,6 +51,22 @@ function Dashboard() {
   const handleSplashFinished = useCallback(() => {
     setShowSplashOverlay(false);
   }, []);
+
+  // Resubmit pending transactions from localStorage when session succeeds
+  const hasResubmittedRef = useRef(false);
+  useEffect(() => {
+    if (isAuthenticated && profile?.pukico_id && !hasResubmittedRef.current) {
+      hasResubmittedRef.current = true;
+      (async () => {
+        try {
+          const token = getAccessToken ? await getAccessToken() : null;
+          await resubmitPendingTransactions({ privyToken: token, isDemoMode });
+        } catch {
+          // Ignore background resubmit errors
+        }
+      })();
+    }
+  }, [isAuthenticated, profile?.pukico_id, getAccessToken, isDemoMode]);
 
   // Store scroll positions per tab
   const scrollPositions = useRef<Partial<Record<ActiveTab, number>>>({});

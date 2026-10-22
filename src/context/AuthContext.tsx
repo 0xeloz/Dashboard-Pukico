@@ -19,6 +19,7 @@ export interface AuthContextType {
   setDemoProfileField: <K extends keyof UserProfile>(field: K, value: UserProfile[K]) => void;
   updateProfileId: (pukicoId: string) => void;
   getAccessToken?: () => Promise<string | null>;
+  sendTransaction?: (tx: any) => Promise<{ hash: `0x${string}` }>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);

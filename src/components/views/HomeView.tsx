@@ -93,6 +93,7 @@ export function HomeView({
 
   // Active Bottom Sheet ('send' | 'receive' | 'faucet' | null)
   const [activeSheet, setActiveSheet] = useState<'send' | 'receive' | 'faucet' | null>(null);
+  const [isSendWaitingApproval, setIsSendWaitingApproval] = useState<boolean>(false);
 
   // References to action buttons for accessibility focus return
   const sendButtonRef = useRef<HTMLButtonElement>(null);
@@ -556,10 +557,12 @@ export function HomeView({
         onClosed={handleSheetClosed}
         title={t.sheets.send.title}
         triggerRef={sendButtonRef}
+        disableBackdropClick={isSendWaitingApproval}
       >
         <SendSheetContent
           onClose={() => setActiveSheet(null)}
           isDemoMode={isDemoMode}
+          onApprovalStateChange={setIsSendWaitingApproval}
         />
       </BottomSheet>
 

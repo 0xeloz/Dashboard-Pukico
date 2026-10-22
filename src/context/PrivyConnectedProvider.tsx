@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PrivyProvider, usePrivy, useWallets } from '@privy-io/react-auth';
+import { PrivyProvider, usePrivy, useWallets, useSendTransaction } from '@privy-io/react-auth';
 import { baseSepolia } from 'viem/chains';
 import { ENV } from '../lib/config';
 import { syncSessionWithSupabase, SessionSyncError } from '../lib/sessionApi';
@@ -32,6 +32,7 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     getAccessToken,
   } = usePrivy();
 
+  const { sendTransaction } = useSendTransaction();
   const { wallets } = useWallets();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -142,6 +143,7 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     setDemoProfileField: () => {},
     updateProfileId: handleUpdateProfileId,
     getAccessToken,
+    sendTransaction,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

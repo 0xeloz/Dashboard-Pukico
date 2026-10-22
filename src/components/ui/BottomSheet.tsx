@@ -10,6 +10,7 @@ interface BottomSheetProps {
   title: string;
   triggerRef?: React.RefObject<HTMLElement | null>;
   children: React.ReactNode;
+  disableBackdropClick?: boolean;
 }
 
 export function BottomSheet({
@@ -19,6 +20,7 @@ export function BottomSheet({
   title,
   triggerRef,
   children,
+  disableBackdropClick = false,
 }: BottomSheetProps) {
   const { t } = useT();
 
@@ -108,8 +110,10 @@ export function BottomSheet({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        e.preventDefault();
-        onCloseRef.current();
+        if (!disableBackdropClick) {
+          e.preventDefault();
+          onCloseRef.current();
+        }
       }
 
       if (e.key === 'Tab' && sheetRef.current) {
@@ -131,10 +135,11 @@ export function BottomSheet({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open]);
+  }, [open, disableBackdropClick]);
 
   // Touch drag to dismiss on mobile
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (disableBackdropClick) return;
     dragStartRef.current = e.touches[0].clientY;
     setIsDragging(true);
   };
@@ -191,7 +196,11 @@ export function BottomSheet({
         className={`fixed inset-0 bg-[#0A0B0D]/40 ${
           closing ? 'animate-backdrop-out' : 'animate-backdrop-in'
         }`}
-        onClick={() => onCloseRef.current()}
+        onClick={() => {
+          if (!disableBackdropClick) {
+            onCloseRef.current();
+          }
+        }}
         aria-hidden="true"
       />
 
