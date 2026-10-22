@@ -115,6 +115,10 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     }
   }, [isPrivyAuthenticated, isPrivyReady, embeddedWalletAddress, userEmail, runSessionSync]);
 
+  const handleUpdateProfileId = useCallback((newId: string) => {
+    setProfile((prev) => (prev ? { ...prev, pukico_id: newId } : null));
+  }, []);
+
   const value: AuthContextType = {
     isDemoMode: false,
     hasPrivyConfigured: true,
@@ -136,6 +140,8 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     },
     retrySession: runSessionSync,
     setDemoProfileField: () => {},
+    updateProfileId: handleUpdateProfileId,
+    getAccessToken,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

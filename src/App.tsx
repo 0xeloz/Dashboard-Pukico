@@ -9,20 +9,46 @@ import { ReceiveView } from './components/views/ReceiveView';
 import { SettingsView } from './components/views/SettingsView';
 import { DevView } from './components/views/DevView';
 import { ComingSoonView } from './components/views/ComingSoonView';
+import { OnboardingView } from './components/views/OnboardingView';
+import { SplashScreen } from './components/ui/SplashScreen';
 import type { ActiveTab } from './types';
 
 function Dashboard() {
   const {
     isAuthenticated,
+    isPrivyReady,
+    isLoadingSession,
     profile,
     isDemoMode,
     logout,
     setDemoProfileField,
+    updateProfileId,
   } = useAuth();
 
   const [currentTab, setCurrentTab] = useState<ActiveTab>('home');
   const [visitedTabs, setVisitedTabs] = useState<Set<ActiveTab>>(() => new Set(['home']));
   const [isSheetOpen, setIsSheetOpen] = useState<boolean>(false);
+  const [isFinishingOnboarding, setIsFinishingOnboarding] = useState<boolean>(false);
+  const [showSplashOverlay, setShowSplashOverlay] = useState<boolean>(false);
+
+  // Transition handler when onboarding finishes
+  const handleOnboardingComplete = useCallback(
+    (claimedId: string) => {
+      setShowSplashOverlay(true);
+      setIsFinishingOnboarding(true);
+      setTimeout(() => {
+        updateProfileId(claimedId);
+        setTimeout(() => {
+          setIsFinishingOnboarding(false);
+        }, 500);
+      }, 120);
+    },
+    [updateProfileId]
+  );
+
+  const handleSplashFinished = useCallback(() => {
+    setShowSplashOverlay(false);
+  }, []);
 
   // Store scroll positions per tab
   const scrollPositions = useRef<Partial<Record<ActiveTab, number>>>({});
@@ -80,13 +106,39 @@ function Dashboard() {
     });
   }, []);
 
-  // If not authenticated (or session is still synchronizing), show Login screen
+  // 1. Privy is initializing or session is loading on startup
+  if (!isPrivyReady || (isLoadingSession && !profile)) {
+    return <SplashScreen isLoading={true} />;
+  }
+
+  // 2. If not authenticated, show Login screen
   if (!isAuthenticated || !profile) {
     return <LoginView />;
   }
 
+  // 3. If authenticated but pukico_id is empty, show Onboarding view
+  if (!profile.pukico_id || profile.pukico_id.trim() === '') {
+    return (
+      <>
+        <OnboardingView onComplete={handleOnboardingComplete} />
+        {showSplashOverlay && (
+          <SplashScreen
+            isLoading={isFinishingOnboarding}
+            onFinished={handleSplashFinished}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <BalanceProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
+      {showSplashOverlay && (
+        <SplashScreen
+          isLoading={isFinishingOnboarding}
+          onFinished={handleSplashFinished}
+        />
+      )}
       <AppLayout
         currentTab={currentTab}
         onTabChange={handleTabChange}

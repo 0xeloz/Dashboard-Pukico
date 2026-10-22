@@ -17,6 +17,8 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   retrySession: () => void;
   setDemoProfileField: <K extends keyof UserProfile>(field: K, value: UserProfile[K]) => void;
+  updateProfileId: (pukicoId: string) => void;
+  getAccessToken?: () => Promise<string | null>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -50,6 +52,13 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const handleUpdateProfileId = useCallback((newId: string) => {
+    setProfile((prev) => ({
+      ...prev,
+      pukico_id: newId,
+    }));
+  }, []);
+
   const handleLogin = useCallback(() => {
     setIsAuthenticated(true);
   }, []);
@@ -72,7 +81,10 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
     logout: handleLogout,
     retrySession: () => {},
     setDemoProfileField: handleSetDemoProfileField,
+    updateProfileId: handleUpdateProfileId,
+    getAccessToken: async () => 'demo-token',
   };
+
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

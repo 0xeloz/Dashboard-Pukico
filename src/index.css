@@ -256,8 +256,36 @@
   animation: popoverIn 160ms var(--ease-out) forwards;
 }
 
-.animate-popover-out {
-  animation: popoverOut 120ms ease-in forwards;
+/* Onboarding step transitions (fade-through 240ms: opacity & translateY 8px) */
+@keyframes fadeThroughIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-through {
+  animation: fadeThroughIn 240ms var(--ease-out) backwards;
+}
+
+/* Success checkmark pop (scale 0.9 to 1 over 220ms) */
+@keyframes checkmarkPop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-checkmark-pop {
+  animation: checkmarkPop 220ms var(--ease-out) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
