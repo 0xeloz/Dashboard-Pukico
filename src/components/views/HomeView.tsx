@@ -397,7 +397,7 @@ export function HomeView({
 
         <div className="divide-y divide-[#E5E7EB] border-b border-[#E5E7EB]">
           {/* Row 1: USDC */}
-          <div className="flex items-center justify-between py-3.5 px-2 -mx-2 rounded-xl active:bg-[#EEF4FF] transition-colors duration-[var(--dur-tap)]">
+          <div className="flex items-center justify-between py-3.5 active:bg-[#EEF4FF] transition-colors duration-[var(--dur-tap)]">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-11 h-11 rounded-[14px] bg-[#EEF4FF] flex items-center justify-center shrink-0">
                 <UsdcTokenIcon className="w-6 h-6" />
@@ -433,7 +433,7 @@ export function HomeView({
           </div>
 
           {/* Row 2: ETH */}
-          <div className="flex items-center justify-between py-3.5 px-2 -mx-2 rounded-xl active:bg-[#EEF4FF] transition-colors duration-[var(--dur-tap)]">
+          <div className="flex items-center justify-between py-3.5 active:bg-[#EEF4FF] transition-colors duration-[var(--dur-tap)]">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-11 h-11 rounded-[14px] bg-[#EEF4FF] flex items-center justify-center shrink-0">
                 <EthTokenIcon className="w-6 h-6" />
@@ -496,7 +496,7 @@ export function HomeView({
         ) : (
           <div>
             <div className="flex items-center justify-between py-1 text-[11px] text-[#B45309]">
-              <span className="font-semibold uppercase tracking-wider">Preview Feed</span>
+              <span className="text-[13px] font-semibold text-[#5B6577]">Preview feed</span>
               <span className="px-1.5 py-0.5 rounded bg-[#FFFBEB] font-bold border border-[#FDE68A]">
                 DEMO DATA
               </span>

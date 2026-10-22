@@ -82,7 +82,7 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-[#0A0B0D]">/dev Console</h1>
-              <span className="px-2 py-0.5 rounded-full bg-[#EEF4FF] text-[#0052FF] text-[11px] font-bold uppercase tracking-wider">
+              <span className="px-2 py-0.5 rounded-full bg-[#EEF4FF] text-[#0052FF] text-[13px] font-semibold">
                 Admin
               </span>
             </div>

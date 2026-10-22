@@ -142,7 +142,7 @@ export function AppLayout({
                 <Compass className="w-5 h-5 shrink-0" />
                 <span>Discover</span>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/20 uppercase tracking-wider font-bold">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/20 font-semibold">
                 Hub
               </span>
             </button>
@@ -190,7 +190,7 @@ export function AppLayout({
                   <Terminal className="w-5 h-5 shrink-0" />
                   <span>/dev Console</span>
                 </div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold uppercase">
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-[#B45309] font-semibold">
                   Admin
                 </span>
               </button>
@@ -303,13 +303,13 @@ export function AppLayout({
       >
         <nav
           aria-label="Mobile Navigation"
-          className="relative w-full max-w-[560px] mx-auto h-[60px] rounded-[30px] bg-white border border-[#E5E7EB] shadow-[0_4px_16px_rgba(10,11,13,0.06)] grid grid-cols-5 items-center pointer-events-auto"
+          className="relative isolate w-full max-w-[560px] mx-auto h-[60px] rounded-[30px] bg-white border border-[#E5E7EB] shadow-[0_4px_16px_rgba(10,11,13,0.06)] grid grid-cols-5 items-center pointer-events-auto"
           style={{ '--active-idx': activeIndex } as React.CSSProperties}
         >
           {/* SATU pil 52x34 (#EEF4FF, rounded-full) meluncur ke kolom item aktif */}
           <div
             aria-hidden="true"
-            className="absolute inset-y-0 left-0 w-1/5 flex items-center justify-center pointer-events-none"
+            className="absolute inset-y-0 left-0 w-1/5 flex items-center justify-center pointer-events-none z-0"
             style={{
               transform: `translate3d(calc(var(--active-idx) * 100%), 0, 0)`,
               opacity: isDiscover ? 0 : 1,
@@ -322,7 +322,7 @@ export function AppLayout({
           </div>
 
           {/* 1. Home */}
-          <div className="h-full flex items-center justify-center">
+          <div className="relative z-10 h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('home')}
@@ -342,7 +342,7 @@ export function AppLayout({
           </div>
 
           {/* 2. Friends */}
-          <div className="h-full flex items-center justify-center">
+          <div className="relative z-10 h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('friends')}
@@ -362,7 +362,7 @@ export function AppLayout({
           </div>
 
           {/* 3. Discover (Tombol tengah 44px, terangkat 10px di atas pil di dalam sel ke-3) */}
-          <div className="relative h-full flex items-center justify-center">
+          <div className="relative z-10 h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('discover')}
@@ -382,7 +382,7 @@ export function AppLayout({
           </div>
 
           {/* 4. History */}
-          <div className="h-full flex items-center justify-center">
+          <div className="relative z-10 h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('history')}
@@ -402,7 +402,7 @@ export function AppLayout({
           </div>
 
           {/* 5. Settings */}
-          <div className="h-full flex items-center justify-center">
+          <div className="relative z-10 h-full flex items-center justify-center">
             <button
               type="button"
               onClick={() => onTabChange('settings')}

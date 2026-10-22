@@ -15,7 +15,6 @@ export interface BalanceContextType {
   eth: AssetState;
   refreshing: boolean;
   refresh: () => Promise<void>;
-  modifyBalance: (asset: 'usdc' | 'eth', delta: number) => void;
   isDemoMode: boolean;
 }
 
@@ -236,45 +235,6 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
     return () => clearInterval(timer);
   }, [refresh, isDemoMode]);
 
-  const modifyBalance = useCallback((asset: 'usdc' | 'eth', delta: number) => {
-    const now = Date.now();
-    if (asset === 'usdc') {
-      setUsdc((prev) => {
-        const currentVal = parseFloat(prev.value?.replace(/,/g, '') || '0');
-        const nextVal = Math.max(0, currentVal + delta);
-        const formatted = nextVal.toLocaleString('en-US', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
-        if (walletRef.current) {
-          saveCachedBalances(walletRef.current, {
-            usdc: formatted,
-            eth: ethValueRef.current || '0.0000',
-            updatedAt: now,
-          });
-        }
-        return { value: formatted, status: 'idle', updatedAt: now, error: null };
-      });
-    } else {
-      setEth((prev) => {
-        const currentVal = parseFloat(prev.value?.replace(/,/g, '') || '0');
-        const nextVal = Math.max(0, currentVal + delta);
-        const formatted = nextVal.toLocaleString('en-US', {
-          minimumFractionDigits: 4,
-          maximumFractionDigits: 4,
-        });
-        if (walletRef.current) {
-          saveCachedBalances(walletRef.current, {
-            usdc: usdcValueRef.current || '0.00',
-            eth: formatted,
-            updatedAt: now,
-          });
-        }
-        return { value: formatted, status: 'idle', updatedAt: now, error: null };
-      });
-    }
-  }, []);
-
   return (
     <BalanceContext.Provider
       value={{
@@ -282,7 +242,6 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
         eth,
         refreshing,
         refresh,
-        modifyBalance,
         isDemoMode,
       }}
     >

@@ -186,8 +186,8 @@ export function SettingsView({
       {/* Demo Mode Testing Toggles (Only in Demo Mode to test UI variants without database) */}
       {isDemoMode && onToggleRole && onTogglePukicoId && (
         <div className="py-4 border-b border-[#E5E7EB]">
-          <div className="text-xs font-bold text-[#92400E] uppercase tracking-wider mb-1">
-            Demo Mode Controls (Preview Only)
+          <div className="text-[13px] font-semibold text-[#5B6577] mb-1">
+            Demo mode controls (preview only)
           </div>
           <p className="text-xs text-[#B45309] mb-3">
             Test how the dashboard responds to different role permissions and Pukico ID states:

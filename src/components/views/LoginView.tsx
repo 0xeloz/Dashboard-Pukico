@@ -109,7 +109,7 @@ export function LoginView() {
             </button>
             {isDemoMode && (
               <p className="text-xs text-[#5B6577] text-center pt-1 font-medium">
-                Demo preview active · Instant one-click sign in
+                Demo preview active · One-click sign in
               </p>
             )}
           </div>
@@ -124,7 +124,7 @@ export function LoginView() {
 
       {/* Footer */}
       <footer className="text-center py-2 text-xs text-[#3B4455]">
-        Pukico Dashboard &copy; 2026 · Phase 1: Authentication & Profile
+        Pukico Dashboard &copy; 2026 · Authentication & Profile
       </footer>
     </div>
   );

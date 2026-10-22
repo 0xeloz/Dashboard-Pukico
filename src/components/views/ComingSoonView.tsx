@@ -41,7 +41,7 @@ export function ComingSoonView({ tab }: ComingSoonViewProps) {
           <IconComponent className="w-8 h-8 text-[#0052FF]" />
         </div>
 
-        <div className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] text-[#B45309] text-xs font-semibold uppercase tracking-wider mb-3">
+        <div className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] text-[#B45309] text-[13px] font-semibold mb-3">
           Coming soon
         </div>
 
@@ -49,8 +49,8 @@ export function ComingSoonView({ tab }: ComingSoonViewProps) {
         <p className="text-sm text-[#5B6577] leading-relaxed max-w-sm mb-6">{config.desc}</p>
 
         <div className="pt-4 border-t border-[#E5E7EB] w-full text-left">
-          <div className="text-xs font-bold text-[#0A0B0D] mb-1 uppercase tracking-wider">
-            Phase 1 Scope
+          <div className="text-[13px] font-semibold text-[#5B6577] mb-1">
+            Current scope
           </div>
           <p className="text-xs text-[#5B6577] leading-relaxed">
             Current milestone covers authentication, session management, wallet address display, and Base Sepolia USDC & ETH tracking.
