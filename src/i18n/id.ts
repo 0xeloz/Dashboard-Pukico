@@ -64,6 +64,8 @@ export const id: Translations = {
     fullHistory: 'Riwayat lengkap',
     noActivity: 'Belum ada aktivitas. Transaksi kirim dan terima bakal muncul di sini.',
     previewFeed: 'Umpan contoh',
+    ethForFees: '{amount} ETH buat biaya',
+    needTestEth: 'Butuh ETH tes buat kirim',
   },
   activity: {
     from: 'Dari',

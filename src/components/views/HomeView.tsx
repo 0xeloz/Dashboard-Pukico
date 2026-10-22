@@ -6,6 +6,7 @@ import {
   ArrowDownLeft,
   Droplet,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { useBalance } from '../../context/BalanceContext';
 import { UsdcTokenIcon, EthTokenIcon } from '../ui/PukicoBrand';
@@ -204,6 +205,24 @@ export function HomeView({
   const isEthInitialLoading = eth.status === 'loading' && eth.value === null;
   const isEthError = eth.status === 'error' && eth.value === null;
 
+  // ETH fee row in balance card
+  const showEthFeeRow = eth.status !== 'error' && (eth.value !== null || eth.status === 'loading');
+  const parsedEthNum =
+    eth.value !== null
+      ? parseFloat(String(eth.value).replace(/,/g, '').replace('<', '').trim())
+      : null;
+  const isZeroEth =
+    !isEthInitialLoading &&
+    parsedEthNum !== null &&
+    !isNaN(parsedEthNum) &&
+    parsedEthNum === 0;
+
+  const displayEthAmount = isBalanceHidden
+    ? '••••'
+    : isEthInitialLoading
+    ? '…'
+    : formatNumber(eth.value, { minDecimals: 2, maxDecimals: 4 });
+
   return (
     <div
       className="relative w-full max-w-[560px] mx-auto px-4 py-1 space-y-6 touch-pan-y"
@@ -323,16 +342,33 @@ export function HomeView({
           )}
         </div>
 
-        {/* Bawah: Chip "Testnet · Base Sepolia" */}
-        <div className="relative z-10 flex items-center justify-between gap-2 pt-1 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="h-7 px-2.5 rounded-full border border-white/30 text-xs font-medium text-white flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-white" />
-              <span>{t.common.testnetBaseSepolia}</span>
+        {/* Bawah: Chip "Testnet · Base Sepolia" & Info Biaya ETH */}
+        <div className="relative z-10 flex flex-col gap-1.5 pt-1 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-7 px-2.5 rounded-full border border-white/30 text-xs font-medium text-white flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                <span>{t.common.testnetBaseSepolia}</span>
+              </div>
             </div>
+
+            <span className="text-[#DCE8FF] text-xs font-medium">{t.common.noMonetaryValue}</span>
           </div>
 
-          <span className="text-[#DCE8FF] text-xs font-medium">{t.common.noMonetaryValue}</span>
+          {showEthFeeRow && (
+            <div className="text-[12px] text-[#DCE8FF] flex items-center gap-1.5 leading-normal transition-opacity duration-150">
+              {isZeroEth && !isBalanceHidden ? (
+                <>
+                  <AlertTriangle className="w-3.5 h-3.5 text-[#FDE68A] shrink-0" />
+                  <span>{t.home.needTestEth}</span>
+                </>
+              ) : (
+                <span>
+                  {t.home.ethForFees.replace('{amount}', displayEthAmount)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

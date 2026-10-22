@@ -62,6 +62,8 @@ export const en = {
     fullHistory: 'Full history',
     noActivity: 'No activity yet. Transactions you send or receive will show up here.',
     previewFeed: 'Preview feed',
+    ethForFees: '{amount} ETH for fees',
+    needTestEth: 'Need test ETH to send',
   },
   activity: {
     from: 'From',
