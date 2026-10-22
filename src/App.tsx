@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LangProvider } from './i18n';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BalanceProvider } from './context/BalanceContext';
+import { TxProvider } from './context/TxContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginView } from './components/views/LoginView';
 import { HomeView } from './components/views/HomeView';
 import { ReceiveView } from './components/views/ReceiveView';
+import { HistoryView } from './components/views/HistoryView';
 import { SettingsView } from './components/views/SettingsView';
 import { DevView } from './components/views/DevView';
 import { ComingSoonView } from './components/views/ComingSoonView';
@@ -151,19 +153,20 @@ function Dashboard() {
 
   return (
     <BalanceProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
-      {showSplashOverlay && (
-        <SplashScreen
-          isLoading={isFinishingOnboarding}
-          onFinished={handleSplashFinished}
-        />
-      )}
-      <AppLayout
-        currentTab={currentTab}
-        onTabChange={handleTabChange}
-        profile={profile}
-        isDemoMode={isDemoMode}
-        isSheetOpen={isSheetOpen}
-      >
+      <TxProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
+        {showSplashOverlay && (
+          <SplashScreen
+            isLoading={isFinishingOnboarding}
+            onFinished={handleSplashFinished}
+          />
+        )}
+        <AppLayout
+          currentTab={currentTab}
+          onTabChange={handleTabChange}
+          profile={profile}
+          isDemoMode={isDemoMode}
+          isSheetOpen={isSheetOpen}
+        >
         <div className="w-full min-w-0">
           {/* 1. Home View */}
           {visitedTabs.has('home') && (
@@ -225,7 +228,7 @@ function Dashboard() {
               inert={currentTab !== 'history' ? true : undefined}
               className={currentTab === 'history' ? 'tab-view-active' : ''}
             >
-              <ComingSoonView tab="history" />
+              <HistoryView isDemoMode={isDemoMode} />
             </div>
           )}
 
@@ -263,6 +266,7 @@ function Dashboard() {
           )}
         </div>
       </AppLayout>
+      </TxProvider>
     </BalanceProvider>
   );
 }

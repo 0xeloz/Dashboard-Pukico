@@ -9,9 +9,12 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useBalance } from '../../context/BalanceContext';
+import { useTx } from '../../context/TxContext';
 import { UsdcTokenIcon, EthTokenIcon } from '../ui/PukicoBrand';
 import { ActivityRow, type ActivityItem } from '../ui/ActivityRow';
 import { BottomSheet } from '../ui/BottomSheet';
+import { TxDetailsSheet } from '../ui/TxDetailsSheet';
+import type { TxRecord } from '../../lib/txApi';
 import {
   SendSheetContent,
   ReceiveSheetContent,
@@ -61,8 +64,10 @@ export function HomeView({
 }: HomeViewProps) {
   const { t, formatNumber } = useT();
 
-  // Global SWR balances
+  // Global SWR balances and transactions
   const { usdc, eth, refreshing, refresh } = useBalance();
+  const { txs, refresh: refreshTx } = useTx();
+  const [selectedDetailTx, setSelectedDetailTx] = useState<TxRecord | null>(null);
 
 
   // Balance visibility state saved in localStorage
@@ -176,7 +181,7 @@ export function HomeView({
 
       const startTime = Date.now();
       try {
-        await refresh();
+        await Promise.all([refresh(), refreshTx()]);
       } finally {
         const elapsed = Date.now() - startTime;
         const remaining = Math.max(0, 600 - elapsed); // Hold for minimum 600ms
@@ -529,11 +534,23 @@ export function HomeView({
         </div>
 
         {!isDemoMode ? (
-          <div className="py-7 border-b border-[#E5E7EB] text-center">
-            <p className="text-xs sm:text-sm text-[#5B6577] max-w-xs mx-auto leading-relaxed">
-              {t.home.noActivity}
-            </p>
-          </div>
+          txs.length === 0 ? (
+            <div className="py-7 border-b border-[#E5E7EB] text-center">
+              <p className="text-xs sm:text-sm text-[#5B6577] max-w-xs mx-auto leading-relaxed">
+                {t.home.noActivity}
+              </p>
+            </div>
+          ) : (
+            <div>
+              {txs.slice(0, 3).map((tx) => (
+                <ActivityRow
+                  key={tx.tx_hash}
+                  activity={tx}
+                  onClick={() => setSelectedDetailTx(tx)}
+                />
+              ))}
+            </div>
+          )
         ) : (
           <div>
             <div className="flex items-center justify-between py-1 text-[11px] text-[#B45309]">
@@ -542,8 +559,12 @@ export function HomeView({
                 {t.common.demoData}
               </span>
             </div>
-            {DEMO_ACTIVITIES.map((act) => (
-              <ActivityRow key={act.id} activity={act} />
+            {txs.slice(0, 3).map((tx) => (
+              <ActivityRow
+                key={tx.tx_hash}
+                activity={tx}
+                onClick={() => setSelectedDetailTx(tx)}
+              />
             ))}
           </div>
         )}
@@ -595,6 +616,13 @@ export function HomeView({
           onClose={() => setActiveSheet(null)}
         />
       </BottomSheet>
+
+      {/* Transaction Details Sheet for clicked Recent Activity row */}
+      <TxDetailsSheet
+        open={selectedDetailTx !== null}
+        onClose={() => setSelectedDetailTx(null)}
+        tx={selectedDetailTx}
+      />
     </div>
   );
 }

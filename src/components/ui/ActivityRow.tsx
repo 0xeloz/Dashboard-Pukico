@@ -1,50 +1,106 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { useT } from '../../i18n';
+import { formatRelativeTime, formatAmountNumber } from '../../lib/formatters';
+import type { TxRecord } from '../../lib/txApi';
 
 export interface ActivityItem {
-  id: string;
-  type: 'incoming' | 'outgoing';
-  targetId: string;
-  timestamp: string;
-  network: string;
+  id?: string;
+  tx_hash?: string;
+  type?: 'incoming' | 'outgoing';
+  direction?: 'in' | 'out' | 'incoming' | 'outgoing';
+  targetId?: string;
+  counterparty?: string;
+  to_pukico_id?: string;
+  from_pukico_id?: string;
+  timestamp?: string;
+  created_at?: string;
+  network?: string;
   amount: string;
-  currency: 'USDC' | 'ETH';
-  status: 'Confirmed' | 'Pending' | 'Failed';
+  currency?: 'USDC' | 'ETH';
+  asset?: 'USDC' | 'ETH';
+  status: 'Confirmed' | 'Pending' | 'Failed' | 'confirmed' | 'pending' | 'failed';
+  explorer_url?: string;
 }
 
 interface ActivityRowProps {
-  activity: ActivityItem;
+  activity: ActivityItem | TxRecord;
+  onClick?: () => void;
 }
 
-export function ActivityRow({ activity }: ActivityRowProps) {
-  const { t, formatNumber } = useT();
-  const isIncoming = activity.type === 'incoming';
+export function ActivityRow({ activity, onClick }: ActivityRowProps) {
+  const { t, lang } = useT();
 
-  const statusColorClass =
-    activity.status === 'Confirmed'
-      ? 'text-[#5B6577]'
-      : activity.status === 'Pending'
-      ? 'text-[#B45309]'
-      : 'text-[#B91C1C]';
+  const isIncoming =
+    activity.direction === 'in' ||
+    activity.direction === 'incoming' ||
+    ('type' in activity && activity.type === 'incoming');
 
-  const localizedStatus =
-    activity.status === 'Confirmed'
-      ? t.activity.confirmed
-      : activity.status === 'Pending'
-      ? t.activity.pending
-      : t.activity.failed;
+  const rawStatus = (activity.status || 'confirmed').toLowerCase();
+  const isPending = rawStatus === 'pending';
+  const isFailed = rawStatus === 'failed';
+  const isConfirmed = !isPending && !isFailed;
 
-  const prefix = isIncoming ? t.activity.from : t.activity.to;
-  const formattedAmount = formatNumber(activity.amount, { minDecimals: 2, maxDecimals: 4 });
+  const statusColorClass = isPending
+    ? 'text-[#B45309]'
+    : isFailed
+    ? 'text-[#B91C1C]'
+    : 'text-[#5B6577]';
+
+  const localizedStatus = isPending
+    ? t.history.pending
+    : isFailed
+    ? t.history.failed
+    : t.history.confirmed;
+
+  const counterparty = (
+    activity.counterparty ||
+    ('targetId' in activity ? activity.targetId : '') ||
+    activity.to_pukico_id ||
+    activity.from_pukico_id ||
+    ''
+  ).replace(/^@/, '');
+
+  const asset = activity.asset || ('currency' in activity ? activity.currency : 'USDC') || 'USDC';
+
+  const rawTimestamp =
+    activity.created_at ||
+    ('timestamp' in activity ? activity.timestamp : '') ||
+    '';
+
+  // If timestamp is already relative like "31m", use it; otherwise format with Intl.RelativeTimeFormat
+  let relativeTimeStr = rawTimestamp;
+  if (rawTimestamp && (rawTimestamp.includes('T') || rawTimestamp.includes('-') || !isNaN(Number(rawTimestamp)))) {
+    relativeTimeStr = formatRelativeTime(rawTimestamp, lang);
+  }
+
+  const formattedAmount = formatAmountNumber(activity.amount, lang);
+  const prefix = isIncoming ? t.history.from : t.history.to;
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      onClick();
+    }
+  };
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-[#E5E7EB]">
+    <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={handleKeyDown}
+      className={`flex items-center justify-between py-3 border-b border-[#E5E7EB] ${
+        onClick
+          ? 'cursor-pointer hover:bg-[#F9FAFB] active:bg-[#F3F4F6] transition-colors duration-[var(--dur-tap)] select-none'
+          : ''
+      }`}
+    >
       <div className="flex items-center gap-3 min-w-0">
-        {/* Kotak ikon 40px (radius 14px) */}
+        {/* Kotak ikon 40px (radius 14px): keluar abu #F3F4F6, masuk #ECFDF5 */}
         <div
           className={`w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 ${
-            isIncoming ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#E5E7EB] text-[#0A0B0D]'
+            isIncoming ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#F3F4F6] text-[#0A0B0D]'
           }`}
         >
           {isIncoming ? (
@@ -57,10 +113,10 @@ export function ActivityRow({ activity }: ActivityRowProps) {
         {/* Text information */}
         <div className="min-w-0">
           <div className="font-semibold text-sm text-[#0A0B0D] truncate">
-            {prefix} @{activity.targetId.replace(/^@/, '')}
+            {prefix} @{counterparty || '—'}
           </div>
           <div className="text-xs text-[#5B6577] mt-0.5">
-            {activity.timestamp} · {activity.network}
+            {relativeTimeStr ? `${relativeTimeStr} · Base Sepolia` : 'Base Sepolia'}
           </div>
         </div>
       </div>
@@ -72,7 +128,7 @@ export function ActivityRow({ activity }: ActivityRowProps) {
             isIncoming ? 'text-[#047857]' : 'text-[#0A0B0D]'
           }`}
         >
-          {isIncoming ? `+${formattedAmount}` : `-${formattedAmount}`} {activity.currency}
+          {isIncoming ? `+${formattedAmount}` : `-${formattedAmount}`} {asset}
         </div>
         <div className={`text-xs mt-0.5 font-medium ${statusColorClass}`}>
           {localizedStatus}
@@ -81,4 +137,3 @@ export function ActivityRow({ activity }: ActivityRowProps) {
     </div>
   );
 }
-

@@ -11,7 +11,7 @@ export interface ResolveIdResult {
 
 export interface TxRecord {
   tx_hash: string;
-  direction?: 'incoming' | 'outgoing';
+  direction?: 'in' | 'out' | 'incoming' | 'outgoing';
   asset: 'USDC' | 'ETH';
   amount: string;
   counterparty?: string;
@@ -21,6 +21,19 @@ export interface TxRecord {
   created_at?: string;
   confirmed_at?: string | null;
   explorer_url?: string;
+}
+
+export interface TxNotification {
+  id: string;
+  kind: 'tx_sent' | 'tx_received' | 'tx_failed';
+  tx_hash: string;
+  data: {
+    asset: 'USDC' | 'ETH';
+    amount: string;
+    counterparty: string;
+  };
+  created_at: string;
+  read: boolean;
 }
 
 export interface PendingTxEntry {
@@ -67,6 +80,7 @@ export function savePendingTx(entry: Omit<PendingTxEntry, 'timestamp'>): void {
       timestamp: Date.now(),
     });
     localStorage.setItem(STORAGE_PENDING_TX_KEY, JSON.stringify(filtered));
+    window.dispatchEvent(new CustomEvent('pukico:tx_updated'));
   } catch {
     // Ignore storage quota errors
   }
@@ -81,6 +95,7 @@ export function removePendingTx(txHash: string): void {
     const current = getPendingTxs();
     const updated = current.filter((item) => item.tx_hash.toLowerCase() !== txHash.toLowerCase());
     localStorage.setItem(STORAGE_PENDING_TX_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('pukico:tx_updated'));
   } catch {
     // Ignore storage errors
   }
@@ -404,12 +419,73 @@ export async function resubmitPendingTransactions(options: ApiOptions = {}): Pro
   await syncPendingTxs(options);
 }
 
+export const DEMO_TXS: TxRecord[] = [
+  {
+    tx_hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    direction: 'out',
+    asset: 'ETH',
+    amount: '0.01',
+    counterparty: 'rina',
+    to_pukico_id: 'rina',
+    status: 'confirmed',
+    created_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+  },
+  {
+    tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    direction: 'in',
+    asset: 'ETH',
+    amount: '0.02',
+    counterparty: 'rina',
+    from_pukico_id: 'rina',
+    status: 'confirmed',
+    created_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+  },
+];
+
+export const DEMO_NOTIFICATIONS: TxNotification[] = [
+  {
+    id: 'demo-notif-1',
+    kind: 'tx_received',
+    tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    data: {
+      asset: 'ETH',
+      amount: '0.02',
+      counterparty: 'rina',
+    },
+    created_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
+    read: false,
+  },
+  {
+    id: 'demo-notif-2',
+    kind: 'tx_sent',
+    tx_hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    data: {
+      asset: 'ETH',
+      amount: '0.01',
+      counterparty: 'rina',
+    },
+    created_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+    read: true,
+  },
+];
+
 /**
  * 7. List transactions
  */
-export async function listTxs(limit = 20, options: ApiOptions = {}): Promise<{ ok: boolean; items?: TxRecord[] }> {
-  if (options.isDemoMode || !ENV.SUPABASE_URL) {
-    return { ok: true, items: [] };
+export async function listTxs(
+  limit = 50,
+  options: ApiOptions = {}
+): Promise<{ ok: boolean; txs: TxRecord[] }> {
+  if (options.isDemoMode) {
+    return { ok: true, txs: DEMO_TXS };
+  }
+
+  if (!ENV.SUPABASE_URL) {
+    return { ok: false, txs: [] };
   }
 
   const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
@@ -422,10 +498,75 @@ export async function listTxs(limit = 20, options: ApiOptions = {}): Promise<{ o
     });
 
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, items: [] };
-    return { ok: true, items: data.items || [] };
+    if (!res.ok) return { ok: false, txs: [] };
+    const rawList: TxRecord[] = data.txs || data.items || [];
+    const normalized: TxRecord[] = rawList.map((item) => ({
+      ...item,
+      counterparty: item.counterparty || item.to_pukico_id || item.from_pukico_id || '',
+      direction:
+        item.direction === 'incoming' ? 'in' : item.direction === 'outgoing' ? 'out' : item.direction || 'out',
+      explorer_url: item.explorer_url || (item.tx_hash ? getExplorerUrl(item.tx_hash) : undefined),
+    }));
+    return { ok: true, txs: normalized };
   } catch {
-    return { ok: false, items: [] };
+    return { ok: false, txs: [] };
+  }
+}
+
+/**
+ * 8. Get notifications
+ */
+export async function getNotifications(
+  options: ApiOptions = {}
+): Promise<{ ok: boolean; items: TxNotification[]; unread: number }> {
+  if (options.isDemoMode) {
+    const unread = DEMO_NOTIFICATIONS.filter((n) => !n.read).length;
+    return { ok: true, items: DEMO_NOTIFICATIONS, unread };
+  }
+
+  if (!ENV.SUPABASE_URL) {
+    return { ok: false, items: [], unread: 0 };
+  }
+
+  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: buildHeaders(options.privyToken),
+      body: JSON.stringify({ action: 'notifications' }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, items: [], unread: 0 };
+    const items: TxNotification[] = data.items || [];
+    const unread = typeof data.unread === 'number' ? data.unread : items.filter((n) => !n.read).length;
+    return { ok: true, items, unread };
+  } catch {
+    return { ok: false, items: [], unread: 0 };
+  }
+}
+
+/**
+ * 9. Mark notifications as read
+ */
+export async function markNotificationsRead(options: ApiOptions = {}): Promise<{ ok: boolean }> {
+  if (options.isDemoMode || !ENV.SUPABASE_URL) {
+    return { ok: true };
+  }
+
+  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: buildHeaders(options.privyToken),
+      body: JSON.stringify({ action: 'mark_read' }),
+    });
+
+    return { ok: res.ok };
+  } catch {
+    return { ok: false };
   }
 }
 
@@ -443,3 +584,4 @@ export function shortenAddress(address: string): string {
   if (!address || address.length < 10) return address || '';
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
+
