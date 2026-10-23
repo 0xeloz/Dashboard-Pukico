@@ -1,20 +1,24 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { LangProvider } from './i18n';
+import { LangProvider, useT } from './i18n';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BalanceProvider } from './context/BalanceContext';
 import { TxProvider } from './context/TxContext';
+import { FriendsProvider, useFriends } from './context/FriendsContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginView } from './components/views/LoginView';
 import { HomeView } from './components/views/HomeView';
 import { ReceiveView } from './components/views/ReceiveView';
+import { FriendsView } from './components/views/FriendsView';
 import { HistoryView } from './components/views/HistoryView';
 import { SettingsView } from './components/views/SettingsView';
 import { DevView } from './components/views/DevView';
 import { ComingSoonView } from './components/views/ComingSoonView';
 import { OnboardingView } from './components/views/OnboardingView';
 import { SplashScreen } from './components/ui/SplashScreen';
+import { BottomSheet } from './components/ui/BottomSheet';
+import { SendSheetContent } from './components/views/sheets/SendSheetContent';
 import { resubmitPendingTransactions } from './lib/txApi';
-import type { ActiveTab } from './types';
+import type { ActiveTab, UserProfile } from './types';
 
 function Dashboard() {
   const {
@@ -154,19 +158,71 @@ function Dashboard() {
   return (
     <BalanceProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
       <TxProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
-        {showSplashOverlay && (
-          <SplashScreen
-            isLoading={isFinishingOnboarding}
-            onFinished={handleSplashFinished}
+        <FriendsProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
+          {showSplashOverlay && (
+            <SplashScreen
+              isLoading={isFinishingOnboarding}
+              onFinished={handleSplashFinished}
+            />
+          )}
+          <DashboardContent
+            currentTab={currentTab}
+            onTabChange={handleTabChange}
+            visitedTabs={visitedTabs}
+            profile={profile}
+            isDemoMode={isDemoMode}
+            isSheetOpen={isSheetOpen}
+            setIsSheetOpen={setIsSheetOpen}
+            logout={logout}
+            setDemoProfileField={setDemoProfileField}
           />
-        )}
-        <AppLayout
-          currentTab={currentTab}
-          onTabChange={handleTabChange}
-          profile={profile}
-          isDemoMode={isDemoMode}
-          isSheetOpen={isSheetOpen}
-        >
+        </FriendsProvider>
+      </TxProvider>
+    </BalanceProvider>
+  );
+}
+
+interface DashboardContentProps {
+  currentTab: ActiveTab;
+  onTabChange: (tab: ActiveTab) => void;
+  visitedTabs: Set<ActiveTab>;
+  profile: UserProfile;
+  isDemoMode: boolean;
+  isSheetOpen: boolean;
+  setIsSheetOpen: (open: boolean) => void;
+  logout: () => Promise<void>;
+  setDemoProfileField: (field: 'role' | 'pukico_id', val: any) => void;
+}
+
+function DashboardContent({
+  currentTab,
+  onTabChange,
+  visitedTabs,
+  profile,
+  isDemoMode,
+  isSheetOpen,
+  setIsSheetOpen,
+  logout,
+  setDemoProfileField,
+}: DashboardContentProps) {
+  const { t } = useT();
+  const {
+    isSendOpen,
+    closeSend,
+    sendPrefilledId,
+    isSendWaitingApproval,
+    setIsSendWaitingApproval,
+  } = useFriends();
+
+  return (
+    <>
+      <AppLayout
+        currentTab={currentTab}
+        onTabChange={onTabChange}
+        profile={profile}
+        isDemoMode={isDemoMode}
+        isSheetOpen={isSheetOpen || isSendOpen}
+      >
         <div className="w-full min-w-0">
           {/* 1. Home View */}
           {visitedTabs.has('home') && (
@@ -178,7 +234,7 @@ function Dashboard() {
               <HomeView
                 profile={profile}
                 isDemoMode={isDemoMode}
-                onNavigateToHistory={() => handleTabChange('history')}
+                onNavigateToHistory={() => onTabChange('history')}
                 onSheetOpenChange={setIsSheetOpen}
               />
             </div>
@@ -193,7 +249,7 @@ function Dashboard() {
             >
               <ReceiveView
                 walletAddress={profile.wallet_address}
-                onBack={() => handleTabChange('home')}
+                onBack={() => onTabChange('home')}
                 isDemoMode={isDemoMode}
               />
             </div>
@@ -206,7 +262,7 @@ function Dashboard() {
               inert={currentTab !== 'friends' ? true : undefined}
               className={currentTab === 'friends' ? 'tab-view-active' : ''}
             >
-              <ComingSoonView tab="friends" />
+              <FriendsView />
             </div>
           )}
 
@@ -260,14 +316,28 @@ function Dashboard() {
             >
               <DevView
                 profile={profile}
-                onRedirectToHome={() => handleTabChange('home')}
+                onRedirectToHome={() => onTabChange('home')}
               />
             </div>
           )}
         </div>
       </AppLayout>
-      </TxProvider>
-    </BalanceProvider>
+
+      {/* Global Send Bottom Sheet (triggered from Home quick action or Friends profile) */}
+      <BottomSheet
+        open={isSendOpen}
+        onClose={closeSend}
+        title={t.sheets.send.title}
+        disableBackdropClick={isSendWaitingApproval}
+      >
+        <SendSheetContent
+          onClose={closeSend}
+          isDemoMode={isDemoMode}
+          onApprovalStateChange={setIsSendWaitingApproval}
+          prefilledRecipientId={sendPrefilledId}
+        />
+      </BottomSheet>
+    </>
   );
 }
 

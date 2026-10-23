@@ -16,10 +16,10 @@ import { BottomSheet } from '../ui/BottomSheet';
 import { TxDetailsSheet } from '../ui/TxDetailsSheet';
 import type { TxRecord } from '../../lib/txApi';
 import {
-  SendSheetContent,
   ReceiveSheetContent,
   FaucetSheetContent,
 } from './sheets/QuickActionSheets';
+import { useFriends } from '../../context/FriendsContext';
 import { useT } from '../../i18n';
 import type { UserProfile } from '../../types';
 
@@ -63,6 +63,7 @@ export function HomeView({
   onSheetOpenChange,
 }: HomeViewProps) {
   const { t, formatNumber } = useT();
+  const { openSend } = useFriends();
 
   // Global SWR balances and transactions
   const { usdc, eth, refreshing, refresh } = useBalance();
@@ -96,9 +97,8 @@ export function HomeView({
     prevUsdcRef.current = usdc.value;
   }, [usdc.value]);
 
-  // Active Bottom Sheet ('send' | 'receive' | 'faucet' | null)
-  const [activeSheet, setActiveSheet] = useState<'send' | 'receive' | 'faucet' | null>(null);
-  const [isSendWaitingApproval, setIsSendWaitingApproval] = useState<boolean>(false);
+  // Active Bottom Sheet ('receive' | 'faucet' | null)
+  const [activeSheet, setActiveSheet] = useState<'receive' | 'faucet' | null>(null);
 
   // References to action buttons for accessibility focus return
   const sendButtonRef = useRef<HTMLButtonElement>(null);
@@ -386,7 +386,7 @@ export function HomeView({
             <button
               ref={sendButtonRef}
               type="button"
-              onClick={() => setActiveSheet('send')}
+              onClick={() => openSend()}
               className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
               aria-label={t.home.send}
             >
@@ -571,23 +571,7 @@ export function HomeView({
       </section>
 
       {/* 5. BOTTOM SHEETS UNTUK AKSI CEPAT */}
-      {/* Sheet 1: Send */}
-      <BottomSheet
-        open={activeSheet === 'send'}
-        onClose={() => setActiveSheet(null)}
-        onClosed={handleSheetClosed}
-        title={t.sheets.send.title}
-        triggerRef={sendButtonRef}
-        disableBackdropClick={isSendWaitingApproval}
-      >
-        <SendSheetContent
-          onClose={() => setActiveSheet(null)}
-          isDemoMode={isDemoMode}
-          onApprovalStateChange={setIsSendWaitingApproval}
-        />
-      </BottomSheet>
-
-      {/* Sheet 2: Receive */}
+      {/* Sheet 1: Receive */}
       <BottomSheet
         open={activeSheet === 'receive'}
         onClose={() => setActiveSheet(null)}

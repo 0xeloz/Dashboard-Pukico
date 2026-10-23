@@ -145,3 +145,20 @@ export function formatFullDateTime(
     timeStyle: 'short',
   }).format(date);
 }
+
+/**
+ * Format month and year, e.g. "January 2025" or "Januari 2025"
+ */
+export function formatJoinedDate(
+  dateString: string | undefined | null,
+  lang: 'en' | 'id' = 'en'
+): string {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-US', {
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}

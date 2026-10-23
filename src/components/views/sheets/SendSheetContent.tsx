@@ -24,12 +24,14 @@ import {
   getExplorerUrl,
   type TxRecord,
 } from '../../../lib/txApi';
+import { useFriends } from '../../../context/FriendsContext';
 import type { UserProfile } from '../../../types';
 
 interface SendSheetContentProps {
   onClose: () => void;
   isDemoMode?: boolean;
   onApprovalStateChange?: (isWaiting: boolean) => void;
+  prefilledRecipientId?: string | null;
 }
 
 type SendStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -42,10 +44,12 @@ export function SendSheetContent({
   onClose,
   isDemoMode = false,
   onApprovalStateChange,
+  prefilledRecipientId,
 }: SendSheetContentProps) {
   const { t, formatNumber } = useT();
   const { profile, getAccessToken, sendTransaction } = useAuth();
   const { usdc, eth, refresh } = useBalance();
+  const { friends } = useFriends();
 
   const [step, setStep] = useState<SendStep>(1);
   const [selectedAsset, setSelectedAsset] = useState<AssetType>('USDC');
@@ -162,6 +166,59 @@ export function SendSheetContent({
         }
       }
     }, 400);
+  };
+
+  // Prefill resolver when opened with recipientId from friends tab
+  useEffect(() => {
+    if (prefilledRecipientId) {
+      const clean = prefilledRecipientId.replace(/^@/, '').toLowerCase().trim();
+      setRecipientInput(clean);
+      setRecipientStatus('looking');
+      (async () => {
+        try {
+          const token = getAccessToken ? await getAccessToken() : null;
+          const result = await resolvePukicoId(clean, { privyToken: token, isDemoMode });
+          if (result.found && result.wallet_address) {
+            setRecipientStatus('found');
+            setResolvedRecipient({
+              id: result.pukico_id || clean,
+              address: result.wallet_address,
+            });
+          } else {
+            setRecipientStatus('not_found');
+            setResolvedRecipient(null);
+          }
+        } catch {
+          setRecipientStatus('not_found');
+          setResolvedRecipient(null);
+        }
+      })();
+    }
+  }, [prefilledRecipientId, getAccessToken, isDemoMode]);
+
+  const handleSelectFriendChip = (id: string) => {
+    const clean = id.replace(/^@/, '').toLowerCase().trim();
+    setRecipientInput(clean);
+    setRecipientStatus('looking');
+    (async () => {
+      try {
+        const token = getAccessToken ? await getAccessToken() : null;
+        const result = await resolvePukicoId(clean, { privyToken: token, isDemoMode });
+        if (result.found && result.wallet_address) {
+          setRecipientStatus('found');
+          setResolvedRecipient({
+            id: result.pukico_id || clean,
+            address: result.wallet_address,
+          });
+        } else {
+          setRecipientStatus('not_found');
+          setResolvedRecipient(null);
+        }
+      } catch {
+        setRecipientStatus('not_found');
+        setResolvedRecipient(null);
+      }
+    })();
   };
 
   // Fee Estimation with 500ms debounce
@@ -558,7 +615,7 @@ export function SendSheetContent({
               disabled={isWalletUnverified}
               onClick={() => {
                 setSelectedAsset('USDC');
-                setStep(2);
+                setStep(prefilledRecipientId ? 3 : 2);
               }}
               className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
             >
@@ -585,7 +642,7 @@ export function SendSheetContent({
               disabled={isWalletUnverified}
               onClick={() => {
                 setSelectedAsset('ETH');
-                setStep(2);
+                setStep(prefilledRecipientId ? 3 : 2);
               }}
               className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
             >
@@ -684,6 +741,27 @@ export function SendSheetContent({
                 <span className="text-[#DC2626]">{t.sheets.send.formatError}</span>
               )}
             </div>
+
+            {/* Friends chips (up to 5 recent friends) */}
+            {friends.length > 0 && (
+              <div className="pt-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-[#5B6577] mb-2">
+                  {t.sheets.send.friendsLabel || 'Friends'}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {friends.slice(0, 5).map((f) => (
+                    <button
+                      key={f.pukico_id}
+                      type="button"
+                      onClick={() => handleSelectFriendChip(f.pukico_id)}
+                      className="px-2.5 py-1 text-xs font-mono font-medium rounded-full bg-[#F3F4F6] hover:bg-[#EEF4FF] text-[#0A0B0D] hover:text-[#0052FF] transition-colors cursor-pointer"
+                    >
+                      @{f.pukico_id}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="pt-2">
@@ -705,7 +783,7 @@ export function SendSheetContent({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => setStep(prefilledRecipientId ? 1 : 2)}
               className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
               aria-label={t.sheets.send.backBtn}
             >
