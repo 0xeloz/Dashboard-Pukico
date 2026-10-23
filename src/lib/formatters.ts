@@ -1,3 +1,5 @@
+import { formatEther } from 'viem';
+
 /**
  * Formatting helpers for localized date, time, and currency amounts
  */
@@ -50,22 +52,81 @@ export function formatRelativeTime(
 }
 
 /**
- * Format transaction amount according to locale without recalculating float math
+ * Format ETH network fee:
+ * - If 0 wei -> "0"
+ * - If < 0.000001 ETH -> "< 0.000001"
+ * - Otherwise -> max 8 decimals without trailing zeros
+ */
+export function formatEthFee(wei: bigint | string | number): string {
+  let weiBig: bigint;
+  try {
+    weiBig = typeof wei === 'bigint' ? wei : BigInt(wei);
+  } catch {
+    return '0';
+  }
+
+  if (weiBig === 0n) return '0';
+
+  // 0.000001 ETH = 10^12 wei (1_000_000_000_000n)
+  if (weiBig < 1000000000000n) {
+    return '< 0.000001';
+  }
+
+  const ethStr = formatEther(weiBig);
+  const parts = ethStr.split('.');
+  if (parts.length === 1) return parts[0];
+
+  let dec = parts[1].slice(0, 8);
+  dec = dec.replace(/0+$/, '');
+  return dec ? `${parts[0]}.${dec}` : parts[0];
+}
+
+/**
+ * Format asset amount:
+ * - USDC: always exactly 2 decimals (e.g. 10.00)
+ * - ETH: max 8 decimals without trailing zeros (e.g. 0.05, 1, 0.00012345)
+ */
+export function formatAssetAmount(
+  amount: string | number | undefined | null,
+  asset: 'USDC' | 'ETH' | string = 'USDC'
+): string {
+  if (amount === undefined || amount === null || amount === '') {
+    return asset === 'USDC' ? '0.00' : '0';
+  }
+  const cleanStr = String(amount).replace(/,/g, '').trim();
+  const num = parseFloat(cleanStr);
+  if (isNaN(num)) return String(amount);
+
+  if (asset === 'USDC') {
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  // ETH: max 8 decimals without trailing zeros
+  const parts = cleanStr.split('.');
+  if (parts.length === 1) {
+    const whole = parseInt(parts[0], 10);
+    return isNaN(whole) ? parts[0] : whole.toLocaleString('en-US');
+  }
+  const whole = parseInt(parts[0], 10);
+  const wholeStr = isNaN(whole) ? parts[0] : whole.toLocaleString('en-US');
+  let dec = parts[1].slice(0, 8);
+  dec = dec.replace(/0+$/, '');
+  return dec ? `${wholeStr}.${dec}` : wholeStr;
+}
+
+/**
+ * Legacy wrapper forwarding to formatAssetAmount
  */
 export function formatAmountNumber(
   amount: string | number | undefined | null,
-  lang: 'en' | 'id' = 'en'
+  assetOrLang?: 'USDC' | 'ETH' | string,
+  _lang: 'en' | 'id' = 'en'
 ): string {
-  if (amount === undefined || amount === null || amount === '') return '0.00';
-  const cleanStr = String(amount).replace(/,/g, '').trim();
-  const num = parseFloat(cleanStr);
-  if (isNaN(num)) return cleanStr;
-
-  const formatter = new Intl.NumberFormat(lang === 'id' ? 'id-ID' : 'en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 6,
-  });
-  return formatter.format(num);
+  const asset = assetOrLang === 'ETH' || assetOrLang === 'USDC' ? assetOrLang : 'USDC';
+  return formatAssetAmount(amount, asset);
 }
 
 /**

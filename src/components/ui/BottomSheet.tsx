@@ -11,6 +11,7 @@ interface BottomSheetProps {
   triggerRef?: React.RefObject<HTMLElement | null>;
   children: React.ReactNode;
   disableBackdropClick?: boolean;
+  contentClassName?: string;
 }
 
 export function BottomSheet({
@@ -21,6 +22,7 @@ export function BottomSheet({
   triggerRef,
   children,
   disableBackdropClick = false,
+  contentClassName,
 }: BottomSheetProps) {
   const { t } = useT();
 
@@ -247,7 +249,11 @@ export function BottomSheet({
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="flex-1 overflow-y-auto px-5 pt-5 sheet-body-pad space-y-4">
+        <div
+          className={`flex-1 overflow-y-auto px-5 sheet-body-pad ${
+            contentClassName !== undefined ? contentClassName : 'pt-5 space-y-4'
+          }`}
+        >
           {children}
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { useT } from '../../i18n';
-import { formatRelativeTime, formatAmountNumber } from '../../lib/formatters';
+import { formatRelativeTime, formatAssetAmount } from '../../lib/formatters';
 import type { TxRecord } from '../../lib/txApi';
 
 export interface ActivityItem {
@@ -74,7 +74,7 @@ export function ActivityRow({ activity, onClick }: ActivityRowProps) {
     relativeTimeStr = formatRelativeTime(rawTimestamp, lang);
   }
 
-  const formattedAmount = formatAmountNumber(activity.amount, lang);
+  const formattedAmount = formatAssetAmount(activity.amount, asset);
   const prefix = isIncoming ? t.history.from : t.history.to;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

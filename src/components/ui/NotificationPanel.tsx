@@ -4,7 +4,7 @@ import { BottomSheet } from './BottomSheet';
 import { TxDetailsSheet } from './TxDetailsSheet';
 import { useT } from '../../i18n';
 import { useTx } from '../../context/TxContext';
-import { formatRelativeTime, formatAmountNumber } from '../../lib/formatters';
+import { formatRelativeTime, formatAssetAmount } from '../../lib/formatters';
 import type { TxRecord, TxNotification } from '../../lib/txApi';
 
 interface NotificationPanelProps {
@@ -52,7 +52,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   };
 
   const renderMessage = (item: TxNotification) => {
-    const formattedAmount = formatAmountNumber(item.data.amount, lang);
+    const formattedAmount = formatAssetAmount(item.data.amount, item.data.asset);
     const counterparty = item.data.counterparty.replace(/^@/, '');
 
     if (item.kind === 'tx_received') {
@@ -72,8 +72,13 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
 
   return (
     <>
-      <BottomSheet open={isOpen} onClose={onClose} title={t.notifications.title}>
-        <div className="py-2 select-none">
+      <BottomSheet
+        open={isOpen}
+        onClose={onClose}
+        title={t.notifications.title}
+        contentClassName="px-5 pt-0 sheet-body-pad"
+      >
+        <div className="select-none">
           {notifications.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 rounded-2xl bg-[#EEF4FF] flex items-center justify-center mb-3">
@@ -87,7 +92,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-[#E5E7EB] border-t border-b border-[#E5E7EB]">
+            <div className="divide-y divide-[#E5E7EB] border-b border-[#E5E7EB]">
               {notifications.map((item) => {
                 const isReceived = item.kind === 'tx_received';
                 const isFailed = item.kind === 'tx_failed';

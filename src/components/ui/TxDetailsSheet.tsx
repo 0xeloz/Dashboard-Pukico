@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ExternalLink, Copy, Check, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { BottomSheet } from './BottomSheet';
 import { useT } from '../../i18n';
-import { formatAmountNumber, formatFullDateTime } from '../../lib/formatters';
+import { formatAssetAmount, formatFullDateTime } from '../../lib/formatters';
 import { shortenAddress, getExplorerUrl, type TxRecord } from '../../lib/txApi';
 
 interface TxDetailsSheetProps {
@@ -28,7 +28,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
     ''
   );
 
-  const formattedAmount = formatAmountNumber(tx.amount, lang);
+  const formattedAmount = formatAssetAmount(tx.amount, tx.asset);
   const explorerUrl = tx.explorer_url || (tx.tx_hash ? getExplorerUrl(tx.tx_hash) : '');
 
   const handleCopyHash = async () => {
