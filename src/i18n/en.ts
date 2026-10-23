@@ -35,7 +35,6 @@ export const en = {
     settings: 'Settings',
     devConsole: '/dev Console',
     currentSession: 'Current Session',
-    hub: 'Hub',
   },
   notifications: {
     title: 'Notifications',
@@ -275,7 +274,7 @@ export const en = {
     errorUnauthorized: 'Your session expired. Sign in again.',
     errorNetwork: "Couldn't reach Pukico. Check your connection and try again.",
     errorGeneric: 'Something went wrong on our side. Try again in a moment.',
-    demoDataNotice: 'DEMO DATA',
+    demoDataNotice: 'Demo data',
   },
   friends: {
     title: 'Friends',

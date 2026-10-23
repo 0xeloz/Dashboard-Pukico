@@ -36,6 +36,16 @@ const TAB_INDEX_MAP: Record<ActiveTab, number> = {
   dev: 4,
 };
 
+function getTopbarContainerClasses(tab: ActiveTab): string {
+  if (tab === 'home') {
+    return 'w-full max-w-[560px] xl:max-w-[1040px] mx-auto px-4 xl:px-6 flex items-center justify-between gap-2 h-full';
+  }
+  if (tab === 'history' || tab === 'friends' || tab === 'dev') {
+    return 'w-full max-w-[560px] lg:max-w-[720px] mx-auto px-4 flex items-center justify-between gap-2 h-full';
+  }
+  return 'w-full max-w-[560px] mx-auto px-4 flex items-center justify-between gap-2 h-full';
+}
+
 export function AppLayout({
   currentTab,
   onTabChange,
@@ -85,7 +95,7 @@ export function AppLayout({
       />
 
       {/* Desktop Sidebar (lg: viewports) */}
-      <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-[#E5E7EB] shrink-0 sticky top-0 h-screen p-5 justify-between z-30">
+      <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-[#E5E7EB] shrink-0 sticky top-0 h-screen p-5 justify-between z-30 overflow-y-auto">
         <div>
           {/* Brand Wordmark & Identity */}
           <div className="flex items-center gap-2.5 px-3 py-3 mb-6">
@@ -108,6 +118,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('home')}
+              aria-current={currentTab === 'home' || currentTab === 'receive' ? 'page' : undefined}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'home' || currentTab === 'receive'
                   ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
@@ -122,6 +133,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('friends')}
+              aria-current={currentTab === 'friends' ? 'page' : undefined}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'friends'
                   ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
@@ -136,25 +148,22 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('discover')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
+              aria-current={currentTab === 'discover' ? 'page' : undefined}
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'discover'
-                  ? 'bg-[#0052FF] text-white'
-                  : 'bg-[#EEF4FF] text-[#0052FF] hover:bg-[#E0ECFF]'
+                  ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
+                  : 'text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6]'
               }`}
             >
-              <div className="flex items-center gap-3.5">
-                <Compass className="w-5 h-5 shrink-0" />
-                <span>{t.nav.discover}</span>
-              </div>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/20 font-semibold">
-                {t.nav.hub}
-              </span>
+              <Compass className="w-5 h-5 shrink-0" />
+              <span>{t.nav.discover}</span>
             </button>
 
             {/* 4. History */}
             <button
               type="button"
               onClick={() => onTabChange('history')}
+              aria-current={currentTab === 'history' ? 'page' : undefined}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'history'
                   ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
@@ -169,6 +178,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={() => onTabChange('settings')}
+              aria-current={currentTab === 'settings' ? 'page' : undefined}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                 currentTab === 'settings'
                   ? 'bg-[#EEF4FF] text-[#0052FF] font-semibold'
@@ -184,6 +194,7 @@ export function AppLayout({
               <button
                 type="button"
                 onClick={() => onTabChange('dev')}
+                aria-current={currentTab === 'dev' ? 'page' : undefined}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] ${
                   currentTab === 'dev'
                     ? 'bg-[#0A0B0D] text-white font-semibold'
@@ -228,8 +239,8 @@ export function AppLayout({
         )}
 
         {/* TOPBAR (sisi kanan tetap diam walau lebar pil Pukico ID di kiri berubah) */}
-        <header className="w-full h-14 px-4 py-2 shrink-0">
-          <div className="w-full max-w-[560px] mx-auto flex items-center justify-between gap-2 h-full">
+        <header className="w-full h-14 py-2 shrink-0">
+          <div className={getTopbarContainerClasses(currentTab)}>
             {/* Kiri: pil ID */}
             <div className="h-9 px-3 bg-white border border-[#E5E7EB] rounded-full flex items-center gap-2">
               {formattedPukicoId ? (

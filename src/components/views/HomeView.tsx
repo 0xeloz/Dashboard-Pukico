@@ -231,7 +231,7 @@ export function HomeView({
 
   return (
     <div
-      className="relative w-full max-w-[560px] mx-auto px-4 py-1 space-y-6 touch-pan-y"
+      className="relative w-full max-w-[560px] xl:max-w-[1040px] mx-auto px-4 xl:px-6 py-1 touch-pan-y"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -269,7 +269,11 @@ export function HomeView({
         </div>
       )}
 
-      {/* 1. KARTU SALDO */}
+      {/* Responsive layout: 1-col on mobile/tablet, 2-col on xl (>=1280px) with 32px gap */}
+      <div className="space-y-6 xl:space-y-0 xl:grid xl:grid-cols-[minmax(0,560px)_minmax(0,420px)] xl:justify-between xl:gap-8">
+        {/* Kolom kiri (maksimal 560px): kartu saldo, aksi cepat, daftar aset */}
+        <div className="space-y-6 w-full max-w-[560px]">
+          {/* 1. KARTU SALDO */}
       <section
         aria-label={t.home.balanceSummaryAria}
         className="relative bg-[#0052FF] rounded-[24px] p-5 text-white overflow-hidden min-h-[150px] flex flex-col justify-between"
@@ -515,60 +519,65 @@ export function HomeView({
           </div>
         </div>
       </section>
-
-      {/* 4. AKTIVITAS TERBARU */}
-      <section
-        aria-label={t.home.recentActivity}
-        className={isInitialSession ? 'animate-fade-up [animation-delay:80ms]' : ''}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-[18px] font-bold text-[#0A0B0D]">{t.home.recentActivity}</h2>
-          <button
-            type="button"
-            onClick={onNavigateToHistory}
-            className="text-xs font-semibold text-[#0052FF] hover:text-[#0042D6] flex items-center gap-1 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
-          >
-            <span>{t.home.fullHistory}</span>
-            <span aria-hidden="true">&rsaquo;</span>
-          </button>
         </div>
 
-        {!isDemoMode ? (
-          txs.length === 0 ? (
-            <div className="py-7 border-b border-[#E5E7EB] text-center">
-              <p className="text-xs sm:text-sm text-[#5B6577] max-w-xs mx-auto leading-relaxed">
-                {t.home.noActivity}
-              </p>
+        {/* Kolom kanan (fleksibel, maksimal 420px, sticky top-4): Recent activity beserta link Full history */}
+        <div className="w-full xl:max-w-[420px] xl:sticky xl:top-4 xl:self-start">
+          {/* 4. AKTIVITAS TERBARU */}
+          <section
+            aria-label={t.home.recentActivity}
+            className={isInitialSession ? 'animate-fade-up [animation-delay:80ms]' : ''}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-[18px] font-bold text-[#0A0B0D]">{t.home.recentActivity}</h2>
+              <button
+                type="button"
+                onClick={onNavigateToHistory}
+                className="text-xs font-semibold text-[#0052FF] hover:text-[#0042D6] flex items-center gap-1 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
+              >
+                <span>{t.home.fullHistory}</span>
+                <span aria-hidden="true">&rsaquo;</span>
+              </button>
             </div>
-          ) : (
-            <div>
-              {txs.slice(0, 3).map((tx) => (
-                <ActivityRow
-                  key={tx.tx_hash}
-                  activity={tx}
-                  onClick={() => setSelectedDetailTx(tx)}
-                />
-              ))}
-            </div>
-          )
-        ) : (
-          <div>
-            <div className="flex items-center justify-between py-1 text-[11px] text-[#B45309]">
-              <span className="text-[13px] font-semibold text-[#5B6577]">{t.home.previewFeed}</span>
-              <span className="px-1.5 py-0.5 rounded bg-[#FFFBEB] font-bold border border-[#FDE68A]">
-                {t.common.demoData}
-              </span>
-            </div>
-            {txs.slice(0, 3).map((tx) => (
-              <ActivityRow
-                key={tx.tx_hash}
-                activity={tx}
-                onClick={() => setSelectedDetailTx(tx)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+
+            {!isDemoMode ? (
+              txs.length === 0 ? (
+                <div className="py-7 border-b border-[#E5E7EB] text-center">
+                  <p className="text-xs sm:text-sm text-[#5B6577] max-w-xs mx-auto leading-relaxed">
+                    {t.home.noActivity}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  {txs.slice(0, 3).map((tx) => (
+                    <ActivityRow
+                      key={tx.tx_hash}
+                      activity={tx}
+                      onClick={() => setSelectedDetailTx(tx)}
+                    />
+                  ))}
+                </div>
+              )
+            ) : (
+              <div>
+                <div className="flex items-center justify-between py-1 text-[11px] text-[#B45309]">
+                  <span className="text-[13px] font-semibold text-[#5B6577]">{t.home.previewFeed}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-[#FFFBEB] font-bold border border-[#FDE68A]">
+                    {t.common.demoData}
+                  </span>
+                </div>
+                {txs.slice(0, 3).map((tx) => (
+                  <ActivityRow
+                    key={tx.tx_hash}
+                    activity={tx}
+                    onClick={() => setSelectedDetailTx(tx)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
 
       {/* 5. BOTTOM SHEETS UNTUK AKSI CEPAT */}
       {/* Sheet 1: Receive */}

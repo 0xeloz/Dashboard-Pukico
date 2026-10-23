@@ -42,7 +42,7 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
 
   if (profile.role !== 'admin') {
     return (
-      <div className="w-full max-w-[560px] mx-auto py-12 px-4 text-center">
+      <div className="w-full max-w-[560px] lg:max-w-[720px] mx-auto py-12 px-4 text-center">
         <AlertTriangle className="w-10 h-10 text-[#B91C1C] mx-auto mb-3" />
         <h2 className="text-lg font-bold text-[#0A0B0D] mb-1">Access Restricted</h2>
         <p className="text-xs text-[#5B6577] mb-4">
@@ -67,7 +67,7 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
   );
 
   return (
-    <div className="w-full max-w-[560px] mx-auto px-4 sm:px-6 py-2 space-y-5 animate-fade-up">
+    <div className="w-full max-w-[560px] lg:max-w-[720px] mx-auto px-4 sm:px-6 py-2 space-y-5 animate-fade-up">
       {/* Top Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">

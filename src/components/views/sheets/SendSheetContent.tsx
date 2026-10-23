@@ -745,7 +745,7 @@ export function SendSheetContent({
             {/* Friends chips (up to 5 recent friends) */}
             {friends.length > 0 && (
               <div className="pt-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-[#5B6577] mb-2">
+                <div className="text-xs font-semibold text-[#5B6577] mb-2">
                   {t.sheets.send.friendsLabel || 'Friends'}
                 </div>
                 <div className="flex flex-wrap gap-1.5">

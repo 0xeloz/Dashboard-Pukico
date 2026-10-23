@@ -324,7 +324,7 @@ export function FriendsView() {
 
   return (
     <div
-      className="relative w-full max-w-[560px] mx-auto px-4 py-2 space-y-4 touch-pan-y"
+      className="relative w-full max-w-[560px] lg:max-w-[720px] mx-auto px-4 py-2 space-y-4 touch-pan-y"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}

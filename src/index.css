@@ -38,6 +38,12 @@
   h1, h2, h3, h4, h5, h6 {
     color: #0A0B0D;
   }
+
+  :focus-visible {
+    outline: 2px solid #0052FF;
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
 }
 
 .pb-safe {

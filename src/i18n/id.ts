@@ -1,5 +1,12 @@
 import type { Translations } from './en';
 
+// Compile-time check ensuring both dictionaries stay in exact 1:1 key parity
+type DeepKeys<T> = T extends object
+  ? { [K in keyof T]: `${Exclude<K, symbol>}` | `${Exclude<K, symbol>}.${DeepKeys<T[K]>}` }[keyof T]
+  : never;
+
+type AssertEqual<T, U> = (<G>() => G extends T ? 1 : 2) extends (<G>() => G extends U ? 1 : 2) ? true : false;
+
 export const id: Translations = {
   common: {
     appName: 'Pukico',
@@ -37,7 +44,6 @@ export const id: Translations = {
     settings: 'Pengaturan',
     devConsole: '/dev Console',
     currentSession: 'Sesi saat ini',
-    hub: 'Hub',
   },
   notifications: {
     title: 'Notifikasi',
@@ -277,7 +283,7 @@ export const id: Translations = {
     errorUnauthorized: 'Sesimu habis. Masuk lagi.',
     errorNetwork: 'Gak bisa terhubung ke Pukico. Cek koneksimu lalu coba lagi.',
     errorGeneric: 'Ada masalah di sisi kami. Coba lagi sebentar ya.',
-    demoDataNotice: 'DATA CONTOH',
+    demoDataNotice: 'Data contoh',
   },
   friends: {
     title: 'Teman',
@@ -302,4 +308,7 @@ export const id: Translations = {
     demoData: 'DATA CONTOH',
   },
 };
+
+// Build-breaking assertion: fails TypeScript compile if en and id ever have diverging keys
+export const _enIdSymmetryCheck: AssertEqual<DeepKeys<Translations>, DeepKeys<typeof id>> = true;
 

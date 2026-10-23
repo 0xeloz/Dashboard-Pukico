@@ -240,7 +240,7 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
 
         <div className="flex items-center gap-2">
           {isDemoMode && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#E5E7EB] text-[#5B6577] uppercase tracking-wider">
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#E5E7EB] text-[#5B6577]">
               {t.onboarding.demoDataNotice}
             </span>
           )}
