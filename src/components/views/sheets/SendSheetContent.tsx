@@ -25,6 +25,7 @@ import {
   type TxRecord,
 } from '../../../lib/txApi';
 import { useFriends } from '../../../context/FriendsContext';
+import { UsdcTokenIcon, EthTokenIcon } from '../../ui/PukicoBrand';
 import type { UserProfile } from '../../../types';
 
 interface SendSheetContentProps {
@@ -620,8 +621,8 @@ export function SendSheetContent({
               className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center font-bold text-[#0052FF] text-sm">
-                  USDC
+                <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
+                  <UsdcTokenIcon className="w-6 h-6" />
                 </div>
                 <div className="text-left">
                   <div className="font-semibold text-sm text-[#0A0B0D]">USD Coin</div>
@@ -647,8 +648,8 @@ export function SendSheetContent({
               className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center font-bold text-[#0052FF] text-sm">
-                  ETH
+                <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
+                  <EthTokenIcon className="w-6 h-6" />
                 </div>
                 <div className="text-left">
                   <div className="font-semibold text-sm text-[#0A0B0D]">Ether</div>

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useBalance } from '../../../context/BalanceContext';
 import { useT } from '../../../i18n';
+import { UsdcTokenIcon } from '../../ui/PukicoBrand';
 import type { UserProfile } from '../../../types';
 
 export { SendSheetContent } from './SendSheetContent';
@@ -275,8 +276,9 @@ export function FaucetSheetContent({
           href="https://faucet.circle.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
+          className="inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
         >
+          <UsdcTokenIcon className="w-4 h-4" />
           <span>{t.sheets.faucet.openFaucet}</span>
           <ExternalLink className="w-3.5 h-3.5" />
         </a>

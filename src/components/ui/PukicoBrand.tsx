@@ -13,30 +13,32 @@ export function GenericNetworkIcon({ className = 'w-4 h-4' }: { className?: stri
 }
 
 /**
- * Token icon badges (handmade SVG, no external images)
+ * Official Circle USDC Logo icon asset
  */
 export function UsdcTokenIcon({ className = 'w-7 h-7' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="15" fill="#2775CA" />
-      <path
-        d="M17.5 10.5C14.7 10.5 13 11.9 13 13.7C13 17 19.5 16 19.5 18.5C19.5 19.6 18.4 20.4 16.7 20.4C14.8 20.4 13.7 19.4 13.5 18M16.5 8.5V10.5M16.5 20.5V22.5"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
+    <img
+      src="/assets/aistudio/Circle_USDC_Logo.svg_ad5d6cbc.png"
+      alt="USDC"
+      className={`aspect-square object-contain select-none shrink-0 ${className}`}
+      loading="eager"
+      draggable={false}
+    />
   );
 }
 
+/**
+ * Official Ethereum (ETH) round logo asset
+ */
 export function EthTokenIcon({ className = 'w-7 h-7' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="15" fill="#627EEA" />
-      <g transform="translate(10, 6) scale(0.75)">
-        <polygon points="8,0 0.5,12 8,16 15.5,12" fill="white" fillOpacity="0.9" />
-        <polygon points="8,17.5 0.5,13.5 8,24 15.5,13.5" fill="white" fillOpacity="0.75" />
-      </g>
-    </svg>
+    <img
+      src="/assets/aistudio/ethereum-eth-round-logo-icon-png-701751694969815akblwl2552_1031196f.png"
+      alt="ETH"
+      className={`aspect-square object-contain select-none shrink-0 ${className}`}
+      loading="eager"
+      draggable={false}
+    />
   );
 }
+
