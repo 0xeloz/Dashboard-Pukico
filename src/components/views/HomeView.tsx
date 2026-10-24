@@ -352,20 +352,9 @@ export function HomeView({
           )}
         </div>
 
-        {/* Bawah: Chip "Testnet · Base Sepolia" & Info Biaya ETH */}
-        <div className="relative z-10 flex flex-col gap-1.5 pt-1 text-xs">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="h-7 px-2.5 rounded-full border border-white/30 text-xs font-medium text-white flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                <span>{t.common.testnetBaseSepolia}</span>
-              </div>
-            </div>
-
-            <span className="text-[#DCE8FF] text-xs font-medium">{t.common.noMonetaryValue}</span>
-          </div>
-
-          {showEthFeeRow && (
+        {/* Bawah: Info Biaya ETH & Tanpa nilai uang */}
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+          {showEthFeeRow ? (
             <div className="text-[12px] text-[#DCE8FF] flex items-center gap-1.5 leading-normal transition-opacity duration-150">
               {isZeroEth && !isBalanceHidden ? (
                 <>
@@ -378,7 +367,11 @@ export function HomeView({
                 </span>
               )}
             </div>
+          ) : (
+            <div />
           )}
+
+          <span className="text-[#DCE8FF] text-xs font-medium shrink-0 ml-auto">{t.common.noMonetaryValue}</span>
         </div>
       </section>
 
