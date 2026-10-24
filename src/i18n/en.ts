@@ -47,6 +47,7 @@ export const en = {
   },
   history: {
     title: 'History',
+    subtitle: 'Complete record of your past transactions.',
     details: 'Transaction details',
     status: 'Status',
     pending: 'Pending',
@@ -79,6 +80,7 @@ export const en = {
     usdCoin: 'USD Coin',
     ether: 'Ether',
     recentActivity: 'Recent activity',
+    recentActivitySub: 'Your latest transactions and transfers.',
     fullHistory: 'Full history',
     noActivity: 'No activity yet. Transactions you send or receive will show up here.',
     previewFeed: 'Preview feed',
@@ -278,6 +280,7 @@ export const en = {
   },
   friends: {
     title: 'Friends',
+    subtitle: 'Search and manage friends to send funds quickly.',
     searchPlaceholder: 'Search a Pukico ID',
     add: 'Add',
     added: 'Added',

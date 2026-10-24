@@ -306,10 +306,10 @@ export function HomeView({
           <button
             type="button"
             onClick={toggleBalanceVisibility}
-            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/20 text-white flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
+            className="p-1 text-white/80 hover:text-white transition-opacity duration-[var(--dur-tap)] cursor-pointer active:scale-[0.92] flex items-center justify-center"
             aria-label={isBalanceHidden ? t.home.showBalance : t.home.hideBalance}
           >
-            {isBalanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {isBalanceHidden ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
 
@@ -521,12 +521,15 @@ export function HomeView({
             aria-label={t.home.recentActivity}
             className={isInitialSession ? 'animate-fade-up [animation-delay:80ms]' : ''}
           >
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-[18px] font-bold text-[#0A0B0D]">{t.home.recentActivity}</h2>
+            <div className="flex items-start justify-between mb-2.5">
+              <div>
+                <h2 className="text-[18px] font-bold text-[#0A0B0D] leading-snug">{t.home.recentActivity}</h2>
+                <p className="text-xs text-[#5B6577] mt-0.5">{t.home.recentActivitySub}</p>
+              </div>
               <button
                 type="button"
                 onClick={onNavigateToHistory}
-                className="text-xs font-semibold text-[#0052FF] hover:text-[#0042D6] flex items-center gap-1 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
+                className="text-xs font-semibold text-[#0052FF] hover:text-[#0042D6] flex items-center gap-1 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] shrink-0 self-start pt-0.5"
               >
                 <span>{t.home.fullHistory}</span>
                 <span aria-hidden="true">&rsaquo;</span>

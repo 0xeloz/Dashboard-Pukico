@@ -363,12 +363,17 @@ export function FriendsView() {
       )}
 
       {/* Top Header: Title & Demo Badge */}
-      <div className="flex items-center justify-between pt-1">
-        <h1 className="text-xl font-bold tracking-tight text-[#0A0B0D]">
-          {t.friends.title}
-        </h1>
+      <div className="flex items-start justify-between pt-1">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-[#0A0B0D]">
+            {t.friends.title}
+          </h1>
+          <p className="text-xs text-[#5B6577] mt-0.5">
+            {t.friends.subtitle}
+          </p>
+        </div>
         {isDemoMode && (
-          <span className="px-2 py-0.5 rounded bg-[#FFFBEB] text-[#B45309] font-bold text-[11px] border border-[#FDE68A]">
+          <span className="px-2 py-0.5 rounded bg-[#FFFBEB] text-[#B45309] font-bold text-[11px] border border-[#FDE68A] shrink-0">
             {t.friends.demoData}
           </span>
         )}

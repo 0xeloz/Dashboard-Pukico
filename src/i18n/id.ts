@@ -56,6 +56,7 @@ export const id: Translations = {
   },
   history: {
     title: 'Riwayat',
+    subtitle: 'Catatan lengkap seluruh riwayat transaksimu.',
     details: 'Detail transaksi',
     status: 'Status',
     pending: 'Menunggu',
@@ -88,6 +89,7 @@ export const id: Translations = {
     usdCoin: 'USD Coin',
     ether: 'Ether',
     recentActivity: 'Aktivitas terbaru',
+    recentActivitySub: 'Transaksi dan transfer terbaru di akunmu.',
     fullHistory: 'Riwayat lengkap',
     noActivity: 'Belum ada aktivitas. Transaksi kirim dan terima bakal muncul di sini.',
     previewFeed: 'Umpan contoh',
@@ -287,6 +289,7 @@ export const id: Translations = {
   },
   friends: {
     title: 'Teman',
+    subtitle: 'Cari dan kelola teman untuk kirim saldo dengan cepat.',
     searchPlaceholder: 'Cari Pukico ID',
     add: 'Tambah',
     added: 'Ditambahkan',

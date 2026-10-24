@@ -133,8 +133,9 @@ export function HistoryView({ isDemoMode }: HistoryViewProps) {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between pt-1">
+      <div className="pt-1">
         <h1 className="text-2xl font-bold text-[#0A0B0D] tracking-tight">{t.history.title}</h1>
+        <p className="text-xs text-[#5B6577] mt-0.5">{t.history.subtitle}</p>
       </div>
 
       {/* Demo Notice */}
