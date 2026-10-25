@@ -16,8 +16,11 @@ const rawPrivyAppId = (import.meta.env.VITE_PRIVY_APP_ID || '').toString().trim(
 const isValidAppId = isValidPrivyAppId(rawPrivyAppId);
 const demoEnvVar = (import.meta.env.VITE_DEMO_MODE || '').toString().toLowerCase();
 
-// Demo Mode is active if explicitly set to "true", or as an automatic mock fallback when Privy App ID is not configured (unless explicitly disabled with VITE_DEMO_MODE="false")
-const isDemoModeActive = demoEnvVar === 'true' || (!isValidAppId && demoEnvVar !== 'false');
+// In production, Demo Mode is ONLY active if explicitly enabled with VITE_DEMO_MODE="true".
+// The automatic fallback when Privy App ID is invalid/missing only applies in dev mode (import.meta.env.DEV) if not explicitly disabled.
+const isDemoModeActive = import.meta.env.PROD
+  ? demoEnvVar === 'true'
+  : demoEnvVar === 'true' || (!isValidAppId && demoEnvVar !== 'false');
 
 export const ENV = {
   PRIVY_APP_ID: rawPrivyAppId,

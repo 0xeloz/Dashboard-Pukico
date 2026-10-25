@@ -129,14 +129,18 @@ function AuthLoadingScreen() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [forcedDemo, setForcedDemo] = useState(false);
 
-  // 1. Strict demo mode check or fallback demo
-  if (ENV.IS_DEMO_MODE || forcedDemo) {
+  // 1. Strict demo mode check or fallback demo (forcedDemo only permitted in dev)
+  if (ENV.IS_DEMO_MODE || (import.meta.env.DEV && forcedDemo)) {
     return <DemoAuthProvider>{children}</DemoAuthProvider>;
   }
 
-  // 2. Missing configuration check
+  // 2. Missing configuration check (no demo button in production)
   if (ENV.IS_CONFIG_MISSING) {
-    return <ConfigurationMissingScreen onEnableDemo={() => setForcedDemo(true)} />;
+    return (
+      <ConfigurationMissingScreen
+        onEnableDemo={import.meta.env.DEV ? () => setForcedDemo(true) : undefined}
+      />
+    );
   }
 
   // 3. Live Privy provider (lazy loaded)
