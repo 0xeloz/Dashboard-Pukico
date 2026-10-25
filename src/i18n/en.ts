@@ -287,6 +287,9 @@ export const en = {
     emailHint: 'Sign in with the same email from your waitlist to keep your reserved Pukico ID.',
     waitlistLink: "Don't have a code? Join the waitlist",
     logoutBtn: 'Log out',
+    onWaitlistNotice: "You're already on the waitlist ✓ Invites are rolling out in batches. If you've received your code, enter it below.",
+    heldIdNotice: 'ID @{id} is reserved for you.',
+    notOnWaitlistNotice: 'Not on the waitlist yet? Join first, invites are rolling out in batches.',
     errors: {
       invalid_code: 'Code not found. Please double-check your spelling.',
       expired: 'This code has expired. Request a new code on Discord.',

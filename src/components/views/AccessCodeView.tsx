@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertCircle, ExternalLink, Loader2, KeyRound } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAuth } from '../../context/AuthContext';
-import { redeemAccessCode, type RedeemAccessCodeReason } from '../../lib/claimApi';
+import { initClaim, redeemAccessCode, type RedeemAccessCodeReason } from '../../lib/claimApi';
 
 export function AccessCodeView() {
   const { t } = useT();
@@ -12,6 +12,52 @@ export function AccessCodeView() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Waitlist init state
+  const [isLoadingInit, setIsLoadingInit] = useState<boolean>(true);
+  const [onWaitlist, setOnWaitlist] = useState<boolean>(false);
+  const [heldId, setHeldId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function checkWaitlistInit() {
+      try {
+        const token = getAccessToken ? await getAccessToken() : null;
+        const res = await initClaim({
+          privyToken: token,
+          isDemoMode,
+        });
+
+        if (isCancelled) return;
+
+        // If user already has full access, proceed directly to onboarding
+        if (res.has_access) {
+          grantBetaAccess();
+          return;
+        }
+
+        setOnWaitlist(Boolean(res.on_waitlist));
+        setHeldId(res.held_id ?? null);
+      } catch (_err) {
+        // If init fails, treat as on_waitlist = false and do not display error
+        if (!isCancelled) {
+          setOnWaitlist(false);
+          setHeldId(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingInit(false);
+        }
+      }
+    }
+
+    checkWaitlistInit();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [getAccessToken, isDemoMode, grantBetaAccess]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.toUpperCase();
@@ -122,6 +168,28 @@ export function AccessCodeView() {
             </p>
           </div>
 
+          {/* Waitlist status notification above input */}
+          {isLoadingInit ? (
+            <div className="h-14 rounded-2xl bg-[#E5E7EB]/50 animate-pulse" aria-hidden="true" />
+          ) : onWaitlist ? (
+            <div className="p-4 rounded-2xl bg-[#EEF4FF] border border-[#BFDBFE] text-left space-y-1">
+              <p className="text-xs sm:text-sm font-semibold text-[#0052FF] leading-relaxed">
+                {t.accessCode.onWaitlistNotice}
+              </p>
+              {heldId && (
+                <p className="text-xs text-[#3B4455] font-medium leading-relaxed">
+                  {t.accessCode.heldIdNotice.replace('{id}', heldId)}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-[#F0F2F5] border border-[#E5E7EB] text-left">
+              <p className="text-xs sm:text-sm text-[#5B6577] font-medium leading-relaxed">
+                {t.accessCode.notOnWaitlistNotice}
+              </p>
+            </div>
+          )}
+
           {/* Access Code Input */}
           <div className="space-y-2">
             <div className="relative flex items-center h-14 bg-white border border-[#E5E7EB] focus-within:border-[#0052FF] focus-within:ring-2 focus-within:ring-[#0052FF]/20 rounded-2xl px-4 transition-all">
@@ -178,15 +246,17 @@ export function AccessCodeView() {
 
           {/* Waitlist link and Logout */}
           <div className="flex flex-col items-center gap-3 pt-2 text-center">
-            <a
-              href="https://pukico.xyz"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-[#0052FF] hover:underline cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <span>{t.accessCode.waitlistLink}</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            {!isLoadingInit && !onWaitlist && (
+              <a
+                href="https://pukico.xyz"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-[#0052FF] hover:underline cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <span>{t.accessCode.waitlistLink}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
 
             <button
               type="button"

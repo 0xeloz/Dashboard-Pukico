@@ -296,6 +296,9 @@ export const id: Translations = {
     emailHint: 'Login memakai email yang sama dengan email waitlist kamu agar Pukico ID pilihanmu tetap terjaga.',
     waitlistLink: 'Belum punya kode? Gabung waitlist',
     logoutBtn: 'Keluar',
+    onWaitlistNotice: 'Kamu sudah ada di waitlist ✓ Undangan dikirim bertahap. Kalau kamu sudah menerima kode, masukkan di bawah.',
+    heldIdNotice: 'ID @{id} sedang kami simpan untukmu.',
+    notOnWaitlistNotice: 'Belum di waitlist? Gabung dulu, undangan dikirim bertahap.',
     errors: {
       invalid_code: 'Kode tidak ditemukan. Periksa lagi penulisannya.',
       expired: 'Kode ini sudah kedaluwarsa. Minta kode baru di Discord.',
