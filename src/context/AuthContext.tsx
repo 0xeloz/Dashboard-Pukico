@@ -18,6 +18,8 @@ export interface AuthContextType {
   retrySession: () => void;
   setDemoProfileField: <K extends keyof UserProfile>(field: K, value: UserProfile[K]) => void;
   updateProfileId: (pukicoId: string) => void;
+  grantBetaAccess: () => void;
+  revokeBetaAccess: () => void;
   getAccessToken?: () => Promise<string | null>;
   sendTransaction?: (tx: any) => Promise<{ hash: `0x${string}` }>;
 }
@@ -31,6 +33,7 @@ const DEFAULT_DEMO_PROFILE: UserProfile = {
   wallet_verified: true,
   pukico_id: 'andika',
   role: 'admin',
+  beta_access: true,
 };
 
 // Lazy load Privy provider so that heavy wallet connectors are not evaluated when using demo mode
@@ -60,6 +63,20 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const handleGrantBetaAccess = useCallback(() => {
+    setProfile((prev) => ({
+      ...prev,
+      beta_access: true,
+    }));
+  }, []);
+
+  const handleRevokeBetaAccess = useCallback(() => {
+    setProfile((prev) => ({
+      ...prev,
+      beta_access: false,
+    }));
+  }, []);
+
   const handleLogin = useCallback(() => {
     setIsAuthenticated(true);
   }, []);
@@ -83,6 +100,8 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
     retrySession: () => {},
     setDemoProfileField: handleSetDemoProfileField,
     updateProfileId: handleUpdateProfileId,
+    grantBetaAccess: handleGrantBetaAccess,
+    revokeBetaAccess: handleRevokeBetaAccess,
     getAccessToken: async () => 'demo-token',
   };
 
@@ -129,16 +148,16 @@ function AuthLoadingScreen() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [forcedDemo, setForcedDemo] = useState(false);
 
-  // 1. Strict demo mode check or fallback demo (forcedDemo only permitted in dev)
-  if (ENV.IS_DEMO_MODE || (import.meta.env.DEV && forcedDemo)) {
+  // 1. Strict demo mode check or user-initiated demo fallback
+  if (ENV.IS_DEMO_MODE || forcedDemo) {
     return <DemoAuthProvider>{children}</DemoAuthProvider>;
   }
 
-  // 2. Missing configuration check (no demo button in production)
+  // 2. Missing configuration check
   if (ENV.IS_CONFIG_MISSING) {
     return (
       <ConfigurationMissingScreen
-        onEnableDemo={import.meta.env.DEV ? () => setForcedDemo(true) : undefined}
+        onEnableDemo={() => setForcedDemo(true)}
       />
     );
   }

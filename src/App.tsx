@@ -14,6 +14,7 @@ import { SettingsView } from './components/views/SettingsView';
 import { DevView } from './components/views/DevView';
 import { ComingSoonView } from './components/views/ComingSoonView';
 import { OnboardingView } from './components/views/OnboardingView';
+import { AccessCodeView } from './components/views/AccessCodeView';
 import { SplashScreen } from './components/ui/SplashScreen';
 import { BottomSheet } from './components/ui/BottomSheet';
 import { SendSheetContent } from './components/views/sheets/SendSheetContent';
@@ -140,8 +141,12 @@ function Dashboard() {
     return <LoginView />;
   }
 
-  // 3. If authenticated but pukico_id is empty, show Onboarding view
+  // 3. If authenticated but pukico_id is empty, check closed beta access
   if (!profile.pukico_id || profile.pukico_id.trim() === '') {
+    if (!profile.beta_access && profile.role !== 'admin') {
+      return <AccessCodeView />;
+    }
+
     return (
       <>
         <OnboardingView onComplete={handleOnboardingComplete} />

@@ -120,6 +120,14 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     setProfile((prev) => (prev ? { ...prev, pukico_id: newId } : null));
   }, []);
 
+  const handleGrantBetaAccess = useCallback(() => {
+    setProfile((prev) => (prev ? { ...prev, beta_access: true } : null));
+  }, []);
+
+  const handleRevokeBetaAccess = useCallback(() => {
+    setProfile((prev) => (prev ? { ...prev, beta_access: false } : null));
+  }, []);
+
   const value: AuthContextType = {
     isDemoMode: false,
     hasPrivyConfigured: true,
@@ -142,6 +150,8 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     retrySession: runSessionSync,
     setDemoProfileField: () => {},
     updateProfileId: handleUpdateProfileId,
+    grantBetaAccess: handleGrantBetaAccess,
+    revokeBetaAccess: handleRevokeBetaAccess,
     getAccessToken,
     sendTransaction,
   };

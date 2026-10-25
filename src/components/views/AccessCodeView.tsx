@@ -1,0 +1,209 @@
+import React, { useState } from 'react';
+import { AlertCircle, ExternalLink, Loader2, KeyRound } from 'lucide-react';
+import { useT } from '../../i18n';
+import { useAuth } from '../../context/AuthContext';
+import { redeemAccessCode, type RedeemAccessCodeReason } from '../../lib/claimApi';
+
+export function AccessCodeView() {
+  const { t } = useT();
+  const { isDemoMode, getAccessToken, grantBetaAccess, logout } = useAuth();
+
+  const [code, setCode] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.toUpperCase();
+    setCode(val);
+    setErrorMessage(null);
+  };
+
+  const mapRedeemError = (reason: RedeemAccessCodeReason): string => {
+    switch (reason) {
+      case 'invalid_code':
+        return t.accessCode.errors.invalid_code;
+      case 'expired':
+        return t.accessCode.errors.expired;
+      case 'used':
+        return t.accessCode.errors.used;
+      case 'rate_limited':
+        return t.accessCode.errors.rate_limited;
+      case 'no_access':
+      case 'server':
+      case 'network':
+      default:
+        return t.accessCode.errors.server;
+    }
+  };
+
+  const handleSubmit = async () => {
+    const trimmed = code.trim();
+    if (!trimmed || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const token = getAccessToken ? await getAccessToken() : null;
+      const res = await redeemAccessCode(trimmed, {
+        privyToken: token,
+        isDemoMode,
+      });
+
+      if (res.ok) {
+        grantBetaAccess();
+      } else {
+        setErrorMessage(mapRedeemError(res.reason));
+      }
+    } catch (_err) {
+      setErrorMessage(t.accessCode.errors.server);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && code.trim() && !isSubmitting) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  return (
+    <main
+      className="min-h-screen bg-[#F7F8FA] flex flex-col justify-between px-5 py-7 max-w-lg mx-auto w-full select-none"
+      role="main"
+      aria-label="Closed Beta Access Code"
+    >
+      {/* Header bar: Logo + Demo badge */}
+      <header className="flex items-center justify-between pt-1 pb-4">
+        <div className="flex items-center gap-2">
+          <img
+            src="/pukico-logo.png"
+            alt="Pukico"
+            className="w-8 h-8 rounded-lg object-contain"
+          />
+          <span className="font-bold text-base tracking-tight text-[#0A0B0D]">
+            Pukico
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isDemoMode && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#E5E7EB] text-[#5B6577]">
+              {t.onboarding.demoDataNotice}
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* Main container */}
+      <div className="flex-1 flex flex-col justify-center py-4">
+        <section className="space-y-6" aria-labelledby="access-code-title">
+          <div>
+            <h1
+              id="access-code-title"
+              className="text-2xl sm:text-3xl font-extrabold text-[#0A0B0D] tracking-tight"
+            >
+              {t.accessCode.title}
+            </h1>
+            <p className="text-sm sm:text-base text-[#5B6577] mt-2 leading-relaxed">
+              {t.accessCode.subtitle}
+            </p>
+          </div>
+
+          {/* Access Code Input */}
+          <div className="space-y-2">
+            <div className="relative flex items-center h-14 bg-white border border-[#E5E7EB] focus-within:border-[#0052FF] focus-within:ring-2 focus-within:ring-[#0052FF]/20 rounded-2xl px-4 transition-all">
+              <KeyRound
+                className="w-5 h-5 text-[#5B6577] mr-2.5 shrink-0"
+                aria-hidden="true"
+              />
+              <input
+                type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                maxLength={32}
+                value={code}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder={t.accessCode.placeholder}
+                disabled={isSubmitting}
+                className="w-full h-full bg-transparent text-lg font-mono font-bold uppercase tracking-wider text-[#0A0B0D] placeholder:text-[#9CA3AF] placeholder:font-normal placeholder:tracking-normal focus:outline-none"
+                autoFocus
+              />
+            </div>
+
+            {/* Error message banner */}
+            {errorMessage && (
+              <div
+                role="alert"
+                className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-[#DC2626] flex items-center gap-2"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626]" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Small helper text */}
+            <p className="text-xs text-[#5B6577] pt-1 leading-relaxed">
+              {t.accessCode.emailHint}
+            </p>
+          </div>
+
+          {/* Submit button */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!code.trim() || isSubmitting}
+              className="w-full h-13 rounded-2xl bg-[#0052FF] text-white font-semibold text-base transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}
+              <span>{t.accessCode.submitBtn}</span>
+            </button>
+          </div>
+
+          {/* Waitlist link and Logout */}
+          <div className="flex flex-col items-center gap-3 pt-2 text-center">
+            <a
+              href="https://pukico.xyz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-[#0052FF] hover:underline cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <span>{t.accessCode.waitlistLink}</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="text-xs font-medium text-[#5B6577] hover:text-[#0A0B0D] cursor-pointer transition-colors pt-1"
+            >
+              {isLoggingOut ? t.common.loading : t.accessCode.logoutBtn}
+            </button>
+          </div>
+        </section>
+      </div>
+
+      {/* Footer text */}
+      <footer className="text-center text-xs text-[#9CA3AF] py-2 border-t border-[#E5E7EB]/60">
+        Pukico © 2026 · Base Sepolia Testnet
+      </footer>
+    </main>
+  );
+}

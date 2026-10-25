@@ -99,7 +99,10 @@ export async function syncSessionWithSupabase({
       );
     }
 
-    return data.profile;
+    return {
+      ...data.profile,
+      beta_access: Boolean(data.profile.beta_access),
+    };
   } catch (error) {
     if (error instanceof SessionSyncError) {
       throw error;

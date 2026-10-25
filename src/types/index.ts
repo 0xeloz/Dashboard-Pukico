@@ -9,6 +9,7 @@ export interface UserProfile {
   wallet_verified: boolean;
   pukico_id: string;
   role: 'user' | 'admin';
+  beta_access: boolean;
 }
 
 export type SessionErrorType = 'unauthorized' | 'wallet_in_use' | 'server';

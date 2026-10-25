@@ -28,7 +28,7 @@ type OnboardingStep = 1 | 2 | 3;
 
 export function OnboardingView({ onComplete }: OnboardingViewProps) {
   const { t } = useT();
-  const { isDemoMode, getAccessToken } = useAuth();
+  const { isDemoMode, getAccessToken, revokeBetaAccess } = useAuth();
 
   const [step, setStep] = useState<OnboardingStep>(1);
   const [rawInput, setRawInput] = useState<string>('');
@@ -175,6 +175,8 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
           return t.onboarding.errorUnauthorized;
         case 'network':
           return t.onboarding.errorNetwork;
+        case 'no_access':
+          return t.onboarding.errorNoAccess;
         case 'server':
         case 'bad_request':
         case 'no_profile':
@@ -202,6 +204,10 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
       if (result.ok) {
         setStep(3);
       } else {
+        if (result.error === 'no_access') {
+          revokeBetaAccess();
+          return;
+        }
         setClaimErrorMessage(mapClaimError(result.error, confirmedId));
         if (result.error === 'taken' || result.error === 'held') {
           // If taken concurrently, return to step 1

@@ -11,6 +11,7 @@ export type CheckStatus =
 export interface InitClaimResponse {
   held_id: string | null;
   on_waitlist: boolean;
+  has_access?: boolean;
 }
 
 export type ClaimError =
@@ -24,11 +25,25 @@ export type ClaimError =
   | 'email_unverified'
   | 'server'
   | 'bad_request'
-  | 'network';
+  | 'network'
+  | 'no_access';
 
 export type ClaimResult =
   | { ok: true; pukico_id: string }
   | { ok: false; error: ClaimError };
+
+export type RedeemAccessCodeReason =
+  | 'invalid_code'
+  | 'expired'
+  | 'used'
+  | 'rate_limited'
+  | 'no_access'
+  | 'server'
+  | 'network';
+
+export type RedeemAccessCodeResult =
+  | { ok: true }
+  | { ok: false; reason: RedeemAccessCodeReason };
 
 interface ApiRequestOptions {
   privyToken?: string | null;
@@ -51,6 +66,7 @@ export async function initClaim({
     return {
       held_id: null,
       on_waitlist: false,
+      has_access: true,
     };
   }
 
@@ -84,6 +100,7 @@ export async function initClaim({
   return {
     held_id: data.held_id ?? null,
     on_waitlist: Boolean(data.on_waitlist),
+    has_access: data.has_access !== undefined ? Boolean(data.has_access) : undefined,
   };
 }
 
@@ -210,8 +227,13 @@ export async function claimPukicoId(
       if (res.status === 401) {
         return { ok: false, error: 'unauthorized' };
       }
-      if (res.status === 403 && data.error === 'email_unverified') {
-        return { ok: false, error: 'email_unverified' };
+      if (res.status === 403) {
+        if (data.error === 'email_unverified') {
+          return { ok: false, error: 'email_unverified' };
+        }
+        if (data.error === 'no_access') {
+          return { ok: false, error: 'no_access' };
+        }
       }
       const err = data.error || (res.status >= 500 ? 'server' : 'bad_request');
       return { ok: false, error: err };
@@ -224,5 +246,78 @@ export async function claimPukicoId(
     return { ok: false, error: data.error || 'server' };
   } catch (_e) {
     return { ok: false, error: 'network' };
+  }
+}
+
+/**
+ * 4. Action "redeem": redeem access code for closed beta
+ */
+export async function redeemAccessCode(
+  code: string,
+  { privyToken, isDemoMode = false }: ApiRequestOptions
+): Promise<RedeemAccessCodeResult> {
+  const trimmed = code.trim();
+
+  if (isDemoMode) {
+    await new Promise((r) => setTimeout(r, 400));
+    if (trimmed === 'PUKI-DEMO-00000') {
+      return { ok: true };
+    }
+    return { ok: false, reason: 'invalid_code' };
+  }
+
+  if (!ENV.SUPABASE_URL) {
+    return { ok: false, reason: 'server' };
+  }
+
+  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/claim-pukico-id`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (privyToken) {
+    headers['x-privy-token'] = privyToken;
+  }
+  if (ENV.SUPABASE_ANON_KEY) {
+    headers['apikey'] = ENV.SUPABASE_ANON_KEY;
+  }
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        action: 'redeem',
+        code: trimmed,
+      }),
+    });
+
+    if (res.status === 429) {
+      return { ok: false, reason: 'rate_limited' };
+    }
+
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.ok) {
+      return { ok: true };
+    }
+
+    const rawError = data.error;
+    const validReasons: RedeemAccessCodeReason[] = [
+      'invalid_code',
+      'expired',
+      'used',
+      'rate_limited',
+      'no_access',
+      'server',
+    ];
+
+    const reason: RedeemAccessCodeReason = validReasons.includes(rawError)
+      ? rawError
+      : 'server';
+
+    return { ok: false, reason };
+  } catch (_e) {
+    return { ok: false, reason: 'network' };
   }
 }
