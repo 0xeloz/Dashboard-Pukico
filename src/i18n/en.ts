@@ -146,6 +146,7 @@ export const en = {
       needEthForFees: 'You need a little test ETH for network fees.',
       getTestEth: 'Get test ETH',
       walletNotVerified: "Your wallet isn't verified yet. Log out and sign in again.",
+      betaAccessRevoked: 'Your beta access is inactive. Contact the Pukico team.',
       networkError: "Couldn't reach Pukico. Check your connection and try again.",
       genericError: 'Something went wrong on our side. Try again in a moment.',
       demoNotice: 'DEMO DATA',

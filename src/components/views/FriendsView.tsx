@@ -49,6 +49,8 @@ export function FriendsView() {
     openSend,
   } = useFriends();
 
+  const hasBetaAccess = profile?.beta_access === true || profile?.role === 'admin';
+
   // Search input state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<SearchFriendResult[]>([]);
@@ -628,12 +630,21 @@ export function FriendsView() {
           {/* Primary Action Button: "Send to @id" */}
           <button
             type="button"
-            onClick={() => handleSendToUser(profileSheet.pukico_id)}
-            className="w-full h-12 rounded-2xl bg-[#0052FF] hover:bg-[#0042D6] text-white font-semibold text-sm transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+            disabled={!hasBetaAccess}
+            onClick={() => {
+              if (!hasBetaAccess) return;
+              handleSendToUser(profileSheet.pukico_id);
+            }}
+            className="w-full h-12 rounded-2xl bg-[#0052FF] hover:bg-[#0042D6] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
           >
             <Send className="w-4 h-4" />
             <span>{t.friends.sendTo.replace('{id}', profileSheet.pukico_id)}</span>
           </button>
+          {!hasBetaAccess && (
+            <p className="text-xs text-[#B45309] font-medium text-center pt-0.5">
+              {t.sheets.send.betaAccessRevoked}
+            </p>
+          )}
 
           {/* Secondary Action: Add or Remove */}
           {!profileSheet.is_self && (

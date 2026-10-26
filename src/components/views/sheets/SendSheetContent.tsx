@@ -48,9 +48,11 @@ export function SendSheetContent({
   prefilledRecipientId,
 }: SendSheetContentProps) {
   const { t, formatNumber } = useT();
-  const { profile, getAccessToken, sendTransaction } = useAuth();
+  const { profile, getAccessToken, sendTransaction, revokeBetaAccess } = useAuth();
   const { usdc, eth, refresh } = useBalance();
   const { friends } = useFriends();
+
+  const hasBetaAccess = profile?.beta_access === true || profile?.role === 'admin';
 
   const [step, setStep] = useState<SendStep>(1);
   const [selectedAsset, setSelectedAsset] = useState<AssetType>('USDC');
@@ -82,7 +84,7 @@ export function SendSheetContent({
   const [sendFailedBeforeHash, setSendFailedBeforeHash] = useState<boolean>(false);
   const [txHash, setTxHash] = useState<string>('');
   const [finalTxRecord, setFinalTxRecord] = useState<TxRecord | null>(null);
-  const [finalStatus, setFinalStatus] = useState<'confirmed' | 'failed' | 'timeout' | null>(null);
+  const [finalStatus, setFinalStatus] = useState<'confirmed' | 'failed' | 'timeout' | 'no_access' | null>(null);
 
   // Inform parent whether approval is in progress (to prevent backdrop clicks)
   useEffect(() => {
@@ -391,7 +393,7 @@ export function SendSheetContent({
 
   // Step 5: Execute Transaction
   const handleExecuteSend = async () => {
-    if (isSubmitting || !resolvedRecipient) return;
+    if (isSubmitting || !resolvedRecipient || !hasBetaAccess) return;
 
     setIsSubmitting(true);
     setProgressState('waiting_approval');
@@ -455,7 +457,6 @@ export function SendSheetContent({
       }
     } catch (_errBeforeHash) {
       // Failed before hash was produced (cancelled, rejected, modal closed, etc.)
-      // Do not guess error type from text
       setSendFailedBeforeHash(true);
       setProgressState(null);
       setIsSubmitting(false);
@@ -479,8 +480,9 @@ export function SendSheetContent({
       const token = getAccessToken ? await getAccessToken() : null;
 
       // Initial submit to backend
+      let submitRes;
       try {
-        await submitTxWithRetry(
+        submitRes = await submitTxWithRetry(
           {
             tx_hash: broadcastHash,
             asset: selectedAsset,
@@ -491,6 +493,15 @@ export function SendSheetContent({
         );
       } catch {
         // Continue to polling loop even if initial submit had issues
+      }
+
+      if (submitRes && !submitRes.ok && submitRes.error === 'no_access') {
+        revokeBetaAccess();
+        setIsSubmitting(false);
+        setProgressState(null);
+        setFinalStatus('no_access');
+        setStep(7);
+        return;
       }
 
       // Poll sync every 3s up to 90s for confirmation
@@ -505,6 +516,15 @@ export function SendSheetContent({
           syncRes = await syncTx(broadcastHash, { privyToken: token });
         } catch {
           syncRes = null;
+        }
+
+        if (syncRes && !syncRes.ok && syncRes.error === 'no_access') {
+          revokeBetaAccess();
+          setIsSubmitting(false);
+          setProgressState(null);
+          setFinalStatus('no_access');
+          setStep(7);
+          return;
         }
 
         if (syncRes && syncRes.ok && syncRes.tx) {
@@ -530,7 +550,7 @@ export function SendSheetContent({
           if (now - lastSubmitTime >= 10000) {
             lastSubmitTime = now;
             try {
-              await submitTx(
+              const retryRes = await submitTx(
                 {
                   tx_hash: broadcastHash,
                   asset: selectedAsset,
@@ -539,6 +559,14 @@ export function SendSheetContent({
                 },
                 { privyToken: token }
               );
+              if (!retryRes.ok && retryRes.error === 'no_access') {
+                revokeBetaAccess();
+                setIsSubmitting(false);
+                setProgressState(null);
+                setFinalStatus('no_access');
+                setStep(7);
+                return;
+              }
             } catch {
               // Ignore background submit retry error and continue polling
             }
@@ -552,7 +580,6 @@ export function SendSheetContent({
         setStep(7);
       }
     } catch (_postHashError) {
-      // Error after hash exists: JANGAN tampilkan error. Tampilkan "Sent. We're still checking it."
       setFinalStatus('timeout');
       setStep(7);
     } finally {
@@ -568,6 +595,16 @@ export function SendSheetContent({
           <AlertCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0" />
           <span className="font-semibold">{t.sheets.send.demoNotice}</span>
           <span className="text-[11px] font-normal text-[#B45309]/80">· Base Sepolia</span>
+        </div>
+      )}
+
+      {/* Prerequisite: Beta Access Inactive */}
+      {!hasBetaAccess && (
+        <div role="alert" className="flex items-start gap-2 text-xs text-[#B45309] bg-amber-50 border border-amber-200 p-3.5 rounded-xl">
+          <AlertCircle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+          <p className="font-semibold leading-relaxed">
+            {t.sheets.send.betaAccessRevoked}
+          </p>
         </div>
       )}
 
@@ -613,8 +650,9 @@ export function SendSheetContent({
             {/* USDC Row */}
             <button
               type="button"
-              disabled={isWalletUnverified}
+              disabled={isWalletUnverified || !hasBetaAccess}
               onClick={() => {
+                if (!hasBetaAccess) return;
                 setSelectedAsset('USDC');
                 setStep(prefilledRecipientId ? 3 : 2);
               }}
@@ -640,8 +678,9 @@ export function SendSheetContent({
             {/* ETH Row */}
             <button
               type="button"
-              disabled={isWalletUnverified}
+              disabled={isWalletUnverified || !hasBetaAccess}
               onClick={() => {
+                if (!hasBetaAccess) return;
                 setSelectedAsset('ETH');
                 setStep(prefilledRecipientId ? 3 : 2);
               }}
@@ -768,7 +807,7 @@ export function SendSheetContent({
           <div className="pt-2">
             <button
               type="button"
-              disabled={recipientStatus !== 'found' || !resolvedRecipient}
+              disabled={recipientStatus !== 'found' || !resolvedRecipient || !hasBetaAccess}
               onClick={() => setStep(3)}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center cursor-pointer"
             >
@@ -867,7 +906,7 @@ export function SendSheetContent({
           <div className="pt-2">
             <button
               type="button"
-              disabled={!amountValidation.valid}
+              disabled={!amountValidation.valid || !hasBetaAccess}
               onClick={() => {
                 setSendFailedBeforeHash(false);
                 setStep(4);
@@ -966,7 +1005,7 @@ export function SendSheetContent({
           <div className="pt-2">
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !hasBetaAccess}
               onClick={handleExecuteSend}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
@@ -1101,6 +1140,44 @@ export function SendSheetContent({
                 <p className="text-xs text-[#5B6577] px-4 leading-relaxed">
                   {t.sheets.send.stillCheckingDesc}
                 </p>
+              </div>
+
+              {txHash && (
+                <div>
+                  <a
+                    href={getExplorerUrl(txHash)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0052FF] hover:underline"
+                  >
+                    <span>{t.sheets.send.viewOnBasescan}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+
+              <div className="pt-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all hover:bg-[#0042D6] cursor-pointer"
+                >
+                  {t.sheets.send.doneBtn}
+                </button>
+              </div>
+            </>
+          )}
+
+          {finalStatus === 'no_access' && (
+            <>
+              <div className="w-16 h-16 rounded-full bg-amber-50 text-[#D97706] mx-auto flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 stroke-[2.5]" />
+              </div>
+
+              <div className="space-y-1 px-4">
+                <h4 className="text-base font-bold text-[#0A0B0D]">
+                  {t.sheets.send.betaAccessRevoked}
+                </h4>
               </div>
 
               {txHash && (

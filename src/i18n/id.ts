@@ -155,6 +155,7 @@ export const id: Translations = {
       needEthForFees: 'Kamu butuh sedikit ETH tes buat biaya jaringan.',
       getTestEth: 'Minta ETH tes',
       walletNotVerified: 'Wallet kamu belum terverifikasi. Keluar lalu masuk lagi.',
+      betaAccessRevoked: 'Akses beta kamu tidak aktif. Hubungi tim Pukico.',
       networkError: 'Gak bisa terhubung ke Pukico. Cek koneksimu lalu coba lagi.',
       genericError: 'Ada masalah di sisi kami. Coba lagi sebentar ya.',
       demoNotice: 'DATA CONTOH',

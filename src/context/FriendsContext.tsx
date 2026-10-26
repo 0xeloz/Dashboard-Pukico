@@ -67,7 +67,7 @@ interface FriendsProviderProps {
 }
 
 export function FriendsProvider({ walletAddress, isDemoMode, children }: FriendsProviderProps) {
-  const { getAccessToken } = useAuth();
+  const { profile, getAccessToken } = useAuth();
 
   const initialCache = useRef<FriendRecord[] | null>(
     !isDemoMode && walletAddress ? loadCachedFriends(walletAddress) : null
@@ -96,10 +96,17 @@ export function FriendsProvider({ walletAddress, isDemoMode, children }: Friends
   const [sendPrefilledId, setSendPrefilledId] = useState<string | null>(null);
   const [isSendWaitingApproval, setIsSendWaitingApproval] = useState<boolean>(false);
 
-  const openSend = useCallback((opts?: { recipientId?: string }) => {
-    setSendPrefilledId(opts?.recipientId || null);
-    setIsSendOpen(true);
-  }, []);
+  const openSend = useCallback(
+    (opts?: { recipientId?: string }) => {
+      // Sebelum alur kirim dibuka, cek profile.beta_access dan role
+      if (profile?.beta_access !== true && profile?.role !== 'admin') {
+        return;
+      }
+      setSendPrefilledId(opts?.recipientId || null);
+      setIsSendOpen(true);
+    },
+    [profile?.beta_access, profile?.role]
+  );
 
   const closeSend = useCallback(() => {
     setIsSendOpen(false);

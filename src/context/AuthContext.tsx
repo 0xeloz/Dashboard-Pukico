@@ -16,6 +16,7 @@ export interface AuthContextType {
   login: () => void;
   logout: () => Promise<void>;
   retrySession: () => void;
+  refreshSession?: () => Promise<void>;
   setDemoProfileField: <K extends keyof UserProfile>(field: K, value: UserProfile[K]) => void;
   updateProfileId: (pukicoId: string) => void;
   grantBetaAccess: () => void;
@@ -98,6 +99,7 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
     login: handleLogin,
     logout: handleLogout,
     retrySession: () => {},
+    refreshSession: async () => {},
     setDemoProfileField: handleSetDemoProfileField,
     updateProfileId: handleUpdateProfileId,
     grantBetaAccess: handleGrantBetaAccess,

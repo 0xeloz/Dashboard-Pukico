@@ -116,6 +116,38 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     }
   }, [isPrivyAuthenticated, isPrivyReady, embeddedWalletAddress, userEmail, runSessionSync]);
 
+  const refreshSession = useCallback(async () => {
+    if (!isPrivyAuthenticated || !userEmail || !embeddedWalletAddress) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const syncedProfile = await syncSessionWithSupabase({
+        privyToken: token,
+        email: userEmail,
+        walletAddress: embeddedWalletAddress,
+      });
+      setProfile(syncedProfile);
+    } catch (_err) {
+      // Do not clear profile on transient background refresh failures
+    }
+  }, [isPrivyAuthenticated, userEmail, embeddedWalletAddress, getAccessToken]);
+
+  // Revalidate session when app becomes active (visibilitychange / focus)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshSession();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [refreshSession]);
+
   const handleUpdateProfileId = useCallback((newId: string) => {
     setProfile((prev) => (prev ? { ...prev, pukico_id: newId } : null));
   }, []);
@@ -148,6 +180,7 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
       await privyLogout();
     },
     retrySession: runSessionSync,
+    refreshSession,
     setDemoProfileField: () => {},
     updateProfileId: handleUpdateProfileId,
     grantBetaAccess: handleGrantBetaAccess,

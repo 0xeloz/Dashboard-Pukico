@@ -7,6 +7,7 @@ import {
   Droplet,
   RefreshCw,
   AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
 import { useBalance } from '../../context/BalanceContext';
 import { useTx } from '../../context/TxContext';
@@ -64,6 +65,7 @@ export function HomeView({
 }: HomeViewProps) {
   const { t, formatNumber } = useT();
   const { openSend } = useFriends();
+  const hasBetaAccess = profile?.beta_access === true || profile?.role === 'admin';
 
   // Global SWR balances and transactions
   const { usdc, eth, refreshing, refresh } = useBalance();
@@ -376,15 +378,29 @@ export function HomeView({
       </section>
 
       {/* 2. AKSI CEPAT */}
-      <section aria-label={t.home.quickActionsAria}>
+      <section aria-label={t.home.quickActionsAria} className="space-y-3">
+        {/* Pesan jika akses beta dicabut */}
+        {!hasBetaAccess && (
+          <div role="alert" className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-[#B45309]" />
+            <span className="font-medium leading-relaxed">
+              {t.sheets.send.betaAccessRevoked}
+            </span>
+          </div>
+        )}
+
         <div className="grid grid-cols-3 w-full">
           {/* Action 1: Send */}
           <div className="flex flex-col items-center">
             <button
               ref={sendButtonRef}
               type="button"
-              onClick={() => openSend()}
-              className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
+              disabled={!hasBetaAccess}
+              onClick={() => {
+                if (!hasBetaAccess) return;
+                openSend();
+              }}
+              className="w-11 h-11 rounded-[14px] bg-white border border-[#E5E7EB] hover:bg-[#EEF4FF] hover:border-[#0052FF]/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
               aria-label={t.home.send}
             >
               <Send className="w-[18px] h-[18px] text-[#0A0B0D]" />
