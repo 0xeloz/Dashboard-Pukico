@@ -19,6 +19,9 @@ const demoEnvVar = (import.meta.env.VITE_DEMO_MODE || '').toString().toLowerCase
 // Automatic fallback to Demo Mode when Privy App ID is missing or invalid, unless explicitly disabled with VITE_DEMO_MODE="false"
 const isDemoModeActive = demoEnvVar === 'true' || (!isValidAppId && demoEnvVar !== 'false');
 
+const rawRequirePasskey = (import.meta.env.VITE_REQUIRE_PASSKEY || '').toString().toLowerCase();
+const isRequirePasskeyActive = rawRequirePasskey !== 'false';
+
 export const ENV = {
   PRIVY_APP_ID: rawPrivyAppId,
   SUPABASE_URL: (import.meta.env.VITE_SUPABASE_URL || '').toString().trim(),
@@ -26,6 +29,7 @@ export const ENV = {
   IS_DEMO_MODE: isDemoModeActive,
   IS_VALID_PRIVY_APP_ID: isValidAppId,
   IS_CONFIG_MISSING: !isDemoModeActive && !isValidAppId,
+  REQUIRE_PASSKEY: isRequirePasskeyActive,
 };
 
 export const CHAIN_CONFIG = {

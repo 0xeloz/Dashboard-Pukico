@@ -23,19 +23,6 @@ export interface TxRecord {
   explorer_url?: string;
 }
 
-export interface TxNotification {
-  id: string;
-  kind: 'tx_sent' | 'tx_received' | 'tx_failed';
-  tx_hash: string;
-  data: {
-    asset: 'USDC' | 'ETH';
-    amount: string;
-    counterparty: string;
-  };
-  created_at: string;
-  read: boolean;
-}
-
 export interface PendingTxEntry {
   tx_hash: string;
   asset: 'USDC' | 'ETH';
@@ -446,33 +433,6 @@ export const DEMO_TXS: TxRecord[] = [
   },
 ];
 
-export const DEMO_NOTIFICATIONS: TxNotification[] = [
-  {
-    id: 'demo-notif-1',
-    kind: 'tx_received',
-    tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-    data: {
-      asset: 'ETH',
-      amount: '0.02',
-      counterparty: 'rina',
-    },
-    created_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
-    read: false,
-  },
-  {
-    id: 'demo-notif-2',
-    kind: 'tx_sent',
-    tx_hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
-    data: {
-      asset: 'ETH',
-      amount: '0.01',
-      counterparty: 'rina',
-    },
-    created_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
-    read: true,
-  },
-];
-
 /**
  * 7. List transactions
  */
@@ -510,63 +470,6 @@ export async function listTxs(
     return { ok: true, txs: normalized };
   } catch {
     return { ok: false, txs: [] };
-  }
-}
-
-/**
- * 8. Get notifications
- */
-export async function getNotifications(
-  options: ApiOptions = {}
-): Promise<{ ok: boolean; items: TxNotification[]; unread: number }> {
-  if (options.isDemoMode) {
-    const unread = DEMO_NOTIFICATIONS.filter((n) => !n.read).length;
-    return { ok: true, items: DEMO_NOTIFICATIONS, unread };
-  }
-
-  if (!ENV.SUPABASE_URL) {
-    return { ok: false, items: [], unread: 0 };
-  }
-
-  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
-
-  try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: buildHeaders(options.privyToken),
-      body: JSON.stringify({ action: 'notifications' }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, items: [], unread: 0 };
-    const items: TxNotification[] = data.items || [];
-    const unread = typeof data.unread === 'number' ? data.unread : items.filter((n) => !n.read).length;
-    return { ok: true, items, unread };
-  } catch {
-    return { ok: false, items: [], unread: 0 };
-  }
-}
-
-/**
- * 9. Mark notifications as read
- */
-export async function markNotificationsRead(options: ApiOptions = {}): Promise<{ ok: boolean }> {
-  if (options.isDemoMode || !ENV.SUPABASE_URL) {
-    return { ok: true };
-  }
-
-  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
-
-  try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: buildHeaders(options.privyToken),
-      body: JSON.stringify({ action: 'mark_read' }),
-    });
-
-    return { ok: res.ok };
-  } catch {
-    return { ok: false };
   }
 }
 

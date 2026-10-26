@@ -1,7 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal, Shield, RefreshCw, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import {
+  Terminal,
+  Shield,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowLeft,
+  Coins,
+  ExternalLink,
+  Copy,
+  Check,
+} from 'lucide-react';
+import { formatUnits } from 'viem';
 import { checkRpcStatus } from '../../lib/viemClient';
 import { CHAIN_CONFIG, APP_METADATA } from '../../lib/config';
+import {
+  CONFIGURED_TREASURY_ADDRESS,
+  CONFIGURED_FEE_BPS,
+  isFeeActive,
+} from '../../lib/fees';
+import { fetchExactBalances, sameAddress } from '../../lib/txGuards';
+import { useToast } from '../../context/ToastContext';
 import type { UserProfile, RpcStatusInfo } from '../../types';
 
 interface DevViewProps {
@@ -183,6 +202,9 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
         )}
       </div>
 
+      {/* Treasury (Revenue) Section */}
+      <TreasuryCard adminWalletAddress={profile.wallet_address} />
+
       {/* JSON Profile (Blok kode tetap diizinkan) */}
       <div className="py-4 space-y-2.5">
         <div className="flex items-center justify-between">
@@ -199,6 +221,126 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
           {safeProfileJson}
         </pre>
       </div>
+    </div>
+  );
+}
+
+function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+  const [balances, setBalances] = useState<{ eth: bigint; usdc: bigint } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const treasuryAddress = CONFIGURED_TREASURY_ADDRESS;
+  const bps = CONFIGURED_FEE_BPS;
+  const active = isFeeActive(false);
+  const isSameAsAdmin = sameAddress(treasuryAddress, adminWalletAddress);
+
+  useEffect(() => {
+    if (treasuryAddress) {
+      setLoading(true);
+      fetchExactBalances(treasuryAddress)
+        .then((res) => setBalances(res))
+        .catch(() => setBalances(null))
+        .finally(() => setLoading(false));
+    }
+  }, [treasuryAddress]);
+
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.info('Address copied', { silent: true });
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // fallback
+    }
+  };
+
+  return (
+    <div className="py-4 border-b border-[#E5E7EB] space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Coins className="w-4 h-4 text-[#0052FF]" />
+          <h3 className="text-sm font-semibold text-[#0A0B0D]">Treasury (revenue)</h3>
+        </div>
+        {active ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#047857] text-xs font-semibold">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Active · {(bps / 100).toFixed(1)}% ({bps} bps)
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FEF2F2] text-[#B91C1C] text-xs font-semibold">
+            Disabled
+          </span>
+        )}
+      </div>
+
+      {treasuryAddress ? (
+        <div className="space-y-3 pt-1 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <span className="text-[#5B6577]">Treasury Address</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[#0A0B0D] font-semibold select-all break-all">
+                {treasuryAddress}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCopy(treasuryAddress)}
+                className="text-[#5B6577] hover:text-[#0A0B0D] p-1 rounded cursor-pointer"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-[#047857]" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[#5B6577]">Admin Wallet Status</span>
+            {isSameAsAdmin ? (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#047857] font-semibold text-[11px]">
+                Matches current admin wallet
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-[#B45309] font-semibold text-[11px]">
+                Different from admin wallet
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[#5B6577]">Treasury Balances</span>
+            <span className="font-mono text-[#0A0B0D] font-semibold">
+              {loading
+                ? 'Loading...'
+                : balances
+                ? `${formatUnits(balances.usdc, 6)} USDC · ${formatUnits(balances.eth, 18).slice(0, 8)} ETH`
+                : '—'}
+            </span>
+          </div>
+
+          <div>
+            <a
+              href={`https://sepolia.basescan.org/address/${treasuryAddress}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[#0052FF] hover:underline font-semibold"
+            >
+              <span>View treasury on Basescan</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        </div>
+      ) : (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] space-y-2">
+          <p className="font-semibold">Treasury Address is not set in live mode.</p>
+          <p className="leading-relaxed">
+            Current admin wallet: <code className="font-mono font-bold text-[#0A0B0D]">{adminWalletAddress}</code>
+          </p>
+          <p className="text-[11px] leading-relaxed">
+            To activate service fee revenue, set <code className="bg-amber-100/70 px-1 py-0.5 rounded">VITE_TREASURY_ADDRESS={adminWalletAddress}</code> and optionally <code className="bg-amber-100/70 px-1 py-0.5 rounded">VITE_FEE_BPS=50</code> in your environment variables.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

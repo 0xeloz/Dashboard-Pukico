@@ -4,6 +4,7 @@ import { LanguagePopover } from '../ui/LanguagePopover';
 import { useT } from '../../i18n';
 import { CHAIN_CONFIG } from '../../lib/config';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import type { UserProfile } from '../../types';
 
 interface SettingsViewProps {
@@ -26,11 +27,21 @@ export function SettingsView({
   hasPasskeyMfa,
 }: SettingsViewProps) {
   const { t } = useT();
+  const { toast } = useToast();
   const { enrollMfa, hasPasskeyMfa: authHasPasskey } = useAuth();
   const handleEnrollMfa = onEnrollMfa || enrollMfa;
   const isPasskeyActive = hasPasskeyMfa ?? authHasPasskey ?? false;
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Success toast when passkey changes from inactive to active
+  const prevPasskeyRef = React.useRef(isPasskeyActive);
+  React.useEffect(() => {
+    if (!prevPasskeyRef.current && isPasskeyActive) {
+      toast.success(t.toast.passkeyActivated);
+    }
+    prevPasskeyRef.current = isPasskeyActive;
+  }, [isPasskeyActive, t.toast.passkeyActivated, toast]);
 
   const maskEmail = (emailStr: string) => {
     if (!emailStr) return t.settings.noEmail;
@@ -49,6 +60,7 @@ export function SettingsView({
     try {
       await navigator.clipboard.writeText(profile.wallet_address);
       setCopied(true);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -58,6 +70,7 @@ export function SettingsView({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     }
   };

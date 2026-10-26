@@ -3,6 +3,8 @@ import { LangProvider, useT } from './i18n';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BalanceProvider } from './context/BalanceContext';
 import { TxProvider } from './context/TxContext';
+import { ToastProvider } from './context/ToastContext';
+import { ToastViewport } from './components/ui/ToastViewport';
 import { FriendsProvider, useFriends } from './context/FriendsContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginView } from './components/views/LoginView';
@@ -163,31 +165,34 @@ function Dashboard() {
   }
 
   return (
-    <BalanceProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
-      <TxProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
-        <FriendsProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
-          {showSplashOverlay && (
-            <SplashScreen
-              isLoading={isFinishingOnboarding}
-              onFinished={handleSplashFinished}
+    <ToastProvider storageId={profile.wallet_address}>
+      <ToastViewport />
+      <BalanceProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
+        <TxProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
+          <FriendsProvider walletAddress={profile.wallet_address} isDemoMode={isDemoMode}>
+            {showSplashOverlay && (
+              <SplashScreen
+                isLoading={isFinishingOnboarding}
+                onFinished={handleSplashFinished}
+              />
+            )}
+            <DashboardContent
+              currentTab={currentTab}
+              onTabChange={handleTabChange}
+              visitedTabs={visitedTabs}
+              profile={profile}
+              isDemoMode={isDemoMode}
+              isSheetOpen={isSheetOpen}
+              setIsSheetOpen={setIsSheetOpen}
+              logout={logout}
+              setDemoProfileField={setDemoProfileField}
+              enrollMfa={enrollMfa}
+              hasPasskeyMfa={hasPasskeyMfa}
             />
-          )}
-          <DashboardContent
-            currentTab={currentTab}
-            onTabChange={handleTabChange}
-            visitedTabs={visitedTabs}
-            profile={profile}
-            isDemoMode={isDemoMode}
-            isSheetOpen={isSheetOpen}
-            setIsSheetOpen={setIsSheetOpen}
-            logout={logout}
-            setDemoProfileField={setDemoProfileField}
-            enrollMfa={enrollMfa}
-            hasPasskeyMfa={hasPasskeyMfa}
-          />
-        </FriendsProvider>
-      </TxProvider>
-    </BalanceProvider>
+          </FriendsProvider>
+        </TxProvider>
+      </BalanceProvider>
+    </ToastProvider>
   );
 }
 

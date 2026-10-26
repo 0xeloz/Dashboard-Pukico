@@ -14,7 +14,7 @@ import {
 import { NotificationPanel } from '../ui/NotificationPanel';
 import { GenericNetworkIcon } from '../ui/PukicoBrand';
 import { useT } from '../../i18n';
-import { useTx } from '../../context/TxContext';
+import { useToast } from '../../context/ToastContext';
 import type { ActiveTab, UserProfile } from '../../types';
 
 interface AppLayoutProps {
@@ -55,7 +55,7 @@ export function AppLayout({
   children,
 }: AppLayoutProps) {
   const { t, phase } = useT();
-  const { unreadCount } = useTx();
+  const { unreadCount, toast } = useToast();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
 
@@ -68,6 +68,7 @@ export function AppLayout({
     try {
       await navigator.clipboard.writeText(formattedPukicoId);
       setCopiedId(true);
+      toast.info(t.toast.copiedId, { silent: true });
       setTimeout(() => setCopiedId(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -77,6 +78,7 @@ export function AppLayout({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopiedId(true);
+      toast.info(t.toast.copiedId, { silent: true });
       setTimeout(() => setCopiedId(false), 1500);
     }
   };

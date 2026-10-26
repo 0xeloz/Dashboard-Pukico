@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ExternalLink, Copy, Check, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { BottomSheet } from './BottomSheet';
 import { useT } from '../../i18n';
+import { useToast } from '../../context/ToastContext';
 import { formatAssetAmount, formatFullDateTime } from '../../lib/formatters';
 import { shortenAddress, getExplorerUrl, type TxRecord } from '../../lib/txApi';
 
@@ -13,6 +14,7 @@ interface TxDetailsSheetProps {
 
 export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
   const { t, lang } = useT();
+  const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
   if (!tx) return null;
@@ -36,6 +38,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
     try {
       await navigator.clipboard.writeText(tx.tx_hash);
       setCopied(true);
+      toast.info(t.toast.copiedHash, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -45,6 +48,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
+      toast.info(t.toast.copiedHash, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     }
   };

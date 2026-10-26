@@ -10,12 +10,17 @@ import {
   Copy,
   ChevronDown,
   ChevronUp,
+  Fingerprint,
 } from 'lucide-react';
-import { encodeFunctionData, erc20Abi, parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits } from 'viem';
 import { useAuth } from '../../../context/AuthContext';
 import { useBalance } from '../../../context/BalanceContext';
+import { useTx } from '../../../context/TxContext';
+import { useFriends } from '../../../context/FriendsContext';
+import { useToast } from '../../../context/ToastContext';
 import { useT } from '../../../i18n';
 import { publicClient, BASE_SEPOLIA_USDC_ADDRESS } from '../../../lib/viemClient';
+import { ENV, CHAIN_CONFIG } from '../../../lib/config';
 import { formatEthFee, formatAssetAmount } from '../../../lib/formatters';
 import {
   resolvePukicoId,
@@ -27,9 +32,30 @@ import {
   getExplorerUrl,
   type TxRecord,
 } from '../../../lib/txApi';
-import { useFriends } from '../../../context/FriendsContext';
+import {
+  type AssetType,
+  ASSET_DECIMALS,
+  LARGE_TRANSFER_THRESHOLD,
+  sameAddress,
+  checkRecipientAddress,
+  fetchExactBalances,
+  buildTransferRequest,
+  simulateTransfer,
+  getGasPriceCeiling,
+  type LockedTransfer,
+  extractHash,
+  isTxHash,
+} from '../../../lib/txGuards';
+import {
+  computeServiceFee,
+  maxSendableWithFee,
+  getTreasuryAddress,
+  getFeeBps,
+  isFeeActive,
+  isTreasuryAddress,
+  formatUnitsTrimmed,
+} from '../../../lib/fees';
 import { UsdcTokenIcon, EthTokenIcon } from '../../ui/PukicoBrand';
-import type { UserProfile } from '../../../types';
 
 interface SendSheetContentProps {
   onClose: () => void;
@@ -39,7 +65,6 @@ interface SendSheetContentProps {
 }
 
 type SendStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-type AssetType = 'USDC' | 'ETH';
 type PreHashFailureReason = 'user_rejected' | 'insufficient_funds' | 'generic';
 
 function identifyPreHashFailureReason(err: unknown): PreHashFailureReason {
@@ -50,7 +75,6 @@ function identifyPreHashFailureReason(err: unknown): PreHashFailureReason {
   const errorObj = err as Record<string, any>;
   const cause = errorObj.cause as Record<string, any> | undefined;
 
-  // 1. User rejection / cancellation (EIP-1193 code 4001, CAIP code 5000)
   const code = errorObj.code ?? cause?.code;
   if (code === 4001 || code === 5000 || String(code) === '4001' || String(code) === '5000') {
     return 'user_rejected';
@@ -76,7 +100,6 @@ function identifyPreHashFailureReason(err: unknown): PreHashFailureReason {
     return 'user_rejected';
   }
 
-  // 2. Insufficient funds / gas
   if (privyErrorCode === 'insufficient_balance') {
     return 'insufficient_funds';
   }
@@ -85,7 +108,6 @@ function identifyPreHashFailureReason(err: unknown): PreHashFailureReason {
     return 'insufficient_funds';
   }
 
-  // Standard RPC node error for insufficient funds (code -32000, -32003, or name RpcError)
   if (code === -32000 || code === -32003 || name === 'RpcError' || cause?.name === 'RpcError') {
     const rpcMessage = String(errorObj.shortMessage || errorObj.details || errorObj.message || '');
     const causeMessage = String(cause?.shortMessage || cause?.details || cause?.message || '');
@@ -102,7 +124,6 @@ function identifyPreHashFailureReason(err: unknown): PreHashFailureReason {
   return 'generic';
 }
 
-const BASE_SEPOLIA_CHAIN_ID = 84532;
 const FAUCET_URL = 'https://portal.cdp.coinbase.com/products/faucet';
 
 export function SendSheetContent({
@@ -112,14 +133,68 @@ export function SendSheetContent({
   prefilledRecipientId,
 }: SendSheetContentProps) {
   const { t, formatNumber } = useT();
-  const { profile, getAccessToken, sendTransaction, revokeBetaAccess } = useAuth();
-  const { usdc, eth, refresh } = useBalance();
+  const {
+    profile,
+    getAccessToken,
+    sendTransaction,
+    revokeBetaAccess,
+    enrollMfa,
+    hasPasskeyMfa,
+    embeddedWalletAddress,
+  } = useAuth();
+  const { usdc, eth, refresh: refreshBalanceCtx } = useBalance();
+  const { txs } = useTx();
   const { friends } = useFriends();
+  const { toast } = useToast();
 
   const hasBetaAccess = profile?.beta_access === true || profile?.role === 'admin';
 
+  // 1. Passkey requirement for live mode
+  const needsPasskey = !isDemoMode && ENV.REQUIRE_PASSKEY && !hasPasskeyMfa;
+
+  // Track passkey activation transition
+  const prevPasskeyRef = useRef(hasPasskeyMfa);
+  useEffect(() => {
+    if (!prevPasskeyRef.current && hasPasskeyMfa) {
+      toast.success(t.toast.passkeyActivated);
+    }
+    prevPasskeyRef.current = hasPasskeyMfa;
+  }, [hasPasskeyMfa, t.toast.passkeyActivated, toast]);
+
   const [step, setStep] = useState<SendStep>(1);
   const [selectedAsset, setSelectedAsset] = useState<AssetType>('USDC');
+
+  // Exact on-chain bigint balances with 15-second refresh
+  const [exactBalances, setExactBalances] = useState<{ eth: bigint; usdc: bigint }>({
+    eth: 0n,
+    usdc: 0n,
+  });
+
+  const loadBalances = useCallback(async () => {
+    if (!profile?.wallet_address) return;
+    try {
+      const res = await fetchExactBalances(profile.wallet_address);
+      setExactBalances(res);
+    } catch {
+      // Safe fallback from BalanceContext
+      try {
+        const cleanUsdc = (usdc.value || '0').replace(/,/g, '').replace('<', '').trim();
+        const cleanEth = (eth.value || '0').replace(/,/g, '').replace('<', '').trim();
+        setExactBalances({
+          usdc: parseUnits(cleanUsdc && !isNaN(Number(cleanUsdc)) ? cleanUsdc : '0', 6),
+          eth: parseUnits(cleanEth && !isNaN(Number(cleanEth)) ? cleanEth : '0', 18),
+        });
+      } catch {
+        // Keep prior state
+      }
+    }
+  }, [profile?.wallet_address, usdc.value, eth.value]);
+
+  useEffect(() => {
+    loadBalances();
+    const interval = setInterval(loadBalances, 15000);
+    return () => clearInterval(interval);
+  }, [loadBalances]);
 
   // Step 2: Recipient
   const [recipientInput, setRecipientInput] = useState<string>('');
@@ -142,48 +217,79 @@ export function SendSheetContent({
   const [isEstimatingFee, setIsEstimatingFee] = useState<boolean>(false);
   const feeEstimateDebounceRef = useRef<number | null>(null);
 
+  // Step 4: Large transfer confirmation & security states
+  const [largeTransferInput, setLargeTransferInput] = useState<string>('');
+  const [showDetails, setShowDetails] = useState<boolean>(false);
+  const [copiedDetailField, setCopiedDetailField] = useState<string | null>(null);
+  const [recipientVerificationError, setRecipientVerificationError] = useState<boolean>(false);
+  const [securityError, setSecurityError] = useState<string | null>(null);
+
   // Step 5 & 6: Execution & Progress
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [progressState, setProgressState] = useState<'waiting_approval' | 'waiting_confirmation' | null>(null);
+  const [feeApprovalPending, setFeeApprovalPending] = useState<boolean>(false);
   const [sendFailedBeforeHash, setSendFailedBeforeHash] = useState<boolean>(false);
   const [preHashFailureReason, setPreHashFailureReason] = useState<PreHashFailureReason | null>(null);
   const [txHash, setTxHash] = useState<string>('');
   const [finalTxRecord, setFinalTxRecord] = useState<TxRecord | null>(null);
   const [finalStatus, setFinalStatus] = useState<'confirmed' | 'failed' | 'timeout' | 'no_access' | null>(null);
 
-  // Step 4 Details & pre-send verification
-  const [showDetails, setShowDetails] = useState<boolean>(false);
-  const [copiedDetailField, setCopiedDetailField] = useState<string | null>(null);
-  const [recipientVerificationError, setRecipientVerificationError] = useState<boolean>(false);
-
-  const handleCopyDetail = async (text: string, fieldId: string) => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedDetailField(fieldId);
-      setTimeout(() => {
-        setCopiedDetailField((prev) => (prev === fieldId ? null : prev));
-      }, 1500);
-    } catch {
-      // Fallback
-    }
-  };
+  // Double-send prevention lock ref
+  const sendInProgressRef = useRef<boolean>(false);
 
   // Inform parent whether approval is in progress (to prevent backdrop clicks)
   useEffect(() => {
-    const isWaiting = progressState === 'waiting_approval';
+    const isWaiting = progressState === 'waiting_approval' || feeApprovalPending;
     onApprovalStateChange?.(isWaiting);
     return () => {
       onApprovalStateChange?.(false);
     };
-  }, [progressState, onApprovalStateChange]);
+  }, [progressState, feeApprovalPending, onApprovalStateChange]);
 
   // Check ETH balance for gas fee availability
-  const ethParsedNum = eth.value !== null ? parseFloat(String(eth.value).replace(/,/g, '').replace('<', '').trim()) : null;
-  const isEthZero = ethParsedNum !== null && !isNaN(ethParsedNum) && ethParsedNum === 0;
-
-  // Prerequisites check
+  const isEthZero = exactBalances.eth === 0n;
   const isWalletUnverified = profile?.wallet_verified === false;
+
+  // Fee calculations
+  const feeBps = getFeeBps(isDemoMode);
+  const isFeeExempt =
+    !isFeeActive(isDemoMode) ||
+    isTreasuryAddress(profile?.wallet_address, isDemoMode) ||
+    isTreasuryAddress(resolvedRecipient?.address, isDemoMode);
+
+  const parseAmountUnits = (val: string, asset: AssetType): bigint => {
+    if (!val || val.trim() === '') return 0n;
+    try {
+      return parseUnits(val.trim(), ASSET_DECIMALS[asset]);
+    } catch {
+      return 0n;
+    }
+  };
+
+  const amountUnits = parseAmountUnits(amountInput, selectedAsset);
+  const feeUnits = computeServiceFee(amountUnits, feeBps, isFeeExempt);
+
+  // Large transfer threshold check
+  const isLargeTransfer = amountUnits >= LARGE_TRANSFER_THRESHOLD[selectedAsset];
+  const isLargeConfirmed =
+    !isLargeTransfer ||
+    largeTransferInput.trim().toLowerCase().replace(/^@/, '') ===
+      (resolvedRecipient?.id || '').toLowerCase().replace(/^@/, '');
+
+  // Known recipient check (friend list or prior txs)
+  const isKnownRecipient = Boolean(
+    resolvedRecipient &&
+      (friends.some(
+        (f) =>
+          f.pukico_id.toLowerCase().replace(/^@/, '') ===
+          resolvedRecipient.id.toLowerCase().replace(/^@/, '')
+      ) ||
+        txs.some(
+          (tx) =>
+            (tx.to_pukico_id || tx.counterparty || '').toLowerCase().replace(/^@/, '') ===
+            resolvedRecipient.id.toLowerCase().replace(/^@/, '')
+        ))
+  );
 
   // Handle Recipient Input & 400ms Debounced Lookup
   const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -307,84 +413,35 @@ export function SendSheetContent({
     })();
   };
 
-  // Fee Estimation with 500ms debounce
+  // Fee Estimation with gas consideration for both transactions if fee is active
   const calculateFee = useCallback(
     async (asset: AssetType, targetAddr: string, valStr: string) => {
       setIsEstimatingFee(true);
       try {
-        const fees = await publicClient.estimateFeesPerGas();
-        const maxFeePerGas = fees.maxFeePerGas ?? fees.gasPrice ?? 1500000000n;
+        const maxFeePerGas = await getGasPriceCeiling(publicClient as any);
+        let gasLimit = asset === 'ETH' ? 21000n : 65000n;
 
-        let gasLimit = 21000n;
-        const sender = (profile?.wallet_address || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-        const recipient = (targetAddr || '0x0000000000000000000000000000000000000000') as `0x${string}`;
+        // If service fee will be sent in a second transaction, account for second transfer gas
+        const willSendFeeTx = isFeeActive(isDemoMode) && !isFeeExempt && feeUnits > 0n;
+        const feeTxGas = asset === 'ETH' ? 21000n : 65000n;
 
-        if (asset === 'ETH') {
-          let testValWei = 1n;
-          try {
-            if (valStr && Number(valStr) > 0) {
-              testValWei = parseUnits(valStr, 18);
-            }
-          } catch {
-            testValWei = 1n;
-          }
+        const totalGasLimit = gasLimit + (willSendFeeTx ? feeTxGas : 0n);
+        const totalWei = totalGasLimit * maxFeePerGas;
 
-          if (profile?.wallet_address && targetAddr) {
-            const estimated = await publicClient
-              .estimateGas({
-                account: sender,
-                to: recipient,
-                value: testValWei,
-              })
-              .catch(() => 21000n);
-            gasLimit = estimated;
-          }
-        } else {
-          let testValUnits = 1n;
-          try {
-            if (valStr && Number(valStr) > 0) {
-              testValUnits = parseUnits(valStr, 6);
-            }
-          } catch {
-            testValUnits = 1n;
-          }
-
-          const callData = encodeFunctionData({
-            abi: erc20Abi,
-            functionName: 'transfer',
-            args: [recipient, testValUnits],
-          });
-
-          if (profile?.wallet_address && targetAddr) {
-            const estimated = await publicClient
-              .estimateGas({
-                account: sender,
-                to: BASE_SEPOLIA_USDC_ADDRESS as `0x${string}`,
-                data: callData,
-              })
-              .catch(() => 65000n);
-            gasLimit = estimated;
-          } else {
-            gasLimit = 65000n;
-          }
-        }
-
-        const totalWei = gasLimit * maxFeePerGas;
         setEstimatedFeeWei(totalWei);
         setEstimatedFeeEth(formatEthFee(totalWei));
       } catch {
-        // Fallback standard Base Sepolia gas limit only for ETH balance reservation, NOT displayed as fee
-        const fallbackWei = asset === 'ETH' ? 21000n * 1500000000n : 65000n * 1500000000n;
+        const fallbackGas = asset === 'ETH' ? 21000n : 65000n;
+        const fallbackWei = fallbackGas * 2000000000n;
         setEstimatedFeeWei(fallbackWei);
         setEstimatedFeeEth(null);
       } finally {
         setIsEstimatingFee(false);
       }
     },
-    [profile?.wallet_address]
+    [isDemoMode, isFeeExempt, feeUnits]
   );
 
-  // Trigger fee calculation on step 3 change
   useEffect(() => {
     if (step === 3 && resolvedRecipient?.address) {
       if (feeEstimateDebounceRef.current) {
@@ -411,236 +468,375 @@ export function SendSheetContent({
     };
   }, []);
 
-  // Validation using parseUnits and BigInt (no float math)
+  // Validation using bigint directly (no float math)
   const validateAmount = (): { valid: boolean; errorKey?: string } => {
     if (!amountInput || amountInput.trim() === '') {
       return { valid: false, errorKey: 'enterAmountPlaceholder' };
     }
 
-    try {
-      const decimals = selectedAsset === 'USDC' ? 6 : 18;
-      const parsedAmount = parseUnits(amountInput.trim(), decimals);
-
-      if (parsedAmount <= 0n) {
-        return { valid: false, errorKey: 'enterAmountPlaceholder' };
-      }
-
-      const balanceStr = selectedAsset === 'USDC' ? usdc.value || '0' : eth.value || '0';
-      const balanceBigInt = parseUnits(balanceStr.trim(), decimals);
-
-      if (parsedAmount > balanceBigInt) {
-        return { valid: false, errorKey: 'notEnoughAsset' };
-      }
-
-      if (selectedAsset === 'USDC' && isEthZero) {
-        return { valid: false, errorKey: 'needEthForFees' };
-      }
-
-      return { valid: true };
-    } catch {
+    if (amountUnits <= 0n) {
       return { valid: false, errorKey: 'enterAmountPlaceholder' };
     }
+
+    if (selectedAsset === 'USDC') {
+      const totalNeeded = amountUnits + feeUnits;
+      if (totalNeeded > exactBalances.usdc) {
+        return { valid: false, errorKey: 'notEnoughAsset' };
+      }
+      if (isEthZero) {
+        return { valid: false, errorKey: 'needEthForFees' };
+      }
+    } else {
+      // ETH: amount + fee + gas
+      const reserveFee = estimatedFeeWei && estimatedFeeWei > 0n ? estimatedFeeWei : 21000n * 2000000000n;
+      const totalNeeded = amountUnits + feeUnits + reserveFee;
+      if (totalNeeded > exactBalances.eth) {
+        return { valid: false, errorKey: 'notEnoughAsset' };
+      }
+    }
+
+    return { valid: true };
   };
 
   const amountValidation = validateAmount();
 
-  // Max Button handler
+  // Max Button handler leaving room for service fee and ETH gas
   const handleMaxAmount = () => {
     if (selectedAsset === 'USDC') {
-      const raw = usdc.value || '0';
-      setAmountInput(raw);
+      const maxUnits = maxSendableWithFee(exactBalances.usdc, feeBps, 0n, isFeeExempt);
+      setAmountInput(formatUnitsTrimmed(maxUnits, 6));
     } else {
-      // ETH: Reserve gas fee
-      try {
-        const totalEthWei = parseUnits(eth.value || '0', 18);
-        const reserveFee = estimatedFeeWei && estimatedFeeWei > 0n ? estimatedFeeWei : 21000n * 1500000000n;
-        if (totalEthWei > reserveFee) {
-          const sendableWei = totalEthWei - reserveFee;
-          const formatted = formatUnits(sendableWei, 18);
-          // Max 8 decimals without trailing zeros
-          const parts = formatted.split('.');
-          if (parts.length > 1) {
-            const dec = parts[1].slice(0, 8).replace(/0+$/, '');
-            setAmountInput(dec ? `${parts[0]}.${dec}` : parts[0]);
-          } else {
-            setAmountInput(formatted);
-          }
-        } else {
-          setAmountInput('0');
-        }
-      } catch {
-        setAmountInput('0');
-      }
+      const reserveFee = estimatedFeeWei && estimatedFeeWei > 0n ? estimatedFeeWei : 21000n * 2000000000n;
+      const totalGasReserve = isFeeActive(isDemoMode) && !isFeeExempt ? reserveFee * 2n : reserveFee;
+      const maxUnits = maxSendableWithFee(exactBalances.eth, feeBps, totalGasReserve, isFeeExempt);
+      setAmountInput(formatUnitsTrimmed(maxUnits, 18, 8));
     }
   };
 
-  // Step 5: Execute Transaction
-  const handleExecuteSend = async () => {
-    if (isSubmitting || !resolvedRecipient || !hasBetaAccess) return;
+  const handleCopyDetail = async (text: string, fieldId: string) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedDetailField(fieldId);
+      toast.info(t.toast.copied, { silent: true });
+      setTimeout(() => {
+        setCopiedDetailField((prev) => (prev === fieldId ? null : prev));
+      }, 1500);
+    } catch {
+      // Fallback
+    }
+  };
 
+  // Step 5: Execute Transaction (11-step sequential security sequence)
+  const handleExecuteSend = async () => {
+    // 1. Anti-double-send lock with useRef
+    if (sendInProgressRef.current || isSubmitting) return;
+    if (!resolvedRecipient || !hasBetaAccess || !profile?.wallet_address) return;
+
+    sendInProgressRef.current = true;
     setIsSubmitting(true);
     setProgressState('waiting_approval');
+    setFeeApprovalPending(false);
     setSendFailedBeforeHash(false);
     setPreHashFailureReason(null);
+    setRecipientVerificationError(false);
+    setSecurityError(null);
 
-    // Demo Mode: Direct honest static flow (no fake hashes, no fake wait timers)
-    if (isDemoMode) {
-      try {
-        const demoResolve = await resolvePukicoId(resolvedRecipient.id, { isDemoMode: true });
-        if (
-          !demoResolve ||
-          !demoResolve.found ||
-          !demoResolve.wallet_address ||
-          demoResolve.wallet_address.toLowerCase() !== resolvedRecipient.address.toLowerCase()
-        ) {
-          setRecipientVerificationError(true);
-          setStep(4);
-          setIsSubmitting(false);
-          setProgressState(null);
-          return;
-        }
-      } catch {
+    // 2. Passkey gate
+    if (needsPasskey) {
+      setSecurityError(t.sheets.send.securityPasskeyRequired);
+      toast.error(t.sheets.send.securityPasskeyRequired);
+      setStep(1);
+      setIsSubmitting(false);
+      setProgressState(null);
+      sendInProgressRef.current = false;
+      return;
+    }
+
+    // 3. Large transfer check
+    if (isLargeTransfer && !isLargeConfirmed) {
+      setSecurityError(t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id));
+      setIsSubmitting(false);
+      setProgressState(null);
+      sendInProgressRef.current = false;
+      return;
+    }
+
+    // 4. Freeze snapshot LockedTransfer (execution only reads this snapshot)
+    const snapshot: LockedTransfer = {
+      asset: selectedAsset,
+      amountUnits,
+      feeUnits,
+      recipientId: resolvedRecipient.id,
+      recipientAddress: resolvedRecipient.address as `0x${string}`,
+      treasuryAddress: getTreasuryAddress(isDemoMode),
+      senderAddress: profile.wallet_address as `0x${string}`,
+      timestamp: Date.now(),
+    };
+
+    // 5. Ensure embeddedWalletAddress matches profile.wallet_address
+    if (embeddedWalletAddress && !sameAddress(embeddedWalletAddress, snapshot.senderAddress)) {
+      setSecurityError(t.sheets.send.securityBlockedWalletMismatch);
+      toast.error(t.sheets.send.securityBlockedWalletMismatch);
+      setStep(4);
+      setIsSubmitting(false);
+      setProgressState(null);
+      sendInProgressRef.current = false;
+      return;
+    }
+
+    // 6. Re-resolve recipient Pukico ID with fresh token. Address must match snapshot.
+    try {
+      const freshToken = getAccessToken ? await getAccessToken().catch(() => null) : null;
+      const latestResolve = await resolvePukicoId(snapshot.recipientId, {
+        privyToken: freshToken,
+        isDemoMode,
+      });
+
+      if (
+        !latestResolve ||
+        !latestResolve.found ||
+        !latestResolve.wallet_address ||
+        !sameAddress(latestResolve.wallet_address, snapshot.recipientAddress)
+      ) {
         setRecipientVerificationError(true);
+        toast.error(t.toast.recipientUnverified);
         setStep(4);
         setIsSubmitting(false);
         setProgressState(null);
+        sendInProgressRef.current = false;
         return;
       }
+    } catch {
+      setRecipientVerificationError(true);
+      toast.error(t.toast.recipientUnverified);
+      setStep(4);
+      setIsSubmitting(false);
+      setProgressState(null);
+      sendInProgressRef.current = false;
+      return;
+    }
+
+    // 7. checkRecipientAddress (block zero, dead, self, USDC contract)
+    const addrCheck = checkRecipientAddress(snapshot.recipientAddress, snapshot.senderAddress);
+    if (!addrCheck.valid) {
+      setSecurityError(t.sheets.send.securityBlockedUnsafeAddress);
+      toast.error(t.sheets.send.securityBlockedUnsafeAddress);
+      setStep(4);
+      setIsSubmitting(false);
+      setProgressState(null);
+      sendInProgressRef.current = false;
+      return;
+    }
+
+    // 8. Read latest on-chain balance and verify balance >= amount + fee
+    let freshBals: { eth: bigint; usdc: bigint };
+    try {
+      freshBals = await fetchExactBalances(snapshot.senderAddress);
+      setExactBalances(freshBals);
+    } catch {
+      freshBals = exactBalances;
+    }
+
+    if (snapshot.asset === 'USDC') {
+      if (snapshot.amountUnits + snapshot.feeUnits > freshBals.usdc) {
+        setSecurityError(t.sheets.send.notEnoughAsset.replace('{asset}', 'USDC'));
+        toast.error(t.toast.insufficientFunds);
+        setStep(4);
+        setIsSubmitting(false);
+        setProgressState(null);
+        sendInProgressRef.current = false;
+        return;
+      }
+    } else {
+      if (snapshot.amountUnits + snapshot.feeUnits > freshBals.eth) {
+        setSecurityError(t.sheets.send.notEnoughAsset.replace('{asset}', 'ETH'));
+        toast.error(t.toast.insufficientFunds);
+        setStep(4);
+        setProgressState(null);
+        sendInProgressRef.current = false;
+        return;
+      }
+    }
+
+    // 9. Simulate transfer and check ETH gas reserve
+    const mainTxRequest = buildTransferRequest(
+      snapshot.asset,
+      snapshot.recipientAddress,
+      snapshot.amountUnits
+    );
+
+    if (!isDemoMode) {
+      try {
+        const estimatedGas = await simulateTransfer(
+          publicClient as any,
+          snapshot.senderAddress,
+          mainTxRequest
+        );
+        const gasCeiling = await getGasPriceCeiling(publicClient as any);
+        const totalGasWei = estimatedGas * gasCeiling;
+        const requiredEth =
+          snapshot.asset === 'ETH' ? snapshot.amountUnits + snapshot.feeUnits + totalGasWei : totalGasWei;
+
+        if (freshBals.eth < requiredEth) {
+          setSecurityError(t.sheets.send.insufficientFundsOrGas);
+          toast.error(t.toast.insufficientFunds);
+          setStep(4);
+          setIsSubmitting(false);
+          setProgressState(null);
+          sendInProgressRef.current = false;
+          return;
+        }
+      } catch (_simErr) {
+        setSecurityError(t.sheets.send.securitySimulationFailed);
+        toast.error(t.toast.simulationFailed);
+        setStep(4);
+        setIsSubmitting(false);
+        setProgressState(null);
+        sendInProgressRef.current = false;
+        return;
+      }
+    }
+
+    // Demo Mode flow
+    if (isDemoMode) {
+      setStep(6);
+      setProgressState('waiting_confirmation');
+
+      // If fee active, demonstrate fee step briefly
+      if (snapshot.feeUnits > 0n && snapshot.treasuryAddress) {
+        setFeeApprovalPending(true);
+        await new Promise((r) => setTimeout(r, 600));
+        toast.info(t.toast.feePaid, { silent: true });
+        setFeeApprovalPending(false);
+      }
+
+      const canonicalAmount = formatUnits(
+        snapshot.amountUnits,
+        ASSET_DECIMALS[snapshot.asset]
+      );
 
       setStep(7);
       setFinalStatus('confirmed');
+      toast.success(t.toast.transferConfirmed);
       setFinalTxRecord({
         tx_hash: '0xdemo1111111111111111111111111111111111111111111111111111111111111111',
-        asset: selectedAsset,
-        amount: amountInput,
-        to_pukico_id: resolvedRecipient.id,
+        asset: snapshot.asset,
+        amount: canonicalAmount,
+        to_pukico_id: snapshot.recipientId,
         status: 'confirmed',
         explorer_url: 'https://sepolia.basescan.org',
       });
       setIsSubmitting(false);
       setProgressState(null);
+      sendInProgressRef.current = false;
       return;
     }
 
     let broadcastHash = '';
 
-    // Step A: Prompt wallet transaction and obtain hash
+    // 10. Prompt wallet transaction for main transfer
     try {
       if (!sendTransaction) {
         throw new Error('Wallet transaction provider not available.');
       }
 
-      // Re-verify recipient address with fresh token right before calling sendTransaction
-      try {
-        const freshToken = getAccessToken ? await getAccessToken() : null;
-        const latestResolve = await resolvePukicoId(resolvedRecipient.id, {
-          privyToken: freshToken,
-          isDemoMode,
-        });
+      const result = await sendTransaction(mainTxRequest, {
+        address: profile.wallet_address,
+        uiOptions: { showWalletUIs: false },
+      });
 
-        if (
-          !latestResolve ||
-          !latestResolve.found ||
-          !latestResolve.wallet_address ||
-          latestResolve.wallet_address.toLowerCase() !== resolvedRecipient.address.toLowerCase()
-        ) {
-          setRecipientVerificationError(true);
-          setStep(4);
-          setProgressState(null);
-          setIsSubmitting(false);
-          return;
-        }
-      } catch {
-        setRecipientVerificationError(true);
-        setStep(4);
-        setProgressState(null);
-        setIsSubmitting(false);
-        return;
+      const extracted = extractHash(result);
+      if (!extracted || !isTxHash(extracted)) {
+        throw new Error('Invalid transaction hash returned.');
       }
-
-      let txRequest: any;
-
-      if (selectedAsset === 'ETH') {
-        txRequest = {
-          to: resolvedRecipient.address as `0x${string}`,
-          value: parseUnits(amountInput, 18),
-          chainId: BASE_SEPOLIA_CHAIN_ID,
-        };
-      } else {
-        const transferData = encodeFunctionData({
-          abi: erc20Abi,
-          functionName: 'transfer',
-          args: [resolvedRecipient.address as `0x${string}`, parseUnits(amountInput, 6)],
-        });
-
-        txRequest = {
-          to: BASE_SEPOLIA_USDC_ADDRESS as `0x${string}`,
-          data: transferData,
-          chainId: BASE_SEPOLIA_CHAIN_ID,
-        };
-      }
-
-      // Prompt native Privy modal preview
-      const result = await sendTransaction(txRequest, { uiOptions: { showWalletUIs: false } });
-
-      // Safe hash extraction
-      broadcastHash = (result as any)?.hash || (result as any)?.transactionHash || (typeof result === 'string' ? result : '');
-
-      if (!broadcastHash) {
-        throw new Error('No transaction hash returned.');
-      }
+      broadcastHash = extracted;
     } catch (errBeforeHash) {
-      // Failed before hash was produced: safely differentiate reason
       const reason = identifyPreHashFailureReason(errBeforeHash);
       setSendFailedBeforeHash(true);
       setPreHashFailureReason(reason);
       setProgressState(null);
       setIsSubmitting(false);
+      sendInProgressRef.current = false;
+      if (reason === 'user_rejected') {
+        toast.info(t.toast.sendCancelled);
+      } else if (reason === 'insufficient_funds') {
+        toast.error(t.toast.insufficientFunds);
+      }
       return;
     }
 
-    // Step B: Hash exists - transition to confirmation waiting
+    // 11. Valid hash exists - execute second fee transaction and backend tracking
     setTxHash(broadcastHash);
+    toast.info(t.toast.transferSent, { silent: true });
     setProgressState('waiting_confirmation');
     setStep(6);
 
-    // Store in localStorage immediately (entri pukico.pendingTx tetap tersimpan)
+    const canonicalAmount = formatUnits(
+      snapshot.amountUnits,
+      ASSET_DECIMALS[snapshot.asset]
+    );
+
+    // Save pending tx locally
     savePendingTx({
       tx_hash: broadcastHash,
-      asset: selectedAsset,
-      to_pukico_id: resolvedRecipient.id,
-      amount: amountInput,
+      asset: snapshot.asset,
+      to_pukico_id: snapshot.recipientId,
+      amount: canonicalAmount,
     });
+
+    // Execute fee transfer as secondary transfer (does not fail main transfer)
+    if (snapshot.feeUnits > 0n && snapshot.treasuryAddress) {
+      setFeeApprovalPending(true);
+      try {
+        const feeTxRequest = buildTransferRequest(
+          snapshot.asset,
+          snapshot.treasuryAddress,
+          snapshot.feeUnits
+        );
+        await sendTransaction(feeTxRequest, {
+          address: profile.wallet_address,
+          uiOptions: { showWalletUIs: false },
+        });
+        toast.info(t.toast.feePaid, { silent: true });
+      } catch (_feeErr) {
+        toast.warning(t.toast.feeFailed);
+      } finally {
+        setFeeApprovalPending(false);
+      }
+    }
 
     try {
       const token = getAccessToken ? await getAccessToken() : null;
 
-      // Initial submit to backend
+      // Submit to backend
       let submitRes;
       try {
         submitRes = await submitTxWithRetry(
           {
             tx_hash: broadcastHash,
-            asset: selectedAsset,
-            to_pukico_id: resolvedRecipient.id,
-            amount: amountInput,
+            asset: snapshot.asset,
+            to_pukico_id: snapshot.recipientId,
+            amount: canonicalAmount,
           },
           { privyToken: token }
         );
       } catch {
-        // Continue to polling loop even if initial submit had issues
+        // Continue to polling
       }
 
       if (submitRes && !submitRes.ok && submitRes.error === 'no_access') {
         revokeBetaAccess();
+        toast.error(t.toast.betaAccessRevoked);
         setIsSubmitting(false);
         setProgressState(null);
         setFinalStatus('no_access');
         setStep(7);
+        sendInProgressRef.current = false;
         return;
       }
 
-      // Poll sync every 3s up to 90s for confirmation
+      // Poll sync every 3s up to 90s
       const pollStart = Date.now();
       const maxSyncMs = 90000;
       let confirmed = false;
@@ -656,10 +852,12 @@ export function SendSheetContent({
 
         if (syncRes && !syncRes.ok && syncRes.error === 'no_access') {
           revokeBetaAccess();
+          toast.error(t.toast.betaAccessRevoked);
           setIsSubmitting(false);
           setProgressState(null);
           setFinalStatus('no_access');
           setStep(7);
+          sendInProgressRef.current = false;
           return;
         }
 
@@ -667,21 +865,24 @@ export function SendSheetContent({
           if (syncRes.tx.status === 'confirmed') {
             setFinalTxRecord(syncRes.tx);
             setFinalStatus('confirmed');
+            toast.success(t.toast.transferConfirmed);
             setStep(7);
             confirmed = true;
-            refresh();
+            refreshBalanceCtx();
+            loadBalances();
             break;
           }
           if (syncRes.tx.status === 'failed') {
             setFinalTxRecord(syncRes.tx);
             setFinalStatus('failed');
+            toast.error(t.toast.transferFailed);
             setStep(7);
             confirmed = true;
-            refresh();
+            refreshBalanceCtx();
+            loadBalances();
             break;
           }
         } else if (syncRes && (syncRes.error === 'not_found' || syncRes.error === 'tx_not_found_yet')) {
-          // Dalam loop polling 90 detik: jika sync mengembalikan not_found, panggil submit lagi (maksimal sekali tiap 10 detik) sebelum melanjutkan polling
           const now = Date.now();
           if (now - lastSubmitTime >= 10000) {
             lastSubmitTime = now;
@@ -689,22 +890,24 @@ export function SendSheetContent({
               const retryRes = await submitTx(
                 {
                   tx_hash: broadcastHash,
-                  asset: selectedAsset,
-                  to_pukico_id: resolvedRecipient.id,
-                  amount: amountInput,
+                  asset: snapshot.asset,
+                  to_pukico_id: snapshot.recipientId,
+                  amount: canonicalAmount,
                 },
                 { privyToken: token }
               );
               if (!retryRes.ok && retryRes.error === 'no_access') {
                 revokeBetaAccess();
+                toast.error(t.toast.betaAccessRevoked);
                 setIsSubmitting(false);
                 setProgressState(null);
                 setFinalStatus('no_access');
                 setStep(7);
+                sendInProgressRef.current = false;
                 return;
               }
             } catch {
-              // Ignore background submit retry error and continue polling
+              // Ignore
             }
           }
         }
@@ -713,19 +916,22 @@ export function SendSheetContent({
 
       if (!confirmed) {
         setFinalStatus('timeout');
+        toast.warning(t.toast.transferTimeout);
         setStep(7);
       }
     } catch (_postHashError) {
       setFinalStatus('timeout');
+      toast.warning(t.toast.transferTimeout);
       setStep(7);
     } finally {
       setIsSubmitting(false);
+      sendInProgressRef.current = false;
     }
   };
 
   return (
     <div className="space-y-5 text-left select-none">
-      {/* Demo Notice (Flat) */}
+      {/* Demo Notice */}
       {isDemoMode && (
         <div className="flex items-center gap-1.5 text-xs text-[#B45309]">
           <AlertCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0" />
@@ -744,7 +950,7 @@ export function SendSheetContent({
         </div>
       )}
 
-      {/* Prerequisite 1: Wallet Not Verified (Flat) */}
+      {/* Prerequisite 1: Wallet Not Verified */}
       {isWalletUnverified && (
         <div role="alert" className="flex items-start gap-1.5 text-xs text-[#B45309]">
           <AlertTriangle className="w-3.5 h-3.5 text-[#B45309] shrink-0 mt-0.5" />
@@ -754,7 +960,7 @@ export function SendSheetContent({
         </div>
       )}
 
-      {/* Prerequisite 2: Zero ETH for Gas Fee Notice (Flat) */}
+      {/* Prerequisite 2: Zero ETH for Gas Fee Notice */}
       {isEthZero && !isWalletUnverified && (
         <div className="flex items-center justify-between gap-2 text-xs text-[#B45309]">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -782,63 +988,87 @@ export function SendSheetContent({
             </h3>
           </div>
 
-          <div className="space-y-2 pt-1">
-            {/* USDC Row */}
-            <button
-              type="button"
-              disabled={isWalletUnverified || !hasBetaAccess}
-              onClick={() => {
-                if (!hasBetaAccess) return;
-                setSelectedAsset('USDC');
-                setStep(prefilledRecipientId ? 3 : 2);
-              }}
-              className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
-                  <UsdcTokenIcon className="w-6 h-6" />
-                </div>
-                <div className="text-left">
-                  <div className="font-semibold text-sm text-[#0A0B0D]">USD Coin</div>
-                  <div className="text-xs text-[#5B6577]">USDC · Base Sepolia</div>
-                </div>
+          {/* Passkey requirement panel for live mode */}
+          {needsPasskey ? (
+            <div className="p-4 rounded-2xl bg-[#EEF4FF] border border-[#BFDBFE] space-y-3 text-center animate-fade-up">
+              <div className="w-12 h-12 rounded-2xl bg-white text-[#0052FF] mx-auto flex items-center justify-center shadow-sm">
+                <Fingerprint className="w-6 h-6 stroke-[2.2]" />
               </div>
-              <div className="text-right">
-                <div className="font-mono text-sm font-bold text-[#0A0B0D]">
-                  {formatNumber(usdc.value, { minDecimals: 2, maxDecimals: 2 })} USDC
-                </div>
-                <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-[#0A0B0D]">
+                  {t.sheets.send.enablePasskeyTitle}
+                </h4>
+                <p className="text-xs text-[#5B6577] max-w-xs mx-auto leading-relaxed">
+                  {t.sheets.send.enablePasskeyDesc}
+                </p>
               </div>
-            </button>
+              <button
+                type="button"
+                onClick={() => enrollMfa()}
+                className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-[#0052FF] hover:bg-[#0042D6] text-white transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+              >
+                {t.sheets.send.enablePasskeyBtn}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2 pt-1">
+              {/* USDC Row */}
+              <button
+                type="button"
+                disabled={isWalletUnverified || !hasBetaAccess}
+                onClick={() => {
+                  if (!hasBetaAccess) return;
+                  setSelectedAsset('USDC');
+                  setStep(prefilledRecipientId ? 3 : 2);
+                }}
+                className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
+                    <UsdcTokenIcon className="w-6 h-6" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-sm text-[#0A0B0D]">USD Coin</div>
+                    <div className="text-xs text-[#5B6577]">USDC · Base Sepolia</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono text-sm font-bold text-[#0A0B0D]">
+                    {formatNumber(formatUnits(exactBalances.usdc, 6), { minDecimals: 2, maxDecimals: 2 })} USDC
+                  </div>
+                  <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
+                </div>
+              </button>
 
-            {/* ETH Row */}
-            <button
-              type="button"
-              disabled={isWalletUnverified || !hasBetaAccess}
-              onClick={() => {
-                if (!hasBetaAccess) return;
-                setSelectedAsset('ETH');
-                setStep(prefilledRecipientId ? 3 : 2);
-              }}
-              className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
-                  <EthTokenIcon className="w-6 h-6" />
+              {/* ETH Row */}
+              <button
+                type="button"
+                disabled={isWalletUnverified || !hasBetaAccess}
+                onClick={() => {
+                  if (!hasBetaAccess) return;
+                  setSelectedAsset('ETH');
+                  setStep(prefilledRecipientId ? 3 : 2);
+                }}
+                className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
+                    <EthTokenIcon className="w-6 h-6" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-sm text-[#0A0B0D]">Ether</div>
+                    <div className="text-xs text-[#5B6577]">ETH · Base Sepolia</div>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <div className="font-semibold text-sm text-[#0A0B0D]">Ether</div>
-                  <div className="text-xs text-[#5B6577]">ETH · Base Sepolia</div>
+                <div className="text-right">
+                  <div className="font-mono text-sm font-bold text-[#0A0B0D]">
+                    {formatNumber(formatUnits(exactBalances.eth, 18), { minDecimals: 2, maxDecimals: 4 })} ETH
+                  </div>
+                  <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className="font-mono text-sm font-bold text-[#0A0B0D]">
-                  {formatNumber(eth.value, { minDecimals: 2, maxDecimals: 4 })} ETH
-                </div>
-                <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
-              </div>
-            </button>
-          </div>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -863,7 +1093,6 @@ export function SendSheetContent({
             {t.sheets.send.enterPukicoIdHelp}
           </p>
 
-          {/* 52px Input with @ prefix */}
           <div className="space-y-2 pt-1">
             <div className="relative flex items-center h-13 bg-white border border-[#E5E7EB] focus-within:border-[#0052FF] focus-within:ring-2 focus-within:ring-[#0052FF]/20 rounded-2xl px-4 transition-all">
               <span className="text-lg font-bold text-[#5B6577] mr-1.5" aria-hidden="true">
@@ -892,7 +1121,6 @@ export function SendSheetContent({
               )}
             </div>
 
-            {/* Single line status */}
             <div aria-live="polite" className="min-h-[22px] text-xs">
               {recipientStatus === 'looking' && (
                 <span className="text-[#5B6577]">{t.sheets.send.lookingUp}</span>
@@ -918,7 +1146,7 @@ export function SendSheetContent({
               )}
             </div>
 
-            {/* Friends chips (up to 5 recent friends) */}
+            {/* Friends chips */}
             {friends.length > 0 && (
               <div className="pt-2">
                 <div className="text-xs font-semibold text-[#5B6577] mb-2">
@@ -977,8 +1205,8 @@ export function SendSheetContent({
                 .replace(
                   '{amount}',
                   selectedAsset === 'USDC'
-                    ? formatNumber(usdc.value, { minDecimals: 2, maxDecimals: 2 })
-                    : formatNumber(eth.value, { minDecimals: 2, maxDecimals: 4 })
+                    ? formatUnitsTrimmed(exactBalances.usdc, 6)
+                    : formatUnitsTrimmed(exactBalances.eth, 18, 4)
                 )
                 .replace('{asset}', selectedAsset)}
             </span>
@@ -991,7 +1219,6 @@ export function SendSheetContent({
             </button>
           </div>
 
-          {/* Amount input */}
           <div className="space-y-2 pt-1">
             <div className="relative flex items-center h-13 bg-white border border-[#E5E7EB] focus-within:border-[#0052FF] focus-within:ring-2 focus-within:ring-[#0052FF]/20 rounded-2xl px-4 transition-all">
               <input
@@ -1013,7 +1240,6 @@ export function SendSheetContent({
               </span>
             </div>
 
-            {/* Validation & Network fee row */}
             <div className="flex items-center justify-between text-xs min-h-[22px]">
               <div>
                 {!amountValidation.valid && amountInput && (
@@ -1045,6 +1271,7 @@ export function SendSheetContent({
               disabled={!amountValidation.valid || !hasBetaAccess}
               onClick={() => {
                 setSendFailedBeforeHash(false);
+                setSecurityError(null);
                 setStep(4);
               }}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center cursor-pointer"
@@ -1064,6 +1291,7 @@ export function SendSheetContent({
               onClick={() => {
                 setSendFailedBeforeHash(false);
                 setRecipientVerificationError(false);
+                setSecurityError(null);
                 setStep(3);
               }}
               className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
@@ -1075,6 +1303,16 @@ export function SendSheetContent({
               {t.sheets.send.review}
             </h3>
           </div>
+
+          {/* New Recipient Amber Warning */}
+          {!isKnownRecipient && resolvedRecipient && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+              <span className="leading-relaxed font-medium">
+                {t.sheets.send.newRecipientWarning}
+              </span>
+            </div>
+          )}
 
           {/* Flat Review Rows */}
           <div className="divide-y divide-[#E5E7EB] border-y border-[#E5E7EB] py-1 text-sm">
@@ -1089,13 +1327,41 @@ export function SendSheetContent({
               </div>
             </div>
 
-            {/* Amount */}
-            <div className="py-2.5 flex items-center justify-between">
-              <span className="text-[#5B6577]">{t.sheets.send.amountLabel}</span>
-              <span className="font-bold font-mono text-[#0A0B0D]">
-                {formatAssetAmount(amountInput, selectedAsset)} {selectedAsset}
-              </span>
-            </div>
+            {/* Recipient gets / Service Fee / Total Rows */}
+            {feeUnits > 0n ? (
+              <>
+                <div className="py-2 flex items-center justify-between">
+                  <span className="text-[#5B6577]">{t.sheets.send.recipientGets}</span>
+                  <span className="font-bold font-mono text-[#0A0B0D]">
+                    {formatUnitsTrimmed(amountUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                  </span>
+                </div>
+                <div className="py-2 flex items-center justify-between text-xs">
+                  <span className="text-[#5B6577] flex items-center gap-1">
+                    <span>{t.sheets.send.serviceFee}</span>
+                    <span className="text-[10px] text-[#0052FF] font-semibold bg-[#EEF4FF] px-1.5 py-0.5 rounded">
+                      {(feeBps / 100).toFixed(1)}%
+                    </span>
+                  </span>
+                  <span className="font-mono text-[#0A0B0D] font-medium">
+                    +{formatUnitsTrimmed(feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                  </span>
+                </div>
+                <div className="py-2.5 flex items-center justify-between font-semibold">
+                  <span className="text-[#0A0B0D]">{t.sheets.send.totalFromYou}</span>
+                  <span className="font-bold font-mono text-[#0052FF]">
+                    {formatUnitsTrimmed(amountUnits + feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="py-2.5 flex items-center justify-between">
+                <span className="text-[#5B6577]">{t.sheets.send.amountLabel}</span>
+                <span className="font-bold font-mono text-[#0A0B0D]">
+                  {formatAssetAmount(amountInput, selectedAsset)} {selectedAsset}
+                </span>
+              </div>
+            )}
 
             {/* Network Fee */}
             <div className="py-2.5 flex items-center justify-between">
@@ -1117,6 +1383,29 @@ export function SendSheetContent({
               <span className="font-medium text-[#0A0B0D]">Base Sepolia · Testnet</span>
             </div>
           </div>
+
+          {/* Large Transfer Retype Confirmation */}
+          {isLargeTransfer && resolvedRecipient && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs space-y-2">
+              <div className="flex items-center gap-1.5 text-[#B45309] font-bold">
+                <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0" />
+                <span>{t.sheets.send.largeTransferTitle}</span>
+              </div>
+              <p className="text-[#B45309] leading-relaxed">
+                {t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id)}
+              </p>
+              <input
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={largeTransferInput}
+                onChange={(e) => setLargeTransferInput(e.target.value)}
+                placeholder={t.sheets.send.largeTransferInputPlaceholder}
+                className="w-full h-10 px-3 bg-white border border-amber-300 rounded-xl font-mono text-xs text-[#0A0B0D] placeholder:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+          )}
 
           {/* Collapsible Details */}
           <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] overflow-hidden">
@@ -1202,10 +1491,10 @@ export function SendSheetContent({
                   <span className="text-[#5B6577] text-[11px]">{t.sheets.send.networkId}</span>
                   <button
                     type="button"
-                    onClick={() => handleCopyDetail(String(BASE_SEPOLIA_CHAIN_ID), 'network_id')}
+                    onClick={() => handleCopyDetail(String(CHAIN_CONFIG.id), 'network_id')}
                     className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#0A0B0D] hover:text-[#0052FF] cursor-pointer"
                   >
-                    <span>{BASE_SEPOLIA_CHAIN_ID}</span>
+                    <span>{CHAIN_CONFIG.id}</span>
                     {copiedDetailField === 'network_id' ? (
                       <Check className="w-3 h-3 text-[#047857]" />
                     ) : (
@@ -1237,6 +1526,16 @@ export function SendSheetContent({
           <p className="text-xs text-[#5B6577] leading-relaxed">
             {t.sheets.send.testnetNotice}
           </p>
+
+          {/* Inline Security Gate Error */}
+          {securityError && (
+            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-[#B91C1C] flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626]" />
+                <span className="font-medium leading-snug">{securityError}</span>
+              </div>
+            </div>
+          )}
 
           {/* Error Message if recipient verification failed right before sending */}
           {recipientVerificationError && (
@@ -1283,7 +1582,7 @@ export function SendSheetContent({
           <div className="pt-2">
             <button
               type="button"
-              disabled={isSubmitting || !hasBetaAccess}
+              disabled={isSubmitting || !hasBetaAccess || (isLargeTransfer && !isLargeConfirmed)}
               onClick={handleExecuteSend}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
@@ -1307,7 +1606,9 @@ export function SendSheetContent({
 
           <div className="space-y-1">
             <h4 className="text-sm font-semibold text-[#0A0B0D]">
-              {progressState === 'waiting_approval'
+              {feeApprovalPending
+                ? t.sheets.send.step2FeeApproval
+                : progressState === 'waiting_approval'
                 ? t.sheets.send.waitingApproval
                 : t.sheets.send.waitingConfirmation}
             </h4>
@@ -1325,7 +1626,6 @@ export function SendSheetContent({
         <div className="py-4 text-center space-y-5">
           {finalStatus === 'confirmed' && (
             <>
-              {/* Green checkmark #047857 */}
               <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#047857] mx-auto flex items-center justify-center">
                 <Check className="w-8 h-8 stroke-[2.5]" />
               </div>
@@ -1342,7 +1642,6 @@ export function SendSheetContent({
                 </p>
               </div>
 
-              {/* View on Basescan link */}
               {(finalTxRecord?.explorer_url || txHash) && (
                 <div>
                   <a

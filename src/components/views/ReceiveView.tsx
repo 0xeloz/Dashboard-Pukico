@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { ArrowLeft, Copy, Check, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { useT } from '../../i18n';
 import { CHAIN_CONFIG } from '../../lib/config';
+import { useToast } from '../../context/ToastContext';
 
 interface ReceiveViewProps {
   walletAddress: string;
@@ -12,6 +13,7 @@ interface ReceiveViewProps {
 
 export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: ReceiveViewProps) {
   const { t } = useT();
+  const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
@@ -34,6 +36,7 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
     try {
       await navigator.clipboard.writeText(walletAddress);
       setCopied(true);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -43,6 +46,7 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     }
   };

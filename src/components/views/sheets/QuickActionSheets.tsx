@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useBalance } from '../../../context/BalanceContext';
 import { useT } from '../../../i18n';
+import { useToast } from '../../../context/ToastContext';
 import { UsdcTokenIcon } from '../../ui/PukicoBrand';
 import type { UserProfile } from '../../../types';
 
@@ -22,6 +23,7 @@ interface ReceiveSheetContentProps {
 
 export function ReceiveSheetContent({ profile, isDemoMode, onClose }: ReceiveSheetContentProps) {
   const { t } = useT();
+  const { toast } = useToast();
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -59,9 +61,11 @@ export function ReceiveSheetContent({ profile, isDemoMode, onClose }: ReceiveShe
 
     if (type === 'address') {
       setCopiedAddress(true);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopiedAddress(false), 1500);
     } else {
       setCopiedId(true);
+      toast.info(t.toast.copiedId, { silent: true });
       setTimeout(() => setCopiedId(false), 1500);
     }
   };
@@ -199,6 +203,7 @@ export function FaucetSheetContent({
   onClose,
 }: FaucetSheetContentProps) {
   const { t } = useT();
+  const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
   const balanceCtx = useBalance();
@@ -209,6 +214,7 @@ export function FaucetSheetContent({
     try {
       await navigator.clipboard.writeText(walletAddress);
       setCopied(true);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -218,6 +224,7 @@ export function FaucetSheetContent({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     }
   };

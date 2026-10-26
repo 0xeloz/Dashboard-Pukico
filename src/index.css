@@ -294,6 +294,22 @@
   animation: checkmarkPop 220ms var(--ease-out) forwards;
 }
 
+/* Toast entrance animation */
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-toast-in {
+  animation: toastIn 200ms var(--ease-out) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-tap: 0.01ms;
@@ -320,7 +336,8 @@
   .animate-balance-change,
   .lang-content[data-phase="in"],
   .animate-popover-in,
-  .animate-popover-out {
+  .animate-popover-out,
+  .animate-toast-in {
     animation: none !important;
   }
 

@@ -1,13 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   listTxs,
-  getNotifications,
-  markNotificationsRead,
   syncPendingTxs,
   type TxRecord,
-  type TxNotification,
   DEMO_TXS,
-  DEMO_NOTIFICATIONS,
 } from '../lib/txApi';
 import { useAuth } from './AuthContext';
 
@@ -15,12 +11,9 @@ export type TxFetchStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export interface TxContextType {
   txs: TxRecord[];
-  notifications: TxNotification[];
-  unreadCount: number;
   status: TxFetchStatus;
   refreshing: boolean;
   refresh: () => Promise<void>;
-  markRead: () => Promise<void>;
   isDemoMode: boolean;
 }
 
@@ -34,8 +27,6 @@ function getStorageKey(walletAddress: string): string {
 
 interface StoredTxData {
   txs: TxRecord[];
-  notifications: TxNotification[];
-  unreadCount: number;
   updatedAt: number;
 }
 
@@ -83,18 +74,6 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
     return [];
   });
 
-  const [notifications, setNotifications] = useState<TxNotification[]>(() => {
-    if (isDemoMode) return DEMO_NOTIFICATIONS;
-    if (initialCache.current) return initialCache.current.notifications;
-    return [];
-  });
-
-  const [unreadCount, setUnreadCount] = useState<number>(() => {
-    if (isDemoMode) return DEMO_NOTIFICATIONS.filter((n) => !n.read).length;
-    if (initialCache.current) return initialCache.current.unreadCount;
-    return 0;
-  });
-
   const [status, setStatus] = useState<TxFetchStatus>(() => {
     if (isDemoMode) return 'success';
     if (initialCache.current) return 'idle';
@@ -113,16 +92,11 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
   const txsRef = useRef(txs);
   txsRef.current = txs;
 
-  const notificationsRef = useRef(notifications);
-  notificationsRef.current = notifications;
-
   const refresh = useCallback(async (): Promise<void> => {
     if (isDemoMode) {
       setRefreshing(true);
       await new Promise((r) => setTimeout(r, 400));
       setTxs(DEMO_TXS);
-      setNotifications(DEMO_NOTIFICATIONS);
-      setUnreadCount(DEMO_NOTIFICATIONS.filter((n) => !n.read).length);
       setStatus('success');
       setRefreshing(false);
       return;
@@ -149,11 +123,8 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
         // 1. First sync pending transactions
         await syncPendingTxs(apiOpts).catch(() => null);
 
-        // 2. Fetch transaction list & notifications in parallel
-        const [listRes, notifRes] = await Promise.all([
-          listTxs(50, apiOpts).catch(() => ({ ok: false, txs: [] })),
-          getNotifications(apiOpts).catch(() => ({ ok: false, items: [], unread: 0 })),
-        ]);
+        // 2. Fetch transaction list
+        const listRes = await listTxs(50, apiOpts).catch(() => ({ ok: false, txs: [] }));
 
         if (thisFetchId === fetchIdRef.current) {
           const now = Date.now();
@@ -162,24 +133,12 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
           if (listRes.ok) {
             setTxs(listRes.txs);
             txsRef.current = listRes.txs;
-          }
-
-          if (notifRes.ok) {
-            setNotifications(notifRes.items);
-            notificationsRef.current = notifRes.items;
-            setUnreadCount(notifRes.unread);
-          }
-
-          if (listRes.ok || notifRes.ok) {
             setStatus('success');
             saveCachedTxData(currentWallet, {
-              txs: listRes.ok ? listRes.txs : txsRef.current,
-              notifications: notifRes.ok ? notifRes.items : notificationsRef.current,
-              unreadCount: notifRes.ok ? notifRes.unread : 0,
+              txs: listRes.txs,
               updatedAt: now,
             });
           } else {
-            // Both failed
             if (txsRef.current.length === 0) {
               setStatus('error');
             }
@@ -201,31 +160,6 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
 
     inFlightPromiseRef.current = promise;
     return promise;
-  }, [isDemoMode, getAccessToken]);
-
-  const markRead = useCallback(async (): Promise<void> => {
-    // Optimistic update
-    setUnreadCount(0);
-    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
-
-    const currentWallet = walletRef.current;
-    if (currentWallet) {
-      saveCachedTxData(currentWallet, {
-        txs: txsRef.current,
-        notifications: notificationsRef.current.map((item) => ({ ...item, read: true })),
-        unreadCount: 0,
-        updatedAt: lastFetchTimeRef.current,
-      });
-    }
-
-    if (isDemoMode) return;
-
-    try {
-      const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
-      await markNotificationsRead({ privyToken: token, isDemoMode });
-    } catch {
-      // Ignore background error
-    }
   }, [isDemoMode, getAccessToken]);
 
   // Initial mount fetch
@@ -288,12 +222,9 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
     <TxContext.Provider
       value={{
         txs,
-        notifications,
-        unreadCount,
         status,
         refreshing,
         refresh,
-        markRead,
         isDemoMode,
       }}
     >
