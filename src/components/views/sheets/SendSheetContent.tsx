@@ -7,6 +7,9 @@ import {
   ExternalLink,
   Loader2,
   ShieldCheck,
+  Copy,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { encodeFunctionData, erc20Abi, parseUnits, formatUnits } from 'viem';
 import { useAuth } from '../../../context/AuthContext';
@@ -37,6 +40,67 @@ interface SendSheetContentProps {
 
 type SendStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 type AssetType = 'USDC' | 'ETH';
+type PreHashFailureReason = 'user_rejected' | 'insufficient_funds' | 'generic';
+
+function identifyPreHashFailureReason(err: unknown): PreHashFailureReason {
+  if (!err || typeof err !== 'object') {
+    return 'generic';
+  }
+
+  const errorObj = err as Record<string, any>;
+  const cause = errorObj.cause as Record<string, any> | undefined;
+
+  // 1. User rejection / cancellation (EIP-1193 code 4001, CAIP code 5000)
+  const code = errorObj.code ?? cause?.code;
+  if (code === 4001 || code === 5000 || String(code) === '4001' || String(code) === '5000') {
+    return 'user_rejected';
+  }
+
+  const name = errorObj.name || cause?.name;
+  if (
+    name === 'UserRejectedRequestError' ||
+    name === 'TransactionRejectedRpcError' ||
+    cause?.name === 'UserRejectedRequestError' ||
+    cause?.name === 'TransactionRejectedRpcError'
+  ) {
+    return 'user_rejected';
+  }
+
+  const privyErrorCode = errorObj.privyErrorCode || cause?.privyErrorCode;
+  if (
+    privyErrorCode === 'exited_auth_flow' ||
+    privyErrorCode === 'exited_link_flow' ||
+    privyErrorCode === 'user_rejected' ||
+    privyErrorCode === 'oauth_user_denied'
+  ) {
+    return 'user_rejected';
+  }
+
+  // 2. Insufficient funds / gas
+  if (privyErrorCode === 'insufficient_balance') {
+    return 'insufficient_funds';
+  }
+
+  if (name === 'InsufficientFundsError' || cause?.name === 'InsufficientFundsError') {
+    return 'insufficient_funds';
+  }
+
+  // Standard RPC node error for insufficient funds (code -32000, -32003, or name RpcError)
+  if (code === -32000 || code === -32003 || name === 'RpcError' || cause?.name === 'RpcError') {
+    const rpcMessage = String(errorObj.shortMessage || errorObj.details || errorObj.message || '');
+    const causeMessage = String(cause?.shortMessage || cause?.details || cause?.message || '');
+    if (
+      /insufficient funds/i.test(rpcMessage) ||
+      /insufficient funds/i.test(causeMessage) ||
+      /exceeds.*balance/i.test(rpcMessage) ||
+      /exceeds.*balance/i.test(causeMessage)
+    ) {
+      return 'insufficient_funds';
+    }
+  }
+
+  return 'generic';
+}
 
 const BASE_SEPOLIA_CHAIN_ID = 84532;
 const FAUCET_URL = 'https://portal.cdp.coinbase.com/products/faucet';
@@ -82,9 +146,28 @@ export function SendSheetContent({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [progressState, setProgressState] = useState<'waiting_approval' | 'waiting_confirmation' | null>(null);
   const [sendFailedBeforeHash, setSendFailedBeforeHash] = useState<boolean>(false);
+  const [preHashFailureReason, setPreHashFailureReason] = useState<PreHashFailureReason | null>(null);
   const [txHash, setTxHash] = useState<string>('');
   const [finalTxRecord, setFinalTxRecord] = useState<TxRecord | null>(null);
   const [finalStatus, setFinalStatus] = useState<'confirmed' | 'failed' | 'timeout' | 'no_access' | null>(null);
+
+  // Step 4 Details & pre-send verification
+  const [showDetails, setShowDetails] = useState<boolean>(false);
+  const [copiedDetailField, setCopiedDetailField] = useState<string | null>(null);
+  const [recipientVerificationError, setRecipientVerificationError] = useState<boolean>(false);
+
+  const handleCopyDetail = async (text: string, fieldId: string) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedDetailField(fieldId);
+      setTimeout(() => {
+        setCopiedDetailField((prev) => (prev === fieldId ? null : prev));
+      }, 1500);
+    } catch {
+      // Fallback
+    }
+  };
 
   // Inform parent whether approval is in progress (to prevent backdrop clicks)
   useEffect(() => {
@@ -398,9 +481,32 @@ export function SendSheetContent({
     setIsSubmitting(true);
     setProgressState('waiting_approval');
     setSendFailedBeforeHash(false);
+    setPreHashFailureReason(null);
 
     // Demo Mode: Direct honest static flow (no fake hashes, no fake wait timers)
     if (isDemoMode) {
+      try {
+        const demoResolve = await resolvePukicoId(resolvedRecipient.id, { isDemoMode: true });
+        if (
+          !demoResolve ||
+          !demoResolve.found ||
+          !demoResolve.wallet_address ||
+          demoResolve.wallet_address.toLowerCase() !== resolvedRecipient.address.toLowerCase()
+        ) {
+          setRecipientVerificationError(true);
+          setStep(4);
+          setIsSubmitting(false);
+          setProgressState(null);
+          return;
+        }
+      } catch {
+        setRecipientVerificationError(true);
+        setStep(4);
+        setIsSubmitting(false);
+        setProgressState(null);
+        return;
+      }
+
       setStep(7);
       setFinalStatus('confirmed');
       setFinalTxRecord({
@@ -422,6 +528,34 @@ export function SendSheetContent({
     try {
       if (!sendTransaction) {
         throw new Error('Wallet transaction provider not available.');
+      }
+
+      // Re-verify recipient address with fresh token right before calling sendTransaction
+      try {
+        const freshToken = getAccessToken ? await getAccessToken() : null;
+        const latestResolve = await resolvePukicoId(resolvedRecipient.id, {
+          privyToken: freshToken,
+          isDemoMode,
+        });
+
+        if (
+          !latestResolve ||
+          !latestResolve.found ||
+          !latestResolve.wallet_address ||
+          latestResolve.wallet_address.toLowerCase() !== resolvedRecipient.address.toLowerCase()
+        ) {
+          setRecipientVerificationError(true);
+          setStep(4);
+          setProgressState(null);
+          setIsSubmitting(false);
+          return;
+        }
+      } catch {
+        setRecipientVerificationError(true);
+        setStep(4);
+        setProgressState(null);
+        setIsSubmitting(false);
+        return;
       }
 
       let txRequest: any;
@@ -455,9 +589,11 @@ export function SendSheetContent({
       if (!broadcastHash) {
         throw new Error('No transaction hash returned.');
       }
-    } catch (_errBeforeHash) {
-      // Failed before hash was produced (cancelled, rejected, modal closed, etc.)
+    } catch (errBeforeHash) {
+      // Failed before hash was produced: safely differentiate reason
+      const reason = identifyPreHashFailureReason(errBeforeHash);
       setSendFailedBeforeHash(true);
+      setPreHashFailureReason(reason);
       setProgressState(null);
       setIsSubmitting(false);
       return;
@@ -927,6 +1063,7 @@ export function SendSheetContent({
               type="button"
               onClick={() => {
                 setSendFailedBeforeHash(false);
+                setRecipientVerificationError(false);
                 setStep(3);
               }}
               className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
@@ -981,16 +1118,157 @@ export function SendSheetContent({
             </div>
           </div>
 
+          {/* Collapsible Details */}
+          <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowDetails((prev) => !prev)}
+              className="flex items-center justify-between w-full px-3.5 py-2.5 text-xs font-semibold text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
+            >
+              <span>{t.sheets.send.details}</span>
+              {showDetails ? (
+                <ChevronUp className="w-4 h-4 text-[#5B6577]" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-[#5B6577]" />
+              )}
+            </button>
+
+            {showDetails && (
+              <div className="px-3.5 pb-3 pt-1 space-y-2.5 border-t border-[#E5E7EB] text-xs">
+                {/* 1. Recipient Address */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[#5B6577] text-[11px]">
+                    <span>{t.sheets.send.recipientAddress}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyDetail(resolvedRecipient?.address || '', 'recipient')}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0052FF] hover:underline cursor-pointer"
+                    >
+                      {copiedDetailField === 'recipient' ? (
+                        <>
+                          <Check className="w-3 h-3 text-[#047857]" />
+                          <span className="text-[#047857]">{t.common.copied}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>{t.common.copy}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div
+                    onClick={() => handleCopyDetail(resolvedRecipient?.address || '', 'recipient')}
+                    className="font-mono text-[11px] text-[#0A0B0D] break-all bg-white p-2 rounded-lg border border-[#E5E7EB] cursor-pointer hover:border-[#BFDBFE] transition-colors select-all"
+                  >
+                    {resolvedRecipient?.address || '—'}
+                  </div>
+                </div>
+
+                {/* 2. Token contract address (for USDC) */}
+                {selectedAsset === 'USDC' && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[#5B6577] text-[11px]">
+                      <span>{t.sheets.send.tokenContract}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyDetail(BASE_SEPOLIA_USDC_ADDRESS, 'token_contract')}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0052FF] hover:underline cursor-pointer"
+                      >
+                        {copiedDetailField === 'token_contract' ? (
+                          <>
+                            <Check className="w-3 h-3 text-[#047857]" />
+                            <span className="text-[#047857]">{t.common.copied}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>{t.common.copy}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div
+                      onClick={() => handleCopyDetail(BASE_SEPOLIA_USDC_ADDRESS, 'token_contract')}
+                      className="font-mono text-[11px] text-[#0A0B0D] break-all bg-white p-2 rounded-lg border border-[#E5E7EB] cursor-pointer hover:border-[#BFDBFE] transition-colors select-all"
+                    >
+                      {BASE_SEPOLIA_USDC_ADDRESS}
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Network ID */}
+                <div className="flex items-center justify-between py-1 border-t border-[#E5E7EB]/60">
+                  <span className="text-[#5B6577] text-[11px]">{t.sheets.send.networkId}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyDetail(String(BASE_SEPOLIA_CHAIN_ID), 'network_id')}
+                    className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#0A0B0D] hover:text-[#0052FF] cursor-pointer"
+                  >
+                    <span>{BASE_SEPOLIA_CHAIN_ID}</span>
+                    {copiedDetailField === 'network_id' ? (
+                      <Check className="w-3 h-3 text-[#047857]" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-[#9CA3AF]" />
+                    )}
+                  </button>
+                </div>
+
+                {/* 4. Asset */}
+                <div className="flex items-center justify-between py-1 border-t border-[#E5E7EB]/60">
+                  <span className="text-[#5B6577] text-[11px]">{t.sheets.send.assetLabel}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyDetail(selectedAsset, 'asset')}
+                    className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#0A0B0D] hover:text-[#0052FF] cursor-pointer"
+                  >
+                    <span>{selectedAsset}</span>
+                    {copiedDetailField === 'asset' ? (
+                      <Check className="w-3 h-3 text-[#047857]" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-[#9CA3AF]" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <p className="text-xs text-[#5B6577] leading-relaxed">
             {t.sheets.send.testnetNotice}
           </p>
 
+          {/* Error Message if recipient verification failed right before sending */}
+          {recipientVerificationError && (
+            <div className="p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-[#3B4455] flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626]" />
+                <span className="font-medium leading-snug">
+                  {t.sheets.send.recipientChangedOrUnverified}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleExecuteSend}
+                className="shrink-0 font-semibold text-[#0052FF] hover:underline cursor-pointer"
+              >
+                {t.sheets.send.tryAgainBtn}
+              </button>
+            </div>
+          )}
+
           {/* Error Message if send failed before hash was produced */}
-          {sendFailedBeforeHash && (
+          {sendFailedBeforeHash && !recipientVerificationError && (
             <div className="p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-[#3B4455] flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <AlertCircle className="w-4 h-4 shrink-0 text-[#5B6577]" />
-                <span className="font-medium leading-snug">{t.sheets.send.notSentNoFundsMoved}</span>
+                <span className="font-medium leading-snug">
+                  {preHashFailureReason === 'user_rejected'
+                    ? t.sheets.send.cancelledTransfer
+                    : preHashFailureReason === 'insufficient_funds'
+                    ? t.sheets.send.insufficientFundsOrGas
+                    : t.sheets.send.notSentNoFundsMoved}
+                </span>
               </div>
               <button
                 type="button"
@@ -1011,7 +1289,9 @@ export function SendSheetContent({
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               <span>
-                {sendFailedBeforeHash ? t.sheets.send.tryAgainBtn : t.sheets.send.confirmAndSend}
+                {sendFailedBeforeHash || recipientVerificationError
+                  ? t.sheets.send.tryAgainBtn
+                  : t.sheets.send.confirmAndSend}
               </span>
             </button>
           </div>

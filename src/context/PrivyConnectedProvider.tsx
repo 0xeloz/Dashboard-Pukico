@@ -175,6 +175,14 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     }
   }, [showMfaEnrollmentModal]);
 
+  const userMfaMethods = (privyUser?.mfaMethods as ('sms' | 'totp' | 'passkey')[] | undefined) ?? [];
+  const hasPasskeyMfa = Boolean(
+    userMfaMethods.includes('passkey') ||
+    privyUser?.linkedAccounts?.some(
+      (acc) => acc.type === 'passkey' && Boolean((acc as any).enrolled_in_mfa)
+    )
+  );
+
   const value: AuthContextType = {
     isDemoMode: false,
     hasPrivyConfigured: true,
@@ -185,6 +193,8 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     profile,
     embeddedWalletAddress,
     userEmail,
+    mfaMethods: userMfaMethods,
+    hasPasskeyMfa,
     login: () => {
       setSessionError(null);
       privyLogin();

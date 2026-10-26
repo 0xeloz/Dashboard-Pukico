@@ -33,6 +33,7 @@ function Dashboard() {
     updateProfileId,
     getAccessToken,
     enrollMfa,
+    hasPasskeyMfa,
   } = useAuth();
 
   const [currentTab, setCurrentTab] = useState<ActiveTab>('home');
@@ -182,6 +183,7 @@ function Dashboard() {
             logout={logout}
             setDemoProfileField={setDemoProfileField}
             enrollMfa={enrollMfa}
+            hasPasskeyMfa={hasPasskeyMfa}
           />
         </FriendsProvider>
       </TxProvider>
@@ -200,6 +202,7 @@ interface DashboardContentProps {
   logout: () => Promise<void>;
   setDemoProfileField: (field: 'role' | 'pukico_id', val: any) => void;
   enrollMfa: () => Promise<void>;
+  hasPasskeyMfa?: boolean;
 }
 
 function DashboardContent({
@@ -213,6 +216,7 @@ function DashboardContent({
   logout,
   setDemoProfileField,
   enrollMfa,
+  hasPasskeyMfa,
 }: DashboardContentProps) {
   const { t } = useT();
   const {
@@ -309,6 +313,7 @@ function DashboardContent({
                 isDemoMode={isDemoMode}
                 onLogout={logout}
                 onEnrollMfa={enrollMfa}
+                hasPasskeyMfa={hasPasskeyMfa}
                 onToggleRole={(role) => setDemoProfileField('role', role)}
                 onTogglePukicoId={(hasId) =>
                   setDemoProfileField('pukico_id', hasId ? 'andika' : '')

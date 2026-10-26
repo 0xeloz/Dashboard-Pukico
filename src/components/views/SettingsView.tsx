@@ -13,6 +13,7 @@ interface SettingsViewProps {
   onToggleRole?: (role: 'user' | 'admin') => void;
   onTogglePukicoId?: (hasId: boolean) => void;
   onEnrollMfa?: () => Promise<void> | void;
+  hasPasskeyMfa?: boolean;
 }
 
 export function SettingsView({
@@ -22,10 +23,12 @@ export function SettingsView({
   onToggleRole,
   onTogglePukicoId,
   onEnrollMfa,
+  hasPasskeyMfa,
 }: SettingsViewProps) {
   const { t } = useT();
-  const { enrollMfa } = useAuth();
+  const { enrollMfa, hasPasskeyMfa: authHasPasskey } = useAuth();
   const handleEnrollMfa = onEnrollMfa || enrollMfa;
+  const isPasskeyActive = hasPasskeyMfa ?? authHasPasskey ?? false;
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -167,21 +170,38 @@ export function SettingsView({
               <div className="min-w-0">
                 <div className="text-xs text-[#5B6577] font-medium">{t.settings.walletSecurity}</div>
                 <div className="font-semibold text-sm text-[#0A0B0D]">
-                  {t.settings.secureWithPasskey}
+                  {isPasskeyActive ? t.settings.passkeyActive : t.settings.secureWithPasskey}
                 </div>
                 <p className="text-xs text-[#5B6577] mt-0.5 leading-relaxed">
                   {t.settings.walletSecurityDesc}
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => handleEnrollMfa()}
-              className="px-3.5 py-2 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] shrink-0 self-start sm:self-auto shadow-xs"
-            >
-              <Fingerprint className="w-3.5 h-3.5" />
-              <span>{t.settings.secureWithPasskey}</span>
-            </button>
+
+            {isPasskeyActive ? (
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#047857] text-xs font-semibold">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{t.settings.passkeyActive}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleEnrollMfa()}
+                  className="px-3 py-1.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
+                >
+                  {t.settings.manage}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleEnrollMfa()}
+                className="px-3.5 py-2 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] shrink-0 self-start sm:self-auto shadow-xs"
+              >
+                <Fingerprint className="w-3.5 h-3.5" />
+                <span>{t.settings.secureWithPasskey}</span>
+              </button>
+            )}
           </div>
         )}
 

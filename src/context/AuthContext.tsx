@@ -27,6 +27,8 @@ export interface AuthContextType {
     options?: { uiOptions?: { showWalletUIs?: boolean }; [key: string]: any }
   ) => Promise<{ hash: `0x${string}` }>;
   enrollMfa: () => Promise<void>;
+  mfaMethods?: ('sms' | 'totp' | 'passkey')[];
+  hasPasskeyMfa?: boolean;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -110,6 +112,8 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
     revokeBetaAccess: handleRevokeBetaAccess,
     getAccessToken: async () => 'demo-token',
     enrollMfa: async () => {},
+    mfaMethods: [],
+    hasPasskeyMfa: false,
   };
 
 
