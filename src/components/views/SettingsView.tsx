@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Shield, Mail, Wallet, Network, UserCheck } from 'lucide-react';
+import { Copy, Check, LogOut, Shield, Mail, Wallet, Network, UserCheck, Fingerprint } from 'lucide-react';
 import { LanguagePopover } from '../ui/LanguagePopover';
 import { useT } from '../../i18n';
 import { CHAIN_CONFIG } from '../../lib/config';
+import { useAuth } from '../../context/AuthContext';
 import type { UserProfile } from '../../types';
 
 interface SettingsViewProps {
@@ -11,6 +12,7 @@ interface SettingsViewProps {
   onLogout: () => Promise<void>;
   onToggleRole?: (role: 'user' | 'admin') => void;
   onTogglePukicoId?: (hasId: boolean) => void;
+  onEnrollMfa?: () => Promise<void> | void;
 }
 
 export function SettingsView({
@@ -19,8 +21,11 @@ export function SettingsView({
   onLogout,
   onToggleRole,
   onTogglePukicoId,
+  onEnrollMfa,
 }: SettingsViewProps) {
   const { t } = useT();
+  const { enrollMfa } = useAuth();
+  const handleEnrollMfa = onEnrollMfa || enrollMfa;
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -151,6 +156,34 @@ export function SettingsView({
             {profile.wallet_address}
           </div>
         </div>
+
+        {/* Wallet Security (Passkey MFA) */}
+        {!isDemoMode && (
+          <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
+                <Fingerprint className="w-5 h-5 text-[#0052FF]" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-[#5B6577] font-medium">{t.settings.walletSecurity}</div>
+                <div className="font-semibold text-sm text-[#0A0B0D]">
+                  {t.settings.secureWithPasskey}
+                </div>
+                <p className="text-xs text-[#5B6577] mt-0.5 leading-relaxed">
+                  {t.settings.walletSecurityDesc}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleEnrollMfa()}
+              className="px-3.5 py-2 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] shrink-0 self-start sm:self-auto shadow-xs"
+            >
+              <Fingerprint className="w-3.5 h-3.5" />
+              <span>{t.settings.secureWithPasskey}</span>
+            </button>
+          </div>
+        )}
 
         {/* Network */}
         <div className="py-4 flex items-center justify-between gap-3">

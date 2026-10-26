@@ -22,7 +22,11 @@ export interface AuthContextType {
   grantBetaAccess: () => void;
   revokeBetaAccess: () => void;
   getAccessToken?: () => Promise<string | null>;
-  sendTransaction?: (tx: any) => Promise<{ hash: `0x${string}` }>;
+  sendTransaction?: (
+    tx: any,
+    options?: { uiOptions?: { showWalletUIs?: boolean }; [key: string]: any }
+  ) => Promise<{ hash: `0x${string}` }>;
+  enrollMfa: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -105,6 +109,7 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
     grantBetaAccess: handleGrantBetaAccess,
     revokeBetaAccess: handleRevokeBetaAccess,
     getAccessToken: async () => 'demo-token',
+    enrollMfa: async () => {},
   };
 
 

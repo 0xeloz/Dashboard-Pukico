@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PrivyProvider, usePrivy, useWallets, useSendTransaction } from '@privy-io/react-auth';
+import {
+  PrivyProvider,
+  usePrivy,
+  useWallets,
+  useSendTransaction,
+  useMfaEnrollment,
+} from '@privy-io/react-auth';
 import { baseSepolia } from 'viem/chains';
 import { ENV } from '../lib/config';
 import { syncSessionWithSupabase, SessionSyncError } from '../lib/sessionApi';
@@ -34,6 +40,7 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
 
   const { sendTransaction } = useSendTransaction();
   const { wallets } = useWallets();
+  const { showMfaEnrollmentModal } = useMfaEnrollment();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState<boolean>(false);
@@ -160,6 +167,14 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     setProfile((prev) => (prev ? { ...prev, beta_access: false } : null));
   }, []);
 
+  const enrollMfa = useCallback(async () => {
+    try {
+      await Promise.resolve(showMfaEnrollmentModal());
+    } catch (_err) {
+      // Do not throw when user closes modal or cancels
+    }
+  }, [showMfaEnrollmentModal]);
+
   const value: AuthContextType = {
     isDemoMode: false,
     hasPrivyConfigured: true,
@@ -187,6 +202,7 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     revokeBetaAccess: handleRevokeBetaAccess,
     getAccessToken,
     sendTransaction,
+    enrollMfa,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

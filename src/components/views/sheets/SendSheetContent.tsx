@@ -447,7 +447,7 @@ export function SendSheetContent({
       }
 
       // Prompt native Privy modal preview
-      const result = await sendTransaction(txRequest);
+      const result = await sendTransaction(txRequest, { uiOptions: { showWalletUIs: false } });
 
       // Safe hash extraction
       broadcastHash = (result as any)?.hash || (result as any)?.transactionHash || (typeof result === 'string' ? result : '');
