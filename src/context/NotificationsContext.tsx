@@ -110,7 +110,7 @@ export function NotificationsProvider({
   const { toast } = useToast();
   const { txs, refresh: refreshTx } = useTx();
   const { refresh: refreshBalance } = useBalance();
-  const { t } = useT();
+  const { t, fmt } = useT();
 
   const [rawItems, setRawItems] = useState<ServerNotificationItem[]>([]);
   const [clearedAt, setClearedAt] = useState<number>(() => loadClearedAt(walletAddress));
@@ -122,8 +122,8 @@ export function NotificationsProvider({
   const walletRef = useRef(walletAddress);
   walletRef.current = walletAddress;
 
-  const latestRef = useRef({ t, toast, refreshTx, refreshBalance, txs, rawItems, getAccessToken });
-  latestRef.current = { t, toast, refreshTx, refreshBalance, txs, rawItems, getAccessToken };
+  const latestRef = useRef({ t, fmt, toast, refreshTx, refreshBalance, txs, rawItems, getAccessToken });
+  latestRef.current = { t, fmt, toast, refreshTx, refreshBalance, txs, rawItems, getAccessToken };
 
   // When walletAddress changes, reload seen and clearedAt
   useEffect(() => {
@@ -170,6 +170,7 @@ export function NotificationsProvider({
       const {
         getAccessToken: curGetAccessToken,
         t: curT,
+        fmt: curFmt,
         toast: curToast,
         refreshTx: curRefreshTx,
         refreshBalance: curRefreshBalance,
@@ -205,7 +206,7 @@ export function NotificationsProvider({
                   if (item.kind === 'tx_received') {
                     const template = curT.notifications.kinds.tx_received;
                     const notifMsg = template
-                      .replace('{amount}', item.data.amount)
+                      .replace('{amount}', curFmt.asset(item.data.amount, item.data.asset))
                       .replace('{asset}', item.data.asset)
                       .replace('{counterparty}', item.data.counterparty);
 

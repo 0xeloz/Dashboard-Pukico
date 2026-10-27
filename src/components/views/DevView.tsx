@@ -22,6 +22,7 @@ import {
 import { fetchExactBalances, sameAddress } from '../../lib/txGuards';
 import { formatEthBalance, formatUsdcUnits } from '../../lib/formatters';
 import { useToast } from '../../context/ToastContext';
+import { useT } from '../../i18n';
 import type { UserProfile, RpcStatusInfo } from '../../types';
 
 interface DevViewProps {
@@ -228,6 +229,7 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
 
 function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
   const { toast } = useToast();
+  const { fmt } = useT();
   const [copied, setCopied] = useState(false);
   const [balances, setBalances] = useState<{ eth: bigint; usdc: bigint } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -314,7 +316,7 @@ function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
               {loading
                 ? 'Loading...'
                 : balances
-                ? `${formatUsdcUnits(balances.usdc)} USDC · ${formatEthBalance(balances.eth)} ETH`
+                ? `${fmt.usdcUnits(balances.usdc)} USDC · ${fmt.ethBalance(balances.eth)} ETH`
                 : '—'}
             </span>
           </div>

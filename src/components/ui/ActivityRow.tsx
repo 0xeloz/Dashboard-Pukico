@@ -29,7 +29,7 @@ interface ActivityRowProps {
 }
 
 export function ActivityRow({ activity, onClick }: ActivityRowProps) {
-  const { t, lang } = useT();
+  const { t, lang, fmt } = useT();
 
   const isIncoming =
     activity.direction === 'in' ||
@@ -74,7 +74,7 @@ export function ActivityRow({ activity, onClick }: ActivityRowProps) {
     relativeTimeStr = formatRelativeTime(rawTimestamp, lang);
   }
 
-  const formattedAmount = formatAssetAmount(activity.amount, asset);
+  const formattedAmount = fmt.asset(activity.amount, asset);
   const prefix = isIncoming ? t.history.from : t.history.to;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

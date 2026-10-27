@@ -146,7 +146,7 @@ export function SendSheetContent({
   onApprovalStateChange,
   prefilledRecipientId,
 }: SendSheetContentProps) {
-  const { t, formatNumber } = useT();
+  const { t, formatNumber, fmt, lang } = useT();
   const {
     profile,
     getAccessToken,
@@ -195,10 +195,14 @@ export function SendSheetContent({
 
   const ethValueRef = useRef(eth.value);
   const usdcValueRef = useRef(usdc.value);
+  const ethWeiRef = useRef(ethWei);
+  const usdcRawRef = useRef(usdcRaw);
   useEffect(() => {
     ethValueRef.current = eth.value;
     usdcValueRef.current = usdc.value;
-  }, [eth.value, usdc.value]);
+    ethWeiRef.current = ethWei;
+    usdcRawRef.current = usdcRaw;
+  }, [eth.value, usdc.value, ethWei, usdcRaw]);
 
   const loadBalances = useCallback(async () => {
     if (!profile?.wallet_address) return;
@@ -207,8 +211,12 @@ export function SendSheetContent({
       setBalances(res);
     } catch {
       // If failed, retain previous value.
-      // Fallback to BalanceContext ONLY if eth.value and usdc.value are not null and parseable;
-      // never convert null or error to 0n.
+      // Fallback to BalanceContext raw bigints if available
+      if (usdcRawRef.current !== null && ethWeiRef.current !== null) {
+        setBalances((prev) => prev ?? { usdc: usdcRawRef.current!, eth: ethWeiRef.current! });
+        return;
+      }
+      // If raw bigints not yet available, fallback to parseable string (canonical)
       const rawUsdc = usdcValueRef.current;
       const rawEth = ethValueRef.current;
       if (rawUsdc !== null && rawEth !== null) {
@@ -599,6 +607,21 @@ export function SendSheetContent({
       const maxUnits = maxSendableWithFee(balances.eth, feeBps, totalGasReserve, isFeeExempt);
       setAmountInput(formatUnitsTrimmed(maxUnits, 18, 8));
     }
+  };
+
+  const handleAmountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/,/g, '.');
+    val = val.replace(/[^0-9.]/g, '');
+    const parts = val.split('.');
+    if (parts.length > 2) {
+      val = parts[0] + '.' + parts.slice(1).join('');
+    }
+    const maxDecimals = selectedAsset === 'USDC' ? 6 : 18;
+    if (val.includes('.')) {
+      const [integerPart, decimalPart] = val.split('.');
+      val = `${integerPart}.${decimalPart.slice(0, maxDecimals)}`;
+    }
+    setAmountInput(val);
   };
 
   const handleCopyDetail = async (text: string, fieldId: string) => {
@@ -1173,7 +1196,7 @@ export function SendSheetContent({
                     <div className="h-4 w-20 bg-[#E5E7EB] rounded animate-pulse mb-1" />
                   ) : (
                     <div className="font-mono text-sm font-bold text-[#0A0B0D]">
-                      {formatUsdcUnits(balances.usdc)} USDC
+                      {fmt.usdcUnits(balances.usdc)} USDC
                     </div>
                   )}
                   <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
@@ -1205,7 +1228,7 @@ export function SendSheetContent({
                     <div className="h-4 w-20 bg-[#E5E7EB] rounded animate-pulse mb-1" />
                   ) : (
                     <div className="font-mono text-sm font-bold text-[#0A0B0D]">
-                      {formatEthBalance(balances.eth)} ETH
+                      {fmt.ethBalance(balances.eth)} ETH
                     </div>
                   )}
                   <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
@@ -1357,8 +1380,8 @@ export function SendSheetContent({
                     .replace(
                       '{amount}',
                       selectedAsset === 'USDC'
-                        ? formatUnitsTrimmed(balances.usdc, 6)
-                        : formatEthBalance(balances.eth)
+                        ? fmt.usdcUnits(balances.usdc)
+                        : fmt.ethBalance(balances.eth)
                     )
                     .replace('{asset}', selectedAsset)}
             </span>
@@ -1377,14 +1400,9 @@ export function SendSheetContent({
               <input
                 type="text"
                 inputMode="decimal"
-                value={amountInput}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/,/g, '.');
-                  if (/^[0-9]*\.?[0-9]*$/.test(val)) {
-                    setAmountInput(val);
-                  }
-                }}
-                placeholder="0.00"
+                value={lang === 'id' ? amountInput.replace('.', ',') : amountInput}
+                onChange={handleAmountInputChange}
+                placeholder={lang === 'id' ? '0,00' : '0.00'}
                 className="w-full h-full bg-transparent text-xl font-bold font-mono text-[#0A0B0D] placeholder:text-[#9CA3AF] focus:outline-none"
                 autoFocus
               />
@@ -1406,11 +1424,11 @@ export function SendSheetContent({
                           ? t.sheets.send.insufficientEthDetailed
                               .replace(
                                 '{needed}',
-                                ethRequiredWei > 0n ? formatEthFee(ethRequiredWei) : '~0.0001'
+                                ethRequiredWei > 0n ? fmt.ethFee(ethRequiredWei) : (lang === 'id' ? '~0,0001' : '~0.0001')
                               )
                               .replace(
                                 '{balance}',
-                                formatUnitsTrimmed(balances.eth, 18, 5)
+                                fmt.units(balances.eth, 18, 5)
                               )
                           : t.sheets.send.needEthForFees)
                       : amountInput
@@ -1424,7 +1442,7 @@ export function SendSheetContent({
                 {isEstimatingFee ? (
                   <span>{t.sheets.send.estimating}</span>
                 ) : estimatedFeeEth ? (
-                  <span>{t.sheets.send.aboutFeeEth.replace('{fee}', estimatedFeeEth)}</span>
+                  <span>{t.sheets.send.aboutFeeEth.replace('{fee}', fmt.number(estimatedFeeEth))}</span>
                 ) : (
                   <span>{t.sheets.send.feeUnavailable}</span>
                 )}
@@ -1502,8 +1520,8 @@ export function SendSheetContent({
                   <span className="text-[#5B6577]">{t.sheets.send.recipientGets}</span>
                   <span className="font-bold font-mono text-[#0A0B0D]">
                     {selectedAsset === 'USDC'
-                      ? formatUsdcUnits(amountUnits)
-                      : formatUnitsTrimmed(amountUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                      ? fmt.usdcUnits(amountUnits)
+                      : fmt.units(amountUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
                   </span>
                 </div>
                 <div className="py-2 flex items-center justify-between text-xs">
@@ -1515,16 +1533,16 @@ export function SendSheetContent({
                   </span>
                   <span className="font-mono text-[#0A0B0D] font-medium">
                     +{selectedAsset === 'USDC'
-                      ? formatUsdcUnits(feeUnits)
-                      : formatUnitsTrimmed(feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                      ? fmt.usdcUnits(feeUnits)
+                      : fmt.units(feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
                   </span>
                 </div>
                 <div className="py-2.5 flex items-center justify-between font-semibold">
                   <span className="text-[#0A0B0D]">{t.sheets.send.totalFromYou}</span>
                   <span className="font-bold font-mono text-[#0052FF]">
                     {selectedAsset === 'USDC'
-                      ? formatUsdcUnits(amountUnits + feeUnits)
-                      : formatUnitsTrimmed(amountUnits + feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                      ? fmt.usdcUnits(amountUnits + feeUnits)
+                      : fmt.units(amountUnits + feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
                   </span>
                 </div>
               </>
@@ -1533,8 +1551,8 @@ export function SendSheetContent({
                 <span className="text-[#5B6577]">{t.sheets.send.amountLabel}</span>
                 <span className="font-bold font-mono text-[#0A0B0D]">
                   {selectedAsset === 'USDC'
-                    ? formatUsdcUnits(amountUnits)
-                    : formatAssetAmount(amountInput, selectedAsset)} {selectedAsset}
+                    ? fmt.usdcUnits(amountUnits)
+                    : fmt.asset(amountInput, selectedAsset)} {selectedAsset}
                 </span>
               </div>
             )}
@@ -1546,7 +1564,7 @@ export function SendSheetContent({
                 {isEstimatingFee ? (
                   <span>{t.sheets.send.estimating}</span>
                 ) : estimatedFeeEth ? (
-                  <span>{t.sheets.send.aboutFeeEth.replace('{fee}', estimatedFeeEth)}</span>
+                  <span>{t.sheets.send.aboutFeeEth.replace('{fee}', fmt.number(estimatedFeeEth))}</span>
                 ) : (
                   <span>{t.sheets.send.feeUnavailable}</span>
                 )}
@@ -1791,8 +1809,8 @@ export function SendSheetContent({
             {lockedSummary && (
               <p className="text-xs text-[#5B6577] font-mono">
                 {lockedSummary.asset === 'USDC'
-                  ? formatUsdcUnits(lockedSummary.amountUnits)
-                  : formatUnitsTrimmed(lockedSummary.amountUnits, ASSET_DECIMALS[lockedSummary.asset], 8)}{' '}
+                  ? fmt.usdcUnits(lockedSummary.amountUnits)
+                  : fmt.units(lockedSummary.amountUnits, ASSET_DECIMALS[lockedSummary.asset], 8)}{' '}
                 {lockedSummary.asset} → @{lockedSummary.recipientId}
               </p>
             )}
@@ -1812,24 +1830,24 @@ export function SendSheetContent({
             const displayAsset = lockedSummary?.asset ?? selectedAsset;
             const displayAmount =
               displayAsset === 'USDC'
-                ? formatUsdcUnits(lockedSummary?.amountUnits ?? amountUnits)
-                : formatUnitsTrimmed(
+                ? fmt.usdcUnits(lockedSummary?.amountUnits ?? amountUnits)
+                : fmt.units(
                     lockedSummary?.amountUnits ?? amountUnits,
                     ASSET_DECIMALS[displayAsset],
                     8
                   );
             const displayFee =
               displayAsset === 'USDC'
-                ? formatUsdcUnits(lockedSummary?.feeUnits ?? feeUnits)
-                : formatUnitsTrimmed(
+                ? fmt.usdcUnits(lockedSummary?.feeUnits ?? feeUnits)
+                : fmt.units(
                     lockedSummary?.feeUnits ?? feeUnits,
                     ASSET_DECIMALS[displayAsset],
                     8
                   );
             const displayTotal =
               displayAsset === 'USDC'
-                ? formatUsdcUnits(lockedSummary?.totalUnits ?? (amountUnits + feeUnits))
-                : formatUnitsTrimmed(
+                ? fmt.usdcUnits(lockedSummary?.totalUnits ?? (amountUnits + feeUnits))
+                : fmt.units(
                     lockedSummary?.totalUnits ?? (amountUnits + feeUnits),
                     ASSET_DECIMALS[displayAsset],
                     8
@@ -1881,7 +1899,7 @@ export function SendSheetContent({
                     <div className="flex items-center justify-between pt-1 border-t border-[#E5E7EB]/60">
                       <span className="text-[#5B6577]">{t.sheets.send.networkFee}</span>
                       <span className="font-mono font-semibold text-[#0A0B0D]">
-                        {formatEthFee(finalTxRecord.network_fee_wei)} ETH
+                        {fmt.ethFee(finalTxRecord.network_fee_wei)} ETH
                       </span>
                     </div>
                   )}

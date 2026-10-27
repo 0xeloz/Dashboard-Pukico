@@ -2,8 +2,28 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { en, type Translations } from './en';
 import { id } from './id';
 
+import {
+  formatUsdcUnits,
+  formatUsdcString,
+  formatAssetAmount,
+  formatEthBalance,
+  formatEthFee,
+  localizeNumber,
+} from '../lib/formatters';
+import { formatUnitsTrimmed } from '../lib/fees';
+
 export type Lang = 'en' | 'id';
 export type LangPhase = 'idle' | 'out' | 'in';
+
+export interface LangFormatters {
+  usdcUnits: (raw: bigint) => string;
+  usdcString: (s: string) => string;
+  asset: (amount: string | number | undefined | null, asset?: string) => string;
+  ethBalance: (v: bigint | string | number | null | undefined) => string;
+  ethFee: (wei: bigint | string | number) => string;
+  units: (value: bigint, decimals: number, maxDecimals?: number) => string;
+  number: (text: string) => string;
+}
 
 const LANG_STORAGE_KEY = 'pukico.lang';
 
@@ -43,6 +63,7 @@ export interface LangContextType {
     date: Date | number | string,
     options?: Intl.DateTimeFormatOptions
   ) => string;
+  fmt: LangFormatters;
 }
 
 const LangContext = createContext<LangContextType | null>(null);
@@ -155,6 +176,20 @@ export function LangProvider({ children }: { children: React.ReactNode }) {
     [lang]
   );
 
+  const fmt = useMemo<LangFormatters>(
+    () => ({
+      usdcUnits: (raw: bigint) => localizeNumber(formatUsdcUnits(raw), lang),
+      usdcString: (s: string) => localizeNumber(formatUsdcString(s), lang),
+      asset: (amount, asset) => localizeNumber(formatAssetAmount(amount, asset), lang),
+      ethBalance: (v) => localizeNumber(formatEthBalance(v), lang),
+      ethFee: (wei) => localizeNumber(formatEthFee(wei), lang),
+      units: (value: bigint, decimals: number, maxDecimals?: number) =>
+        localizeNumber(formatUnitsTrimmed(value, decimals, maxDecimals), lang),
+      number: (text: string) => localizeNumber(text, lang),
+    }),
+    [lang]
+  );
+
   const value = useMemo<LangContextType>(
     () => ({
       lang,
@@ -163,8 +198,9 @@ export function LangProvider({ children }: { children: React.ReactNode }) {
       changeLang,
       formatNumber,
       formatDate,
+      fmt,
     }),
-    [lang, phase, changeLang, formatNumber, formatDate]
+    [lang, phase, changeLang, formatNumber, formatDate, fmt]
   );
 
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;

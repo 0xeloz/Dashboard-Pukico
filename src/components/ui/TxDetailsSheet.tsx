@@ -13,7 +13,7 @@ interface TxDetailsSheetProps {
 }
 
 export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
-  const { t, lang } = useT();
+  const { t, lang, fmt } = useT();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
@@ -30,7 +30,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
     ''
   );
 
-  const formattedAmount = formatAssetAmount(tx.amount, tx.asset);
+  const formattedAmount = fmt.asset(tx.amount, tx.asset);
   const explorerUrl = tx.explorer_url || (tx.tx_hash ? getExplorerUrl(tx.tx_hash) : '');
 
   const handleCopyHash = async () => {
@@ -157,7 +157,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
             <div className="flex items-center justify-between py-3">
               <span className="text-sm text-[#5B6577] font-medium">{t.sheets.send.networkFee}</span>
               <span className="font-mono text-sm font-semibold text-[#0A0B0D]">
-                {formatEthFee(tx.network_fee_wei)} ETH
+                {fmt.ethFee(tx.network_fee_wei)} ETH
               </span>
             </div>
           )}

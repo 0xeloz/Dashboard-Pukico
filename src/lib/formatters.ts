@@ -56,6 +56,22 @@ export function formatUsdcString(amount: string): string {
 }
 
 /**
+ * Localize number string based on language:
+ * - 'en': returns canonical string untouched (dot decimal, comma thousands)
+ * - 'id': swaps dots and commas in a single pass (comma decimal, dot thousands)
+ * Any non-numeric prefix like "< " is preserved untouched.
+ * Examples:
+ *   "9.975" -> "9,975"
+ *   "1,234.50" -> "1.234,50"
+ *   "< 0.00000001" -> "< 0,00000001"
+ *   "0.0009967" -> "0,0009967"
+ */
+export function localizeNumber(text: string, lang: 'en' | 'id'): string {
+  if (lang === 'en' || !text) return text;
+  return text.replace(/[.,]/g, (c) => (c === '.' ? ',' : '.'));
+}
+
+/**
  * Formatting helpers for localized date, time, and currency amounts
  */
 

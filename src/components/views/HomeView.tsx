@@ -64,7 +64,7 @@ export function HomeView({
   onNavigateToHistory,
   onSheetOpenChange,
 }: HomeViewProps) {
-  const { t, formatNumber } = useT();
+  const { t, fmt } = useT();
   const { openSend } = useFriends();
   const hasBetaAccess = profile?.beta_access === true || profile?.role === 'admin';
 
@@ -230,7 +230,7 @@ export function HomeView({
     ? '••••'
     : isEthInitialLoading
     ? '…'
-    : formatEthBalance(eth.value ?? '0');
+    : fmt.ethBalance(eth.value ?? '0');
 
   return (
     <div
@@ -338,8 +338,8 @@ export function HomeView({
                   {isBalanceHidden
                     ? '••••'
                     : usdcRaw !== null
-                    ? formatUsdcUnits(usdcRaw)
-                    : formatUsdcString(usdc.value ?? '0')}
+                    ? fmt.usdcUnits(usdcRaw)
+                    : fmt.usdcString(usdc.value ?? '0')}
                 </span>
                 <span className="text-base font-semibold text-white/80">USDC</span>
               </div>
@@ -492,8 +492,8 @@ export function HomeView({
                       ? '••••'
                       : `${
                           usdcRaw !== null
-                            ? formatUsdcUnits(usdcRaw)
-                            : formatUsdcString(usdc.value ?? '0')
+                            ? fmt.usdcUnits(usdcRaw)
+                            : fmt.usdcString(usdc.value ?? '0')
                         } USDC`}
                   </div>
                   <div className="text-[11px] text-[#5B6577] mt-0.5">{t.common.testnet}</div>
@@ -530,7 +530,7 @@ export function HomeView({
               ) : (
                 <>
                   <div className="font-mono text-[15px] font-bold text-[#0A0B0D] tabular-nums transition-opacity duration-150">
-                    {isBalanceHidden ? '••••' : `${formatEthBalance(eth.value ?? '0')} ETH`}
+                    {isBalanceHidden ? '••••' : `${fmt.ethBalance(eth.value ?? '0')} ETH`}
                   </div>
                   <div className="text-[11px] text-[#5B6577] mt-0.5">{t.common.testnet}</div>
                 </>

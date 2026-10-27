@@ -85,7 +85,7 @@ function NotificationTypeIcon({ kind }: { kind: string }) {
 }
 
 export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
-  const { t, lang } = useT();
+  const { t, lang, fmt } = useT();
   const {
     notifications: localNotifications,
     unreadCount: localUnreadCount,
@@ -133,7 +133,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
       }
 
       let message = '';
-      const formattedAmount = formatAssetAmount(item.data.amount, item.data.asset);
+      const formattedAmount = fmt.asset(item.data.amount, item.data.asset);
       if (item.kind === 'tx_received') {
         message = t.notifications.kinds.tx_received
           .replace('{amount}', formattedAmount)
