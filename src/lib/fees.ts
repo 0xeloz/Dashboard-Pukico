@@ -11,8 +11,8 @@ function parseFeeBps(raw: unknown): number {
   return Math.min(parsed, MAX_FEE_BPS);
 }
 
-const rawTreasuryEnv = (import.meta.env.VITE_TREASURY_ADDRESS || '').toString().trim();
-const rawFeeBpsEnv = import.meta.env.VITE_FEE_BPS;
+const rawTreasuryEnv = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TREASURY_ADDRESS || '').toString().trim();
+const rawFeeBpsEnv = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_FEE_BPS : undefined;
 
 export const CONFIGURED_TREASURY_ADDRESS =
   rawTreasuryEnv && isAddress(rawTreasuryEnv) ? (rawTreasuryEnv as `0x${string}`) : null;
@@ -60,21 +60,30 @@ export function isTreasuryAddress(address?: string | null, isDemoMode = false): 
 }
 
 /**
- * Compute the service fee with ceiling division: ceil(amount * bps / 10000).
- * Minimum 1 unit if amount > 0 and fee is active.
- * Fee is 0 if exempt (e.g. sender or recipient is treasury, or fee is inactive).
+ * Compute the service fee.
+ * For asset 'USDC': fee = floor((amountUnits * bps) / 10000) then floored to multiple of 10000 units (0.01 USDC),
+ * with minimum 10000 units (0.01 USDC) if fee is active (bps > 0, not exempt, amountUnits > 0).
+ * For asset 'ETH': original behavior preserved (ceil division: (amountUnits * bps + 9999) / 10000).
  */
 export function computeServiceFee(
   amountUnits: bigint,
   bps: number,
-  isExempt = false
+  isExempt = false,
+  asset: 'USDC' | 'ETH' = 'USDC'
 ): bigint {
   if (isExempt || bps <= 0 || amountUnits <= 0n) {
     return 0n;
   }
 
   const bpsBig = BigInt(bps);
-  // Ceil division: (a * bps + 9999) / 10000
+
+  if (asset === 'USDC') {
+    const rawFee = (amountUnits * bpsBig) / 10000n;
+    const flooredToCent = (rawFee / 10000n) * 10000n;
+    return flooredToCent < 10000n ? 10000n : flooredToCent;
+  }
+
+  // ETH: ceil division: (a * bps + 9999) / 10000
   const fee = (amountUnits * bpsBig + 9999n) / 10000n;
   return fee > 0n ? fee : 1n;
 }
@@ -82,28 +91,59 @@ export function computeServiceFee(
 /**
  * Calculate maximum sendable amount considering fee and optional gas reservation.
  * amount + fee <= available
+ * For USDC: rounded down to multiple of 10000 units and ensures amount + fee <= balance.
  */
-export function maxSendableWithFee(
+export function computeMaxSendable(
   totalBalanceUnits: bigint,
   bps: number,
   reserveGasUnits: bigint = 0n,
-  isExempt = false
+  isExempt = false,
+  asset: 'USDC' | 'ETH' = 'USDC'
 ): bigint {
   const available = totalBalanceUnits > reserveGasUnits ? totalBalanceUnits - reserveGasUnits : 0n;
   if (available <= 0n) return 0n;
+
+  if (asset === 'USDC') {
+    if (isExempt || bps <= 0) {
+      return (available / 10000n) * 10000n;
+    }
+
+    if (available < 20000n) {
+      return 0n;
+    }
+
+    const bpsBig = BigInt(bps);
+    let amount = (available * 10000n) / (10000n + bpsBig);
+    amount = (amount / 10000n) * 10000n;
+
+    // Ensure amount + fee <= available
+    while (amount > 0n && amount + computeServiceFee(amount, bps, isExempt, 'USDC') > available) {
+      amount -= 10000n;
+    }
+
+    // Try stepping up by 10000n if there is headroom because fee was floored
+    while (amount + 10000n + computeServiceFee(amount + 10000n, bps, isExempt, 'USDC') <= available) {
+      amount += 10000n;
+    }
+
+    return amount > 0n ? amount : 0n;
+  }
+
+  // ETH: unchanged
   if (isExempt || bps <= 0) return available;
 
   const bpsBig = BigInt(bps);
-  // Initial estimate: available * 10000 / (10000 + bps)
   let amount = (available * 10000n) / (10000n + bpsBig);
 
-  // Guard against ceil fee exceeding available
-  while (amount > 0n && amount + computeServiceFee(amount, bps, isExempt) > available) {
+  while (amount > 0n && amount + computeServiceFee(amount, bps, isExempt, 'ETH') > available) {
     amount -= 1n;
   }
 
   return amount > 0n ? amount : 0n;
 }
+
+// Alias for backwards compatibility
+export const maxSendableWithFee = computeMaxSendable;
 
 /**
  * Format bigint units to trimmed decimal string (no redundant trailing zeros, no trailing dot).

@@ -54,6 +54,7 @@ import {
 } from '../../../lib/txGuards';
 import {
   computeServiceFee,
+  computeMaxSendable,
   maxSendableWithFee,
   getTreasuryAddress,
   getFeeBps,
@@ -347,7 +348,7 @@ export function SendSheetContent({
   };
 
   const amountUnits = parseAmountUnits(amountInput, selectedAsset);
-  const feeUnits = computeServiceFee(amountUnits, feeBps, isFeeExempt);
+  const feeUnits = computeServiceFee(amountUnits, feeBps, isFeeExempt, selectedAsset);
 
   // Dynamic required ETH calculation for gas + service fee + optional ETH transfer
   const ethRequiredWei =
@@ -599,12 +600,14 @@ export function SendSheetContent({
   const handleMaxAmount = () => {
     if (!balances) return;
     if (selectedAsset === 'USDC') {
-      const maxUnits = maxSendableWithFee(balances.usdc, feeBps, 0n, isFeeExempt);
-      setAmountInput(formatUnitsTrimmed(maxUnits, 6));
+      const maxUnits = computeMaxSendable(balances.usdc, feeBps, 0n, isFeeExempt, 'USDC');
+      const full = formatUnits(maxUnits, 6);
+      const [intP, decP = ''] = full.split('.');
+      setAmountInput(`${intP}.${decP.padEnd(2, '0').slice(0, 2)}`);
     } else {
       const reserveFee = estimatedFeeWei && estimatedFeeWei > 0n ? estimatedFeeWei : 21000n * 2000000000n;
       const totalGasReserve = isFeeActive(isDemoMode) && !isFeeExempt ? reserveFee * 2n : reserveFee;
-      const maxUnits = maxSendableWithFee(balances.eth, feeBps, totalGasReserve, isFeeExempt);
+      const maxUnits = computeMaxSendable(balances.eth, feeBps, totalGasReserve, isFeeExempt, 'ETH');
       setAmountInput(formatUnitsTrimmed(maxUnits, 18, 8));
     }
   };
@@ -616,7 +619,7 @@ export function SendSheetContent({
     if (parts.length > 2) {
       val = parts[0] + '.' + parts.slice(1).join('');
     }
-    const maxDecimals = selectedAsset === 'USDC' ? 6 : 18;
+    const maxDecimals = selectedAsset === 'USDC' ? 2 : 18;
     if (val.includes('.')) {
       const [integerPart, decimalPart] = val.split('.');
       val = `${integerPart}.${decimalPart.slice(0, maxDecimals)}`;
@@ -673,24 +676,27 @@ export function SendSheetContent({
     }
 
     // 4. Freeze snapshot LockedTransfer (execution only reads this snapshot)
-    const snapshot: LockedTransfer = {
-      asset: selectedAsset,
-      amountUnits,
-      feeUnits,
-      recipientId: resolvedRecipient.id,
-      recipientAddress: resolvedRecipient.address as `0x${string}`,
-      treasuryAddress: getTreasuryAddress(isDemoMode),
-      senderAddress: profile.wallet_address as `0x${string}`,
-      timestamp: Date.now(),
-    };
-
-    setLockedSummary({
+    const currentSummary: LockedSummary = lockedSummary ?? {
       asset: selectedAsset,
       amountUnits,
       feeUnits,
       totalUnits: amountUnits + feeUnits,
       recipientId: resolvedRecipient.id,
-    });
+    };
+    if (!lockedSummary) {
+      setLockedSummary(currentSummary);
+    }
+
+    const snapshot: LockedTransfer = {
+      asset: currentSummary.asset,
+      amountUnits: currentSummary.amountUnits,
+      feeUnits: currentSummary.feeUnits,
+      recipientId: currentSummary.recipientId,
+      recipientAddress: resolvedRecipient.address as `0x${string}`,
+      treasuryAddress: getTreasuryAddress(isDemoMode),
+      senderAddress: profile.wallet_address as `0x${string}`,
+      timestamp: Date.now(),
+    };
 
     // 5. Ensure embeddedWalletAddress matches profile.wallet_address
     if (embeddedWalletAddress && !sameAddress(embeddedWalletAddress, snapshot.senderAddress)) {
@@ -1178,6 +1184,13 @@ export function SendSheetContent({
                   if (!hasBetaAccess || balances === null) return;
                   setLockedSummary(null);
                   setSelectedAsset('USDC');
+                  setAmountInput((prev) => {
+                    if (prev.includes('.')) {
+                      const [intP, decP = ''] = prev.split('.');
+                      return `${intP}.${decP.slice(0, 2)}`;
+                    }
+                    return prev;
+                  });
                   setStep(prefilledRecipientId ? 3 : 2);
                 }}
                 className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
@@ -1457,6 +1470,13 @@ export function SendSheetContent({
               onClick={() => {
                 setSendFailedBeforeHash(false);
                 setSecurityError(null);
+                setLockedSummary({
+                  asset: selectedAsset,
+                  amountUnits,
+                  feeUnits,
+                  totalUnits: amountUnits + feeUnits,
+                  recipientId: resolvedRecipient?.id || '',
+                });
                 setStep(4);
               }}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center cursor-pointer"
@@ -1514,48 +1534,55 @@ export function SendSheetContent({
             </div>
 
             {/* Recipient gets / Service Fee / Total Rows */}
-            {feeUnits > 0n ? (
-              <>
-                <div className="py-2 flex items-center justify-between">
-                  <span className="text-[#5B6577]">{t.sheets.send.recipientGets}</span>
-                  <span className="font-bold font-mono text-[#0A0B0D]">
-                    {selectedAsset === 'USDC'
-                      ? fmt.usdcUnits(amountUnits)
-                      : fmt.units(amountUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
-                  </span>
-                </div>
-                <div className="py-2 flex items-center justify-between text-xs">
-                  <span className="text-[#5B6577] flex items-center gap-1">
-                    <span>{t.sheets.send.serviceFee}</span>
-                    <span className="text-[10px] text-[#0052FF] font-semibold bg-[#EEF4FF] px-1.5 py-0.5 rounded">
-                      {(feeBps / 100).toFixed(1)}%
+            {(() => {
+              const reviewAsset = lockedSummary?.asset ?? selectedAsset;
+              const reviewAmountUnits = lockedSummary?.amountUnits ?? amountUnits;
+              const reviewFeeUnits = lockedSummary?.feeUnits ?? feeUnits;
+              const reviewTotalUnits = lockedSummary?.totalUnits ?? (amountUnits + feeUnits);
+
+              return reviewFeeUnits > 0n ? (
+                <>
+                  <div className="py-2 flex items-center justify-between">
+                    <span className="text-[#5B6577]">{t.sheets.send.recipientGets}</span>
+                    <span className="font-bold font-mono text-[#0A0B0D]">
+                      {reviewAsset === 'USDC'
+                        ? fmt.usdcUnits(reviewAmountUnits)
+                        : fmt.units(reviewAmountUnits, ASSET_DECIMALS[reviewAsset])} {reviewAsset}
                     </span>
-                  </span>
-                  <span className="font-mono text-[#0A0B0D] font-medium">
-                    +{selectedAsset === 'USDC'
-                      ? fmt.usdcUnits(feeUnits)
-                      : fmt.units(feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                  </div>
+                  <div className="py-2 flex items-center justify-between text-xs">
+                    <span className="text-[#5B6577] flex items-center gap-1">
+                      <span>{t.sheets.send.serviceFee}</span>
+                      <span className="text-[10px] text-[#0052FF] font-semibold bg-[#EEF4FF] px-1.5 py-0.5 rounded">
+                        {(feeBps / 100).toFixed(1)}%
+                      </span>
+                    </span>
+                    <span className="font-mono text-[#0A0B0D] font-medium">
+                      +{reviewAsset === 'USDC'
+                        ? fmt.usdcUnits(reviewFeeUnits)
+                        : fmt.units(reviewFeeUnits, ASSET_DECIMALS[reviewAsset])} {reviewAsset}
+                    </span>
+                  </div>
+                  <div className="py-2.5 flex items-center justify-between font-semibold">
+                    <span className="text-[#0A0B0D]">{t.sheets.send.totalFromYou}</span>
+                    <span className="font-bold font-mono text-[#0052FF]">
+                      {reviewAsset === 'USDC'
+                        ? fmt.usdcUnits(reviewTotalUnits)
+                        : fmt.units(reviewTotalUnits, ASSET_DECIMALS[reviewAsset])} {reviewAsset}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="py-2.5 flex items-center justify-between">
+                  <span className="text-[#5B6577]">{t.sheets.send.amountLabel}</span>
+                  <span className="font-bold font-mono text-[#0A0B0D]">
+                    {reviewAsset === 'USDC'
+                      ? fmt.usdcUnits(reviewAmountUnits)
+                      : fmt.asset(amountInput, reviewAsset)} {reviewAsset}
                   </span>
                 </div>
-                <div className="py-2.5 flex items-center justify-between font-semibold">
-                  <span className="text-[#0A0B0D]">{t.sheets.send.totalFromYou}</span>
-                  <span className="font-bold font-mono text-[#0052FF]">
-                    {selectedAsset === 'USDC'
-                      ? fmt.usdcUnits(amountUnits + feeUnits)
-                      : fmt.units(amountUnits + feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <div className="py-2.5 flex items-center justify-between">
-                <span className="text-[#5B6577]">{t.sheets.send.amountLabel}</span>
-                <span className="font-bold font-mono text-[#0A0B0D]">
-                  {selectedAsset === 'USDC'
-                    ? fmt.usdcUnits(amountUnits)
-                    : fmt.asset(amountInput, selectedAsset)} {selectedAsset}
-                </span>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Network Fee */}
             <div className="py-2.5 flex items-center justify-between">

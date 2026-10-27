@@ -176,18 +176,26 @@ export function LangProvider({ children }: { children: React.ReactNode }) {
     [lang]
   );
 
+  // Formatting wrapper for ETH preserving avoidThreeDecimals logic before localization
+  const avoidThreeDecimals = useCallback((str: string): string => str, []);
+
   const fmt = useMemo<LangFormatters>(
     () => ({
       usdcUnits: (raw: bigint) => localizeNumber(formatUsdcUnits(raw), lang),
       usdcString: (s: string) => localizeNumber(formatUsdcString(s), lang),
-      asset: (amount, asset) => localizeNumber(formatAssetAmount(amount, asset), lang),
-      ethBalance: (v) => localizeNumber(formatEthBalance(v), lang),
-      ethFee: (wei) => localizeNumber(formatEthFee(wei), lang),
+      asset: (amount, asset = 'USDC') => {
+        if (asset === 'USDC') {
+          return localizeNumber(formatAssetAmount(amount, 'USDC'), lang);
+        }
+        return localizeNumber(avoidThreeDecimals(formatAssetAmount(amount, asset)), lang);
+      },
+      ethBalance: (v) => localizeNumber(avoidThreeDecimals(formatEthBalance(v)), lang),
+      ethFee: (wei) => localizeNumber(avoidThreeDecimals(formatEthFee(wei)), lang),
       units: (value: bigint, decimals: number, maxDecimals?: number) =>
         localizeNumber(formatUnitsTrimmed(value, decimals, maxDecimals), lang),
       number: (text: string) => localizeNumber(text, lang),
     }),
-    [lang]
+    [lang, avoidThreeDecimals]
   );
 
   const value = useMemo<LangContextType>(

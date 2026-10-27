@@ -2,56 +2,61 @@ import { formatEther, parseEther, formatUnits, parseUnits } from 'viem';
 
 /**
  * Format raw USDC units (bigint, 6 decimals):
- * - Uses formatUnits(raw, 6)
- * - Exact string manipulation without parseFloat/Number/toLocaleString
- * - Strips trailing zeros but retains at least 2 decimals, up to 6 decimals
- * - Commas for thousands separator on the integer part
+ * - Exactly 2 decimals with truncation (floor without rounding up)
+ * - cents = raw / 10000n (for negative, truncates towards zero)
+ * - Formatted as "int.dd" with canonical thousands commas
+ * - No Number/parseFloat/toLocaleString
  * Examples:
- *   25000n -> "0.025"
- *   5025000n -> "5.025"
- *   5000000n -> "5.00"
- *   4975000n -> "4.975"
+ *   9975000n -> "9.97"
+ *   5020000n -> "5.02"
+ *   20000n -> "0.02"
+ *   10000n -> "0.01"
+ *   5000n -> "0.00"
  *   1234500000n -> "1,234.50"
  */
 export function formatUsdcUnits(raw: bigint): string {
   const isNegative = raw < 0n;
-  const absVal = isNegative ? -raw : raw;
-  const full = formatUnits(absVal, 6);
-  const [intPart, fracPart = ''] = full.split('.');
-  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  let trimmedFrac = fracPart.replace(/0+$/, '');
-  if (trimmedFrac.length < 2) {
-    trimmedFrac = trimmedFrac.padEnd(2, '0');
-  }
-  const result = `${formattedInt}.${trimmedFrac}`;
-  return isNegative ? `-${result}` : result;
+  const absRaw = isNegative ? -raw : raw;
+  const absCents = absRaw / 10000n;
+
+  const intPart = absCents / 100n;
+  const fracPart = absCents % 100n;
+
+  const intStr = intPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const fracStr = fracPart.toString().padStart(2, '0');
+
+  const result = `${intStr}.${fracStr}`;
+  return isNegative && absCents > 0n ? `-${result}` : result;
 }
 
 /**
- * Format string USDC amount (e.g. from server / tx.amount):
- * Parses with parseUnits(..., 6) then formats with formatUsdcUnits.
- * If invalid or cannot parse, returns original string.
+ * Format string USDC amount (e.g. from server / tx.amount / BalanceContext):
+ * Exact 2 decimals with truncation (floor without rounding up).
+ * Parses into raw BigInt 6-decimals without Number/parseFloat/toLocaleString,
+ * then delegates to formatUsdcUnits.
  */
-export function formatUsdcString(amount: string): string {
-  if (typeof amount !== 'string') {
-    if (typeof amount === 'number') {
-      amount = String(amount);
-    } else {
-      return '';
-    }
-  }
-  const clean = amount.replace(/,/g, '').trim();
-  if (!clean) return amount;
+export function formatUsdcString(amount: string | number | undefined | null): string {
+  if (amount === undefined || amount === null) return '0.00';
+  const str = String(amount).replace(/,/g, '').trim();
+  if (!str) return '0.00';
+
   try {
-    let sanitized = clean;
+    let sanitized = str;
+    const isNegative = sanitized.startsWith('-');
+    if (isNegative) sanitized = sanitized.slice(1);
+
     const dotIdx = sanitized.indexOf('.');
-    if (dotIdx !== -1 && sanitized.length - dotIdx - 1 > 6) {
-      sanitized = sanitized.slice(0, dotIdx + 7);
+    let intStr = sanitized;
+    let decStr = '';
+    if (dotIdx !== -1) {
+      intStr = sanitized.slice(0, dotIdx);
+      decStr = sanitized.slice(dotIdx + 1, dotIdx + 7);
     }
-    const raw = parseUnits(sanitized, 6);
+    decStr = decStr.padEnd(6, '0');
+    const raw = (BigInt(intStr || '0') * 1000000n + BigInt(decStr)) * (isNegative ? -1n : 1n);
     return formatUsdcUnits(raw);
   } catch {
-    return amount;
+    return '0.00';
   }
 }
 
