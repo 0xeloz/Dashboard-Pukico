@@ -20,6 +20,8 @@ export interface SessionErrorInfo {
   statusCode?: number;
 }
 
+export type FeeStatus = 'pending' | 'paid' | 'unpaid' | 'invalid' | 'none' | 'legacy' | null;
+
 export type ActiveTab = 'home' | 'friends' | 'discover' | 'history' | 'settings' | 'receive' | 'dev';
 
 export interface RpcStatusInfo {
@@ -30,3 +32,4 @@ export interface RpcStatusInfo {
   chainId: number;
   networkName: string;
 }
+

@@ -99,7 +99,15 @@ export const id: Translations = {
     couldNotLoad: 'Riwayat gagal dimuat',
     noActivity: 'Belum ada aktivitas. Transaksi kirim dan terima bakal muncul di sini.',
     previewFeed: 'Umpan contoh',
+    serviceFee: 'Biaya layanan Pukico',
+    feeStatusPaid: 'Terbayar',
+    feeStatusPending: 'Menunggu verifikasi',
+    feeStatusUnpaid: 'Belum terbayar',
+    feeStatusInvalid: 'Tidak sesuai',
+    payFeeNow: 'Bayar sekarang',
+    payingFee: 'Membayar biaya…',
   },
+
   home: {
     balanceSummaryAria: 'Ringkasan Saldo',
     showBalance: 'Tampilkan saldo',

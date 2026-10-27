@@ -15,9 +15,11 @@ export interface TxContextType {
   status: TxFetchStatus;
   refreshing: boolean;
   refresh: () => Promise<void>;
+  updateTxRecord: (txHash: string, updates: Partial<TxRecord>) => void;
   simulateIncomingTx: (asset?: 'USDC' | 'ETH', amount?: string, sender?: string) => void;
   isDemoMode: boolean;
 }
+
 
 const TxContext = createContext<TxContextType | null>(null);
 
@@ -267,6 +269,18 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
     };
   }, [refresh, isDemoMode]);
 
+  // Update a transaction record in local state immediately (e.g. after fee retry)
+  const updateTxRecord = useCallback((txHash: string, updates: Partial<TxRecord>) => {
+
+    setTxs((prev) =>
+      prev.map((item) =>
+        item.tx_hash.toLowerCase() === txHash.toLowerCase()
+          ? { ...item, ...updates }
+          : item
+      )
+    );
+  }, []);
+
   return (
     <TxContext.Provider
       value={{
@@ -274,6 +288,7 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
         status,
         refreshing,
         refresh,
+        updateTxRecord,
         simulateIncomingTx,
         isDemoMode,
       }}
@@ -281,6 +296,7 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
       {children}
     </TxContext.Provider>
   );
+
 }
 
 export function useTx(): TxContextType {

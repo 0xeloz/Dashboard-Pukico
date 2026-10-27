@@ -9,6 +9,8 @@ export interface ResolveIdResult {
   error?: 'onboarding_required' | 'unauthorized' | 'server' | 'network';
 }
 
+export type FeeStatus = 'pending' | 'paid' | 'unpaid' | 'invalid' | 'none' | 'legacy' | null;
+
 export interface TxRecord {
   tx_hash: string;
   direction?: 'in' | 'out' | 'incoming' | 'outgoing';
@@ -23,7 +25,37 @@ export interface TxRecord {
   explorer_url?: string;
   network_fee_wei?: string;
   fee_tx_hash?: string;
+  service_fee?: string | null;
+  fee_status?: FeeStatus;
 }
+
+export interface FeeReportAssetTotal {
+  paid_count: number;
+  paid_amount: string;
+  due_count: number;
+  due_amount: string;
+}
+
+export interface FeeReportUnpaidEntry {
+  tx_hash: string;
+  asset: 'USDC' | 'ETH';
+  from: string;
+  status: string;
+  expected: string;
+  created_at: string;
+}
+
+export interface FeeReportResponse {
+  treasury: string | null;
+  fee_bps: number;
+  active: boolean;
+  totals: {
+    USDC: FeeReportAssetTotal;
+    ETH: FeeReportAssetTotal;
+  };
+  unpaid: FeeReportUnpaidEntry[];
+}
+
 
 export interface PendingTxEntry {
   tx_hash: string;
@@ -204,6 +236,24 @@ export async function submitTx(
   options: ApiOptions = {}
 ): Promise<{ ok: boolean; status: number; tx?: TxRecord; error?: string }> {
   if (options.isDemoMode) {
+    const feeBps = 50;
+    let serviceFee: string | null = null;
+    if (params.asset === 'USDC') {
+      try {
+        const rawAmount = BigInt(Math.round(parseFloat(params.amount || '0') * 1000000));
+        const rawFee = (rawAmount * BigInt(feeBps)) / 10000n;
+        const flooredCent = (rawFee / 10000n) * 10000n;
+        const finalFeeUnits = flooredCent < 10000n ? 10000n : flooredCent;
+        serviceFee = (Number(finalFeeUnits) / 1000000).toFixed(2);
+      } catch {
+        serviceFee = '0.02';
+      }
+    } else {
+      serviceFee = '0.00005';
+    }
+
+    const feeTxHash = params.fee_tx_hash || '0xfee' + Math.random().toString(16).slice(2).padEnd(64, '0');
+
     return {
       ok: true,
       status: 200,
@@ -213,7 +263,9 @@ export async function submitTx(
         asset: params.asset,
         amount: params.amount,
         to_pukico_id: params.to_pukico_id,
-        fee_tx_hash: params.fee_tx_hash,
+        fee_tx_hash: feeTxHash,
+        service_fee: serviceFee,
+        fee_status: 'paid',
         status: 'confirmed',
         created_at: new Date().toISOString(),
         confirmed_at: new Date().toISOString(),
@@ -221,6 +273,7 @@ export async function submitTx(
       },
     };
   }
+
 
   if (!ENV.SUPABASE_URL) {
     return { ok: false, status: 500, error: 'server' };
@@ -413,29 +466,66 @@ export async function resubmitPendingTransactions(options: ApiOptions = {}): Pro
 }
 
 export const DEMO_TXS: TxRecord[] = [
+  // a. Sent 5 USDC: fee 0.02 USDC, status 'paid'
   {
     tx_hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    direction: 'out',
+    asset: 'USDC',
+    amount: '5.00',
+    counterparty: 'rina',
+    to_pukico_id: 'rina',
+    status: 'confirmed',
+    service_fee: '0.02',
+    fee_status: 'paid',
+    fee_tx_hash: '0xfee1111111111111111111111111111111111111111111111111111111111111',
+    created_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+  },
+  // d. Received 10 USDC: incoming transaction, no service fee info
+  {
+    tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    direction: 'in',
+    asset: 'USDC',
+    amount: '10.00',
+    counterparty: 'rina',
+    from_pukico_id: 'rina',
+    status: 'confirmed',
+    service_fee: null,
+    fee_status: null,
+    created_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+  },
+  // b. Legacy transaction: outgoing, legacy fee status (hidden service fee row)
+  {
+    tx_hash: '0x7777777777abcdef7777777777abcdef7777777777abcdef7777777777abcdef',
     direction: 'out',
     asset: 'ETH',
     amount: '0.01',
     counterparty: 'rina',
     to_pukico_id: 'rina',
     status: 'confirmed',
-    created_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
-    confirmed_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
-    explorer_url: 'https://sepolia.basescan.org/tx/0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    service_fee: null,
+    fee_status: 'legacy',
+    created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0x7777777777abcdef7777777777abcdef7777777777abcdef7777777777abcdef',
   },
+  // c. Failed / unpaid fee: outgoing, fee_status 'unpaid' with "Bayar sekarang" button
   {
-    tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-    direction: 'in',
-    asset: 'ETH',
-    amount: '0.02',
+    tx_hash: '0x9999999999abcdef9999999999abcdef9999999999abcdef9999999999abcdef',
+    direction: 'out',
+    asset: 'USDC',
+    amount: '50.00',
     counterparty: 'rina',
-    from_pukico_id: 'rina',
+    to_pukico_id: 'rina',
     status: 'confirmed',
-    created_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
-    confirmed_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
-    explorer_url: 'https://sepolia.basescan.org/tx/0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    service_fee: '0.25',
+    fee_status: 'unpaid',
+    created_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0x9999999999abcdef9999999999abcdef9999999999abcdef9999999999abcdef',
   },
 ];
 
@@ -466,16 +556,101 @@ export async function listTxs(
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, txs: [] };
     const rawList: TxRecord[] = data.txs || data.items || [];
-    const normalized: TxRecord[] = rawList.map((item) => ({
-      ...item,
-      counterparty: item.counterparty || item.to_pukico_id || item.from_pukico_id || '',
-      direction:
-        item.direction === 'incoming' ? 'in' : item.direction === 'outgoing' ? 'out' : item.direction || 'out',
-      explorer_url: item.explorer_url || (item.tx_hash ? getExplorerUrl(item.tx_hash) : undefined),
-    }));
+    const normalized: TxRecord[] = rawList.map((item) => {
+      const isIncoming = item.direction === 'in' || item.direction === 'incoming';
+      return {
+        ...item,
+        counterparty: item.counterparty || item.to_pukico_id || item.from_pukico_id || '',
+        direction: isIncoming ? 'in' : 'out',
+        explorer_url: item.explorer_url || (item.tx_hash ? getExplorerUrl(item.tx_hash) : undefined),
+        // Receiver must never see service fee info
+        service_fee: isIncoming ? null : (item.service_fee ?? null),
+        fee_status: isIncoming ? null : (item.fee_status ?? null),
+      };
+    });
     return { ok: true, txs: normalized };
   } catch {
     return { ok: false, txs: [] };
+  }
+}
+
+/**
+ * 8. Fetch Admin Fee Report
+ * Action 'fee_report' on edge function 'tx'
+ */
+export async function fetchFeeReport(
+  token?: string | null,
+  options: { isDemoMode?: boolean } = {}
+): Promise<FeeReportResponse> {
+  if (options.isDemoMode || !ENV.SUPABASE_URL) {
+    return {
+      treasury: '0x3333333333333333333333333333333333333333',
+      fee_bps: 50,
+      active: true,
+      totals: {
+        USDC: {
+          paid_count: 14,
+          paid_amount: '0.28',
+          due_count: 1,
+          due_amount: '0.25',
+        },
+        ETH: {
+          paid_count: 8,
+          paid_amount: '0.0004',
+          due_count: 0,
+          due_amount: '0',
+        },
+      },
+      unpaid: [
+        {
+          tx_hash: '0x9999999999abcdef9999999999abcdef9999999999abcdef9999999999abcdef',
+          asset: 'USDC',
+          from: 'andika',
+          status: 'unpaid',
+          expected: '0.25',
+          created_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+        },
+      ],
+    };
+  }
+
+  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: buildHeaders(token),
+      body: JSON.stringify({ action: 'fee_report' }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || `Failed to fetch fee report (Status ${res.status})`);
+    }
+
+    return {
+      treasury: data.treasury ?? null,
+      fee_bps: typeof data.fee_bps === 'number' ? data.fee_bps : 0,
+      active: Boolean(data.active),
+      totals: {
+        USDC: {
+          paid_count: Number(data.totals?.USDC?.paid_count ?? 0),
+          paid_amount: String(data.totals?.USDC?.paid_amount ?? '0'),
+          due_count: Number(data.totals?.USDC?.due_count ?? 0),
+          due_amount: String(data.totals?.USDC?.due_amount ?? '0'),
+        },
+        ETH: {
+          paid_count: Number(data.totals?.ETH?.paid_count ?? 0),
+          paid_amount: String(data.totals?.ETH?.paid_amount ?? '0'),
+          due_count: Number(data.totals?.ETH?.due_count ?? 0),
+          due_amount: String(data.totals?.ETH?.due_amount ?? '0'),
+        },
+      },
+      unpaid: Array.isArray(data.unpaid) ? data.unpaid : [],
+    };
+  } catch (err) {
+    if (err instanceof Error) throw err;
+    throw new Error('Failed to connect to fee report service.');
   }
 }
 
@@ -485,6 +660,7 @@ export async function listTxs(
 export function getExplorerUrl(txHash: string): string {
   return `https://sepolia.basescan.org/tx/${txHash}`;
 }
+
 
 
 /**

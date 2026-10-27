@@ -90,7 +90,15 @@ export const en = {
     couldNotLoad: "Couldn't load history",
     noActivity: 'No activity yet. Transactions you send or receive will show up here.',
     previewFeed: 'Preview feed',
+    serviceFee: 'Pukico service fee',
+    feeStatusPaid: 'Paid',
+    feeStatusPending: 'Pending verification',
+    feeStatusUnpaid: 'Unpaid',
+    feeStatusInvalid: 'Mismatch',
+    payFeeNow: 'Pay now',
+    payingFee: 'Paying fee…',
   },
+
   home: {
     balanceSummaryAria: 'Balance Summary',
     showBalance: 'Show balance',

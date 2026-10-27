@@ -22,8 +22,16 @@ import {
 import { fetchExactBalances, sameAddress } from '../../lib/txGuards';
 import { formatEthBalance, formatUsdcUnits } from '../../lib/formatters';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n';
+import {
+  fetchFeeReport,
+  shortenAddress,
+  getExplorerUrl,
+  type FeeReportResponse,
+} from '../../lib/txApi';
 import type { UserProfile, RpcStatusInfo } from '../../types';
+
 
 interface DevViewProps {
   profile: UserProfile;
@@ -230,24 +238,44 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
 function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
   const { toast } = useToast();
   const { fmt } = useT();
+  const { isDemoMode, getAccessToken } = useAuth();
+
   const [copied, setCopied] = useState(false);
   const [balances, setBalances] = useState<{ eth: bigint; usdc: bigint } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [report, setReport] = useState<FeeReportResponse | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
-  const treasuryAddress = CONFIGURED_TREASURY_ADDRESS;
-  const bps = CONFIGURED_FEE_BPS;
-  const active = isFeeActive(false);
+  const treasuryAddress = report?.treasury || CONFIGURED_TREASURY_ADDRESS;
+  const bps = report?.fee_bps ?? (CONFIGURED_FEE_BPS || 50);
+  const isServerActive = report ? report.active : isFeeActive(isDemoMode);
   const isSameAsAdmin = sameAddress(treasuryAddress, adminWalletAddress);
 
-  useEffect(() => {
-    if (treasuryAddress) {
-      setLoading(true);
-      fetchExactBalances(treasuryAddress)
-        .then((res) => setBalances(res))
-        .catch(() => setBalances(null))
-        .finally(() => setLoading(false));
+  const loadData = async () => {
+    setReportLoading(true);
+    setLoading(true);
+
+    try {
+      const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
+      const res = await fetchFeeReport(token, { isDemoMode });
+      setReport(res);
+
+      const targetAddress = res.treasury || treasuryAddress;
+      if (targetAddress) {
+        const balRes = await fetchExactBalances(targetAddress).catch(() => null);
+        setBalances(balRes);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch fee report:', err);
+    } finally {
+      setReportLoading(false);
+      setLoading(false);
     }
-  }, [treasuryAddress]);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [treasuryAddress, isDemoMode]);
 
   const handleCopy = async (text: string) => {
     try {
@@ -262,23 +290,45 @@ function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
 
   return (
     <div className="py-4 border-b border-[#E5E7EB] space-y-3">
+      {/* Header with Title, Status badge & Refresh Button */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Coins className="w-4 h-4 text-[#0052FF]" />
           <h3 className="text-sm font-semibold text-[#0A0B0D]">Treasury (revenue)</h3>
         </div>
-        {active ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#047857] text-xs font-semibold">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Active · {(bps / 100).toFixed(1)}% ({bps} bps)
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FEF2F2] text-[#B91C1C] text-xs font-semibold">
-            Disabled
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={reportLoading}
+            className="p-1 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] text-[#5B6577] hover:text-[#0A0B0D] transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh fee report"
+            aria-label="Refresh fee report"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${reportLoading ? 'animate-spin text-[#0052FF]' : ''}`} />
+          </button>
+
+          {isServerActive ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#047857] text-xs font-semibold">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Aktif · {(bps / 100).toFixed(1)}% ({bps} bps)
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FEF2F2] text-[#B91C1C] text-xs font-semibold">
+              Nonaktif
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* Warning message if active=false on server */}
+      {!isServerActive && (
+        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] font-medium">
+          Fee nonaktif di server: isi secret TREASURY_ADDRESS
+        </div>
+      )}
+
+      {/* Treasury Address & Balances */}
       {treasuryAddress ? (
         <div className="space-y-3 pt-1 text-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
@@ -332,6 +382,102 @@ function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
+
+          {/* Revenue Report Statistics */}
+          {report && (
+            <div className="pt-2 border-t border-[#E5E7EB] space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Total Fee Terbayar */}
+                <div className="p-2.5 rounded-xl bg-white border border-[#E5E7EB] space-y-1">
+                  <div className="text-[11px] font-semibold text-[#047857] uppercase tracking-wider">
+                    Total Fee Terbayar
+                  </div>
+                  <div className="text-xs space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#5B6577]">USDC ({report.totals.USDC.paid_count} tx):</span>
+                      <span className="font-mono font-bold text-[#0A0B0D]">
+                        {fmt.usdcString(report.totals.USDC.paid_amount)} USDC
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#5B6577]">ETH ({report.totals.ETH.paid_count} tx):</span>
+                      <span className="font-mono font-bold text-[#0A0B0D]">
+                        {fmt.ethBalance(report.totals.ETH.paid_amount)} ETH
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Total Fee Terutang */}
+                <div className="p-2.5 rounded-xl bg-white border border-[#E5E7EB] space-y-1">
+                  <div className="text-[11px] font-semibold text-[#B45309] uppercase tracking-wider">
+                    Total Fee Terutang
+                  </div>
+                  <div className="text-xs space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#5B6577]">USDC ({report.totals.USDC.due_count} tx):</span>
+                      <span className="font-mono font-bold text-[#B45309]">
+                        {fmt.usdcString(report.totals.USDC.due_amount)} USDC
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#5B6577]">ETH ({report.totals.ETH.due_count} tx):</span>
+                      <span className="font-mono font-bold text-[#B45309]">
+                        {fmt.ethBalance(report.totals.ETH.due_amount)} ETH
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Daftar Transaksi Belum Terbayar (Maks 20) */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-[#0A0B0D]">
+                    Transaksi Belum Terbayar ({report.unpaid.length})
+                  </span>
+                  {report.unpaid.length > 20 && (
+                    <span className="text-[10px] text-[#5B6577]">Menampilkan 20 teratas</span>
+                  )}
+                </div>
+
+                {report.unpaid.length === 0 ? (
+                  <div className="p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100 text-[11px] text-[#047857]">
+                    Semua biaya layanan transaksi telah terverifikasi lunas.
+                  </div>
+                ) : (
+                  <div className="space-y-1 max-h-48 overflow-y-auto pr-0.5">
+                    {report.unpaid.slice(0, 20).map((item) => (
+                      <div
+                        key={item.tx_hash}
+                        className="p-2 rounded-lg bg-white border border-[#E5E7EB] flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <a
+                            href={getExplorerUrl(item.tx_hash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-[11px] text-[#0052FF] hover:underline flex items-center gap-0.5 shrink-0"
+                            title="Buka transaksi di Basescan"
+                          >
+                            <span>{shortenAddress(item.tx_hash)}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                          <span className="text-[#5B6577] text-[11px] truncate">
+                            @{item.from.replace(/^@/, '')}
+                          </span>
+                        </div>
+                        <span className="font-mono font-semibold text-[#B45309] shrink-0 text-xs">
+                          {item.asset === 'USDC' ? fmt.usdcString(item.expected) : fmt.ethBalance(item.expected)}{' '}
+                          {item.asset}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] space-y-2">
@@ -347,3 +493,4 @@ function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
     </div>
   );
 }
+
