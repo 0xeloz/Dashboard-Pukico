@@ -159,3 +159,58 @@ export function formatUnitsTrimmed(value: bigint, decimals: number, maxDecimals?
   decPart = decPart.replace(/0+$/, '');
   return decPart.length > 0 ? `${intPart}.${decPart}` : intPart;
 }
+
+export interface PendingFeeRecord {
+  txHash: string;
+  asset: 'USDC' | 'ETH';
+  feeUnits: string;
+  treasuryAddress: `0x${string}`;
+  createdAt: number;
+  recipientId?: string;
+  amount?: string;
+}
+
+export function getPendingFeeStorageKey(walletAddress: string): string {
+  return `pukico.fee_due.${walletAddress.toLowerCase()}`;
+}
+
+export function getPendingFees(walletAddress?: string | null): PendingFeeRecord[] {
+  if (!walletAddress || typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(getPendingFeeStorageKey(walletAddress));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function savePendingFee(walletAddress: string, record: PendingFeeRecord): void {
+  if (!walletAddress || typeof window === 'undefined') return;
+  try {
+    const existing = getPendingFees(walletAddress).filter(
+      (r) => r.txHash.toLowerCase() !== record.txHash.toLowerCase()
+    );
+    existing.push(record);
+    localStorage.setItem(getPendingFeeStorageKey(walletAddress), JSON.stringify(existing));
+  } catch (e) {
+    console.error('Failed to save pending fee to localStorage', e);
+  }
+}
+
+export function removePendingFee(walletAddress: string, txHash: string): void {
+  if (!walletAddress || typeof window === 'undefined') return;
+  try {
+    const updated = getPendingFees(walletAddress).filter(
+      (r) => r.txHash.toLowerCase() !== txHash.toLowerCase()
+    );
+    if (updated.length > 0) {
+      localStorage.setItem(getPendingFeeStorageKey(walletAddress), JSON.stringify(updated));
+    } else {
+      localStorage.removeItem(getPendingFeeStorageKey(walletAddress));
+    }
+  } catch (e) {
+    console.error('Failed to remove pending fee from localStorage', e);
+  }
+}

@@ -61,6 +61,10 @@ import {
   isFeeActive,
   isTreasuryAddress,
   formatUnitsTrimmed,
+  getPendingFees,
+  savePendingFee,
+  removePendingFee,
+  type PendingFeeRecord,
 } from '../../../lib/fees';
 import { UsdcTokenIcon, EthTokenIcon } from '../../ui/PukicoBrand';
 
@@ -311,6 +315,165 @@ export function SendSheetContent({
   const [finalTxRecord, setFinalTxRecord] = useState<TxRecord | null>(null);
   const [finalStatus, setFinalStatus] = useState<'confirmed' | 'failed' | 'timeout' | 'no_access' | null>(null);
   const [lockedSummary, setLockedSummary] = useState<LockedSummary | null>(null);
+  const [pendingFeeCurrentTx, setPendingFeeCurrentTx] = useState<boolean>(false);
+  const [isRetryingPendingFee, setIsRetryingPendingFee] = useState<boolean>(false);
+
+  // Sync pending fee status for the active transaction
+  useEffect(() => {
+    if (!profile?.wallet_address) return;
+    const current = txHash || finalTxRecord?.tx_hash;
+    if (!current) {
+      setPendingFeeCurrentTx(false);
+      return;
+    }
+    const dueList = getPendingFees(profile.wallet_address);
+    setPendingFeeCurrentTx(dueList.some((f) => f.txHash.toLowerCase() === current.toLowerCase()));
+  }, [profile?.wallet_address, txHash, finalTxRecord?.tx_hash, step]);
+
+  // Requirement 11: Silent auto-retry for pending fees on mount
+  const silentRetryRanRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (silentRetryRanRef.current || isDemoMode || !profile?.wallet_address || !sendTransaction) return;
+    const pendingList = getPendingFees(profile.wallet_address);
+    if (!pendingList || pendingList.length === 0) return;
+
+    silentRetryRanRef.current = true;
+
+    (async () => {
+      try {
+        const freshBals = await fetchExactBalances(profile.wallet_address);
+        for (const item of pendingList) {
+          const neededFee = BigInt(item.feeUnits);
+          const gasPrice = await getGasPriceCeiling(publicClient as any).catch(() => 2000000000n);
+          const gasWei = (item.asset === 'ETH' ? 21000n : 65000n) * gasPrice;
+
+          const sufficient =
+            item.asset === 'USDC'
+              ? freshBals.usdc >= neededFee && freshBals.eth >= gasWei
+              : freshBals.eth >= neededFee + gasWei;
+
+          if (!sufficient) continue;
+
+          try {
+            const feeTxRequest = buildTransferRequest(item.asset, item.treasuryAddress, neededFee);
+            const feeResult = await sendTransaction(feeTxRequest, {
+              address: profile.wallet_address,
+              uiOptions: { showWalletUIs: false },
+            });
+            const extractedFee = extractHash(feeResult);
+            if (extractedFee && isTxHash(extractedFee)) {
+              removePendingFee(profile.wallet_address, item.txHash);
+              const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
+              await submitTxWithRetry(
+                {
+                  tx_hash: item.txHash,
+                  asset: item.asset,
+                  to_pukico_id: item.recipientId || '',
+                  amount: item.amount || '0',
+                  fee_tx_hash: extractedFee,
+                },
+                { privyToken: token }
+              );
+            }
+          } catch (silentErr) {
+            console.error('[fee] Silent fee retry failed for', item.txHash, silentErr);
+          }
+        }
+      } catch (err) {
+        console.error('[fee] Silent fee check error', err);
+      }
+    })();
+  }, [profile?.wallet_address, isDemoMode, sendTransaction, getAccessToken]);
+
+  // Requirement 10: Retry paying current pending fee from step 7
+  const handleRetryCurrentFee = async () => {
+    if (isRetryingPendingFee || !profile?.wallet_address || !sendTransaction) return;
+    const currentHash = txHash || finalTxRecord?.tx_hash;
+    if (!currentHash) return;
+
+    const feeRecord = getPendingFees(profile.wallet_address).find(
+      (f) => f.txHash.toLowerCase() === currentHash.toLowerCase()
+    );
+    if (!feeRecord) {
+      setPendingFeeCurrentTx(false);
+      return;
+    }
+
+    setIsRetryingPendingFee(true);
+    toast.loading(t.toast.feePaying, { id: 'fee-tx-status', title: t.toast.feePaying });
+
+    const retryDelays = [0, 1500, 3000];
+    let retriedFeeTxHash: string | undefined = undefined;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (attempt > 1) {
+        await new Promise((r) => setTimeout(r, retryDelays[attempt - 1]));
+      }
+
+      try {
+        const feeTxRequest = buildTransferRequest(
+          feeRecord.asset,
+          feeRecord.treasuryAddress,
+          BigInt(feeRecord.feeUnits)
+        );
+        const feeResult = await sendTransaction(feeTxRequest, {
+          address: profile.wallet_address,
+          uiOptions: { showWalletUIs: false },
+        });
+        const extractedFee = extractHash(feeResult);
+        if (extractedFee && isTxHash(extractedFee)) {
+          retriedFeeTxHash = extractedFee;
+          break;
+        } else {
+          throw new Error('Invalid fee transaction hash returned');
+        }
+      } catch (err: unknown) {
+        const reason = identifyPreHashFailureReason(err);
+        console.error('[fee]', {
+          attempt,
+          reason,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        if (reason === 'user_rejected') {
+          break;
+        }
+      }
+    }
+
+    if (retriedFeeTxHash && isTxHash(retriedFeeTxHash)) {
+      toast.update('fee-tx-status', 'success', t.toast.feePaid, { silent: true });
+      removePendingFee(profile.wallet_address, currentHash);
+      setPendingFeeCurrentTx(false);
+
+      try {
+        const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
+        await submitTxWithRetry(
+          {
+            tx_hash: currentHash,
+            asset: feeRecord.asset,
+            to_pukico_id: feeRecord.recipientId || lockedSummary?.recipientId || '',
+            amount:
+              feeRecord.amount ||
+              (lockedSummary
+                ? formatUnits(lockedSummary.amountUnits, ASSET_DECIMALS[lockedSummary.asset])
+                : '0'),
+            fee_tx_hash: retriedFeeTxHash,
+          },
+          { privyToken: token }
+        );
+      } catch (resubmitErr) {
+        console.error('[fee]', {
+          attempt: 'retry_resubmit',
+          reason: 'backend_resubmit_failed',
+          error: resubmitErr instanceof Error ? resubmitErr.message : String(resubmitErr),
+        });
+      }
+    } else {
+      toast.update('fee-tx-status', 'warning', t.toast.feeFailed);
+    }
+
+    setIsRetryingPendingFee(false);
+  };
 
   const handleClose = useCallback(() => {
     setLockedSummary(null);
@@ -921,62 +1084,139 @@ export function SendSheetContent({
       amount: canonicalAmount,
     });
 
-    // Execute fee transfer as secondary transfer (does not fail main transfer)
+    const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
+
+    // ALUR 1: Segera submit ke backend tanpa fee_tx_hash
+    let initialSubmitRes;
+    try {
+      initialSubmitRes = await submitTxWithRetry(
+        {
+          tx_hash: broadcastHash,
+          asset: snapshot.asset,
+          to_pukico_id: snapshot.recipientId,
+          amount: canonicalAmount,
+        },
+        { privyToken: token }
+      );
+    } catch (e) {
+      console.error('[tx] Initial submit error (will be polled)', e);
+    }
+
+    if (initialSubmitRes && !initialSubmitRes.ok && initialSubmitRes.error === 'no_access') {
+      revokeBetaAccess();
+      toast.error(t.toast.betaAccessRevoked);
+      setIsSubmitting(false);
+      setProgressState(null);
+      setFinalStatus('no_access');
+      setStep(7);
+      sendInProgressRef.current = false;
+      return;
+    }
+
+    // ALUR 2, 3, 4, 5: Biaya layanan
     let feeTxHash: string | undefined = undefined;
-    if (snapshot.feeUnits > 0n && snapshot.treasuryAddress) {
+    const isFeeEligible = snapshot.feeUnits > 0n && Boolean(snapshot.treasuryAddress);
+
+    if (isFeeEligible) {
       setFeeApprovalPending(true);
+      toast.loading(t.toast.feePaying, { id: 'fee-tx-status', title: t.toast.feePaying });
+
+      // ALUR 2: Tunggu receipt transfer utama dengan publicClient.waitForTransactionReceipt({ hash, timeout: 60_000 })
       try {
-        const feeTxRequest = buildTransferRequest(
-          snapshot.asset,
-          snapshot.treasuryAddress,
-          snapshot.feeUnits
-        );
-        const feeResult = await sendTransaction(feeTxRequest, {
-          address: profile.wallet_address,
-          uiOptions: { showWalletUIs: false },
+        await (publicClient as any).waitForTransactionReceipt({
+          hash: broadcastHash as `0x${string}`,
+          timeout: 60000,
         });
-        const extractedFee = extractHash(feeResult);
-        if (extractedFee && isTxHash(extractedFee)) {
-          feeTxHash = extractedFee;
+      } catch (receiptErr) {
+        console.error('[fee]', {
+          attempt: 0,
+          reason: 'wait_receipt_timeout_or_error',
+          error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+        });
+      }
+
+      // ALUR 3: Kirim transaksi fee dengan retry: maksimal 3 percobaan, jeda 1500 ms lalu 3000 ms.
+      const retryDelays = [0, 1500, 3000];
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        if (attempt > 1) {
+          const delay = retryDelays[attempt - 1];
+          await new Promise((r) => setTimeout(r, delay));
         }
-        toast.info(t.toast.feePaid, { silent: true });
-      } catch (_feeErr) {
-        toast.warning(t.toast.feeFailed);
-      } finally {
-        setFeeApprovalPending(false);
+
+        try {
+          const feeTxRequest = buildTransferRequest(
+            snapshot.asset,
+            snapshot.treasuryAddress!,
+            snapshot.feeUnits
+          );
+          const feeResult = await sendTransaction(feeTxRequest, {
+            address: profile.wallet_address,
+            uiOptions: { showWalletUIs: false },
+          });
+          const extractedFee = extractHash(feeResult);
+          if (extractedFee && isTxHash(extractedFee)) {
+            feeTxHash = extractedFee;
+            break;
+          } else {
+            throw new Error('Invalid fee transaction hash returned');
+          }
+        } catch (err: unknown) {
+          const reason = identifyPreHashFailureReason(err);
+          console.error('[fee]', {
+            attempt,
+            reason,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          if (reason === 'user_rejected') {
+            break; // Jangan retry jika error adalah penolakan pengguna
+          }
+        }
+      }
+
+      setFeeApprovalPending(false);
+
+      // ALUR 4: Jika fee berhasil (hash valid): submit ulang ke backend dengan fee_tx_hash
+      if (feeTxHash && isTxHash(feeTxHash)) {
+        toast.update('fee-tx-status', 'success', t.toast.feePaid, { silent: true });
+        removePendingFee(profile.wallet_address, broadcastHash);
+        setPendingFeeCurrentTx(false);
+
+        try {
+          const freshToken = getAccessToken ? await getAccessToken().catch(() => null) : null;
+          await submitTxWithRetry(
+            {
+              tx_hash: broadcastHash,
+              asset: snapshot.asset,
+              to_pukico_id: snapshot.recipientId,
+              amount: canonicalAmount,
+              fee_tx_hash: feeTxHash,
+            },
+            { privyToken: freshToken }
+          );
+        } catch (resubmitErr) {
+          console.error('[fee]', {
+            attempt: 'fee_resubmit',
+            reason: 'backend_resubmit_failed',
+            error: resubmitErr instanceof Error ? resubmitErr.message : String(resubmitErr),
+          });
+        }
+      } else {
+        // ALUR 5 & 9: Gagal setelah retry: simpan catatan fee tertunda & update toast warning
+        toast.update('fee-tx-status', 'warning', t.toast.feeFailed);
+        savePendingFee(profile.wallet_address, {
+          txHash: broadcastHash,
+          asset: snapshot.asset,
+          feeUnits: snapshot.feeUnits.toString(),
+          treasuryAddress: snapshot.treasuryAddress!,
+          createdAt: Date.now(),
+          recipientId: snapshot.recipientId,
+          amount: canonicalAmount,
+        });
+        setPendingFeeCurrentTx(true);
       }
     }
 
     try {
-      const token = getAccessToken ? await getAccessToken() : null;
-
-      // Submit to backend
-      let submitRes;
-      try {
-        submitRes = await submitTxWithRetry(
-          {
-            tx_hash: broadcastHash,
-            asset: snapshot.asset,
-            to_pukico_id: snapshot.recipientId,
-            amount: canonicalAmount,
-            fee_tx_hash: feeTxHash,
-          },
-          { privyToken: token }
-        );
-      } catch {
-        // Continue to polling
-      }
-
-      if (submitRes && !submitRes.ok && submitRes.error === 'no_access') {
-        revokeBetaAccess();
-        toast.error(t.toast.betaAccessRevoked);
-        setIsSubmitting(false);
-        setProgressState(null);
-        setFinalStatus('no_access');
-        setStep(7);
-        sendInProgressRef.current = false;
-        return;
-      }
 
       // Poll sync every 3s up to 90s
       const pollStart = Date.now();
@@ -1924,13 +2164,36 @@ export function SendSheetContent({
 
                   {finalTxRecord?.network_fee_wei && (
                     <div className="flex items-center justify-between pt-1 border-t border-[#E5E7EB]/60">
-                      <span className="text-[#5B6577]">{t.sheets.send.networkFee}</span>
+                      <span className="text-[#5B6577]">
+                        {t.sheets.send.networkFeeTransfer || t.sheets.send.networkFee}
+                      </span>
                       <span className="font-mono font-semibold text-[#0A0B0D]">
                         {fmt.ethFee(finalTxRecord.network_fee_wei)} ETH
                       </span>
                     </div>
                   )}
                 </div>
+
+                {/* Pending fee warning row with retry button */}
+                {pendingFeeCurrentTx && (
+                  <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] max-w-sm mx-auto">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AlertCircle className="w-4 h-4 text-[#B45309] shrink-0" />
+                      <span className="font-medium text-left leading-tight">
+                        {t.sheets.send.feePendingWarning}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isRetryingPendingFee}
+                      onClick={handleRetryCurrentFee}
+                      className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-200 hover:bg-amber-300 text-[#78350F] font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {isRetryingPendingFee && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      <span>{t.sheets.send.feePendingRetry}</span>
+                    </button>
+                  </div>
+                )}
 
                 {(finalTxRecord?.explorer_url || txHash) && (
                   <div>
