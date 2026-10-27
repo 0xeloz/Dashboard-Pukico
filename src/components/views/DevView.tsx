@@ -250,7 +250,7 @@ function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.info('Address copied', { silent: true });
+      toast.info('Address copied');
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // fallback

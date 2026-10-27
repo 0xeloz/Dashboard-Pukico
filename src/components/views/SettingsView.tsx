@@ -34,11 +34,15 @@ export function SettingsView({
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Success toast when passkey changes from inactive to active
+  // Success toast when passkey changes from inactive to active after explicit enrollment click
+  const enrollRequestedRef = React.useRef(false);
   const prevPasskeyRef = React.useRef(isPasskeyActive);
   React.useEffect(() => {
     if (!prevPasskeyRef.current && isPasskeyActive) {
-      toast.success(t.toast.passkeyActivated);
+      if (enrollRequestedRef.current) {
+        toast.success(t.toast.passkeyActivated);
+        enrollRequestedRef.current = false;
+      }
     }
     prevPasskeyRef.current = isPasskeyActive;
   }, [isPasskeyActive, t.toast.passkeyActivated, toast]);
@@ -60,7 +64,7 @@ export function SettingsView({
     try {
       await navigator.clipboard.writeText(profile.wallet_address);
       setCopied(true);
-      toast.info(t.toast.copiedAddress, { silent: true });
+      toast.info(t.toast.copiedAddress);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -70,7 +74,7 @@ export function SettingsView({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
-      toast.info(t.toast.copiedAddress, { silent: true });
+      toast.info(t.toast.copiedAddress);
       setTimeout(() => setCopied(false), 1500);
     }
   };
@@ -199,7 +203,10 @@ export function SettingsView({
                 </span>
                 <button
                   type="button"
-                  onClick={() => handleEnrollMfa()}
+                  onClick={() => {
+                    enrollRequestedRef.current = true;
+                    handleEnrollMfa();
+                  }}
                   className="px-3 py-1.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
                 >
                   {t.settings.manage}
@@ -208,7 +215,10 @@ export function SettingsView({
             ) : (
               <button
                 type="button"
-                onClick={() => handleEnrollMfa()}
+                onClick={() => {
+                  enrollRequestedRef.current = true;
+                  handleEnrollMfa();
+                }}
                 className="px-3.5 py-2 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] shrink-0 self-start sm:self-auto shadow-xs"
               >
                 <Fingerprint className="w-3.5 h-3.5" />

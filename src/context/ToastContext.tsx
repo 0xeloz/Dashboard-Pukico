@@ -11,7 +11,7 @@ import React, {
 export type ToastKind = 'success' | 'error' | 'warning' | 'info';
 
 export interface ToastOptions {
-  silent?: boolean;
+  persist?: boolean;
   duration?: number;
 }
 
@@ -31,6 +31,13 @@ export interface StoredToastNotification {
   read: boolean;
 }
 
+interface ToastTimerRecord {
+  timeoutId: number | null;
+  remainingMs: number;
+  lastStartedAt: number;
+  isPaused: boolean;
+}
+
 export interface ToastContextType {
   toasts: ActiveToast[];
   notifications: StoredToastNotification[];
@@ -42,6 +49,8 @@ export interface ToastContextType {
     info: (message: string, options?: ToastOptions) => void;
   };
   dismissToast: (id: string) => void;
+  pauseToast: (id: string) => void;
+  resumeToast: (id: string) => void;
   markAllRead: () => void;
   clearAll: () => void;
 }
@@ -50,7 +59,6 @@ const ToastContext = createContext<ToastContextType | null>(null);
 
 const MAX_VISIBLE_TOASTS = 3;
 const MAX_STORED_NOTIFICATIONS = 50;
-const DEDUPE_WINDOW_MS = 1000;
 
 function getStorageKey(storageId?: string | null): string | null {
   if (!storageId) return null;
@@ -101,8 +109,7 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
     loadStoredNotifications(storageId)
   );
 
-  const lastMessageRef = useRef<{ message: string; timestamp: number } | null>(null);
-  const timersRef = useRef<Map<string, number>>(new Map());
+  const timersRef = useRef<Map<string, ToastTimerRecord>>(new Map());
 
   // Reload notifications when storageId changes (e.g. login/switch wallet)
   useEffect(() => {
@@ -110,73 +117,114 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
   }, [storageId]);
 
   const dismissToast = useCallback((id: string) => {
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      window.clearTimeout(timer);
-      timersRef.current.delete(id);
+    const rec = timersRef.current.get(id);
+    if (rec?.timeoutId) {
+      window.clearTimeout(rec.timeoutId);
     }
+    timersRef.current.delete(id);
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const pauseToast = useCallback((id: string) => {
+    const rec = timersRef.current.get(id);
+    if (!rec || rec.isPaused) return;
+    if (rec.timeoutId) {
+      window.clearTimeout(rec.timeoutId);
+      rec.timeoutId = null;
+    }
+    const elapsed = Date.now() - rec.lastStartedAt;
+    rec.remainingMs = Math.max(500, rec.remainingMs - elapsed);
+    rec.isPaused = true;
+  }, []);
+
+  const resumeToast = useCallback(
+    (id: string) => {
+      const rec = timersRef.current.get(id);
+      if (!rec || !rec.isPaused) return;
+      rec.lastStartedAt = Date.now();
+      rec.isPaused = false;
+      rec.timeoutId = window.setTimeout(() => {
+        dismissToast(id);
+      }, rec.remainingMs);
+    },
+    [dismissToast]
+  );
+
   const addToast = useCallback(
     (kind: ToastKind, message: string, options?: ToastOptions) => {
-      const now = Date.now();
-
-      // Deduplicate identical message within 1 second
-      if (
-        lastMessageRef.current &&
-        lastMessageRef.current.message === message &&
-        now - lastMessageRef.current.timestamp < DEDUPE_WINDOW_MS
-      ) {
-        return;
-      }
-      lastMessageRef.current = { message, timestamp: now };
-
-      const isSilent = Boolean(options?.silent);
       const defaultDuration = kind === 'error' || kind === 'warning' ? 6000 : 4000;
       const duration = typeof options?.duration === 'number' ? options.duration : defaultDuration;
+      const shouldPersist = Boolean(options?.persist);
 
-      const toastId = `toast-${now}-${Math.random().toString(36).slice(2, 7)}`;
+      let createdNewToastId: string | null = null;
 
-      // 1. If not silent, show in viewport (capped at MAX_VISIBLE_TOASTS)
-      if (!isSilent) {
+      // Deduplicate active toasts: if same message is already visible, reset timer
+      setToasts((prev) => {
+        const existing = prev.find((t) => t.message === message);
+        if (existing) {
+          const rec = timersRef.current.get(existing.id);
+          if (rec?.timeoutId) {
+            window.clearTimeout(rec.timeoutId);
+          }
+          const timeoutId = window.setTimeout(() => {
+            dismissToast(existing.id);
+          }, duration);
+
+          timersRef.current.set(existing.id, {
+            timeoutId,
+            remainingMs: duration,
+            lastStartedAt: Date.now(),
+            isPaused: false,
+          });
+          return prev;
+        }
+
+        const toastId = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        createdNewToastId = toastId;
+
         const newToast: ActiveToast = {
           id: toastId,
           kind,
           message,
           duration,
-          createdAt: now,
+          createdAt: Date.now(),
         };
 
-        setToasts((prev) => {
-          const next = [...prev, newToast];
-          if (next.length > MAX_VISIBLE_TOASTS) {
-            // Drop oldest
-            const dropped = next[0];
-            const droppedTimer = timersRef.current.get(dropped.id);
-            if (droppedTimer) {
-              window.clearTimeout(droppedTimer);
-              timersRef.current.delete(dropped.id);
-            }
-            return next.slice(next.length - MAX_VISIBLE_TOASTS);
+        const next = [...prev, newToast];
+        if (next.length > MAX_VISIBLE_TOASTS) {
+          const dropped = next[0];
+          const droppedRec = timersRef.current.get(dropped.id);
+          if (droppedRec?.timeoutId) {
+            window.clearTimeout(droppedRec.timeoutId);
           }
-          return next;
-        });
+          timersRef.current.delete(dropped.id);
+          return next.slice(next.length - MAX_VISIBLE_TOASTS);
+        }
+        return next;
+      });
 
-        // Auto dismiss timer
-        const timer = window.setTimeout(() => {
-          dismissToast(toastId);
+      // If a new toast was scheduled, bind its timer
+      if (createdNewToastId) {
+        const newId: string = createdNewToastId;
+        const timeoutId = window.setTimeout(() => {
+          dismissToast(newId);
         }, duration);
-        timersRef.current.set(toastId, timer);
+
+        timersRef.current.set(newId, {
+          timeoutId,
+          remainingMs: duration,
+          lastStartedAt: Date.now(),
+          isPaused: false,
+        });
       }
 
-      // 2. If non-silent, save to notification log
-      if (!isSilent && storageId) {
+      // 2. Persist ONLY if persist === true
+      if (shouldPersist && storageId) {
         const notifEntry: StoredToastNotification = {
-          id: toastId,
+          id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           kind,
           message,
-          created_at: new Date(now).toISOString(),
+          created_at: new Date().toISOString(),
           read: false,
         };
 
@@ -220,7 +268,9 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
   // Clean up all timers on unmount
   useEffect(() => {
     return () => {
-      timersRef.current.forEach((t) => window.clearTimeout(t));
+      timersRef.current.forEach((t) => {
+        if (t.timeoutId) window.clearTimeout(t.timeoutId);
+      });
       timersRef.current.clear();
     };
   }, []);
@@ -233,6 +283,8 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
         unreadCount,
         toast,
         dismissToast,
+        pauseToast,
+        resumeToast,
         markAllRead,
         clearAll,
       }}

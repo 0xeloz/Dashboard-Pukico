@@ -152,11 +152,15 @@ export function SendSheetContent({
   // 1. Passkey requirement for live mode
   const needsPasskey = !isDemoMode && ENV.REQUIRE_PASSKEY && !hasPasskeyMfa;
 
-  // Track passkey activation transition
+  // Track passkey activation transition (only when user requested enrollment from this component)
+  const enrollRequestedRef = useRef<boolean>(false);
   const prevPasskeyRef = useRef(hasPasskeyMfa);
   useEffect(() => {
     if (!prevPasskeyRef.current && hasPasskeyMfa) {
-      toast.success(t.toast.passkeyActivated);
+      if (enrollRequestedRef.current) {
+        toast.success(t.toast.passkeyActivated);
+        enrollRequestedRef.current = false;
+      }
     }
     prevPasskeyRef.current = hasPasskeyMfa;
   }, [hasPasskeyMfa, t.toast.passkeyActivated, toast]);
@@ -164,36 +168,78 @@ export function SendSheetContent({
   const [step, setStep] = useState<SendStep>(1);
   const [selectedAsset, setSelectedAsset] = useState<AssetType>('USDC');
 
-  // Exact on-chain bigint balances with 15-second refresh
-  const [exactBalances, setExactBalances] = useState<{ eth: bigint; usdc: bigint }>({
-    eth: 0n,
-    usdc: 0n,
-  });
+  // Exact on-chain bigint balances: null means unknown/loading
+  const [balances, setBalances] = useState<{ eth: bigint; usdc: bigint } | null>(null);
+
+  const ethValueRef = useRef(eth.value);
+  const usdcValueRef = useRef(usdc.value);
+  useEffect(() => {
+    ethValueRef.current = eth.value;
+    usdcValueRef.current = usdc.value;
+  }, [eth.value, usdc.value]);
 
   const loadBalances = useCallback(async () => {
     if (!profile?.wallet_address) return;
     try {
       const res = await fetchExactBalances(profile.wallet_address);
-      setExactBalances(res);
+      setBalances(res);
     } catch {
-      // Safe fallback from BalanceContext
-      try {
-        const cleanUsdc = (usdc.value || '0').replace(/,/g, '').replace('<', '').trim();
-        const cleanEth = (eth.value || '0').replace(/,/g, '').replace('<', '').trim();
-        setExactBalances({
-          usdc: parseUnits(cleanUsdc && !isNaN(Number(cleanUsdc)) ? cleanUsdc : '0', 6),
-          eth: parseUnits(cleanEth && !isNaN(Number(cleanEth)) ? cleanEth : '0', 18),
-        });
-      } catch {
-        // Keep prior state
+      // If failed, retain previous value.
+      // Fallback to BalanceContext ONLY if eth.value and usdc.value are not null and parseable;
+      // never convert null or error to 0n.
+      const rawUsdc = usdcValueRef.current;
+      const rawEth = ethValueRef.current;
+      if (rawUsdc !== null && rawEth !== null) {
+        try {
+          const cleanUsdc = rawUsdc.replace(/,/g, '').replace('<', '').trim();
+          const cleanEth = rawEth.replace(/,/g, '').replace('<', '').trim();
+          if (cleanUsdc && !isNaN(Number(cleanUsdc)) && cleanEth && !isNaN(Number(cleanEth))) {
+            const parsedUsdc = parseUnits(cleanUsdc, 6);
+            const parsedEth = parseUnits(cleanEth, 18);
+            setBalances((prev) => prev ?? { usdc: parsedUsdc, eth: parsedEth });
+          }
+        } catch {
+          // Keep prior state, never set to 0n
+        }
       }
     }
-  }, [profile?.wallet_address, usdc.value, eth.value]);
+  }, [profile?.wallet_address]);
 
   useEffect(() => {
     loadBalances();
-    const interval = setInterval(loadBalances, 15000);
-    return () => clearInterval(interval);
+
+    let intervalId: number | null = null;
+    const startPolling = () => {
+      if (intervalId === null) {
+        intervalId = window.setInterval(() => {
+          if (document.visibilityState === 'visible') {
+            loadBalances();
+          }
+        }, 15000);
+      }
+    };
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadBalances();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [loadBalances]);
 
   // Step 2: Recipient
@@ -246,8 +292,6 @@ export function SendSheetContent({
     };
   }, [progressState, feeApprovalPending, onApprovalStateChange]);
 
-  // Check ETH balance for gas fee availability
-  const isEthZero = exactBalances.eth === 0n;
   const isWalletUnverified = profile?.wallet_verified === false;
 
   // Fee calculations
@@ -268,6 +312,17 @@ export function SendSheetContent({
 
   const amountUnits = parseAmountUnits(amountInput, selectedAsset);
   const feeUnits = computeServiceFee(amountUnits, feeBps, isFeeExempt);
+
+  // Dynamic required ETH calculation for gas + service fee + optional ETH transfer
+  const ethRequiredWei =
+    estimatedFeeWei !== null
+      ? (selectedAsset === 'ETH' ? amountUnits + feeUnits + estimatedFeeWei : estimatedFeeWei)
+      : 0n;
+
+  // Insufficient ETH check: ONLY when balances is known AND ETH < required (or 0 if quote not yet available)
+  const isInsufficientEth =
+    balances !== null &&
+    (ethRequiredWei > 0n ? balances.eth < ethRequiredWei : balances.eth === 0n);
 
   // Large transfer threshold check
   const isLargeTransfer = amountUnits >= LARGE_TRANSFER_THRESHOLD[selectedAsset];
@@ -468,8 +523,12 @@ export function SendSheetContent({
     };
   }, []);
 
-  // Validation using bigint directly (no float math)
+  // Validation using bigint directly (no float math), null-aware for loading balances
   const validateAmount = (): { valid: boolean; errorKey?: string } => {
+    if (balances === null) {
+      return { valid: false, errorKey: 'loadingBalance' };
+    }
+
     if (!amountInput || amountInput.trim() === '') {
       return { valid: false, errorKey: 'enterAmountPlaceholder' };
     }
@@ -480,17 +539,17 @@ export function SendSheetContent({
 
     if (selectedAsset === 'USDC') {
       const totalNeeded = amountUnits + feeUnits;
-      if (totalNeeded > exactBalances.usdc) {
+      if (totalNeeded > balances.usdc) {
         return { valid: false, errorKey: 'notEnoughAsset' };
       }
-      if (isEthZero) {
+      if (isInsufficientEth) {
         return { valid: false, errorKey: 'needEthForFees' };
       }
     } else {
       // ETH: amount + fee + gas
       const reserveFee = estimatedFeeWei && estimatedFeeWei > 0n ? estimatedFeeWei : 21000n * 2000000000n;
       const totalNeeded = amountUnits + feeUnits + reserveFee;
-      if (totalNeeded > exactBalances.eth) {
+      if (totalNeeded > balances.eth) {
         return { valid: false, errorKey: 'notEnoughAsset' };
       }
     }
@@ -502,13 +561,14 @@ export function SendSheetContent({
 
   // Max Button handler leaving room for service fee and ETH gas
   const handleMaxAmount = () => {
+    if (!balances) return;
     if (selectedAsset === 'USDC') {
-      const maxUnits = maxSendableWithFee(exactBalances.usdc, feeBps, 0n, isFeeExempt);
+      const maxUnits = maxSendableWithFee(balances.usdc, feeBps, 0n, isFeeExempt);
       setAmountInput(formatUnitsTrimmed(maxUnits, 6));
     } else {
       const reserveFee = estimatedFeeWei && estimatedFeeWei > 0n ? estimatedFeeWei : 21000n * 2000000000n;
       const totalGasReserve = isFeeActive(isDemoMode) && !isFeeExempt ? reserveFee * 2n : reserveFee;
-      const maxUnits = maxSendableWithFee(exactBalances.eth, feeBps, totalGasReserve, isFeeExempt);
+      const maxUnits = maxSendableWithFee(balances.eth, feeBps, totalGasReserve, isFeeExempt);
       setAmountInput(formatUnitsTrimmed(maxUnits, 18, 8));
     }
   };
@@ -518,7 +578,6 @@ export function SendSheetContent({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedDetailField(fieldId);
-      toast.info(t.toast.copied, { silent: true });
       setTimeout(() => {
         setCopiedDetailField((prev) => (prev === fieldId ? null : prev));
       }, 1500);
@@ -545,7 +604,6 @@ export function SendSheetContent({
     // 2. Passkey gate
     if (needsPasskey) {
       setSecurityError(t.sheets.send.securityPasskeyRequired);
-      toast.error(t.sheets.send.securityPasskeyRequired);
       setStep(1);
       setIsSubmitting(false);
       setProgressState(null);
@@ -577,7 +635,6 @@ export function SendSheetContent({
     // 5. Ensure embeddedWalletAddress matches profile.wallet_address
     if (embeddedWalletAddress && !sameAddress(embeddedWalletAddress, snapshot.senderAddress)) {
       setSecurityError(t.sheets.send.securityBlockedWalletMismatch);
-      toast.error(t.sheets.send.securityBlockedWalletMismatch);
       setStep(4);
       setIsSubmitting(false);
       setProgressState(null);
@@ -600,7 +657,6 @@ export function SendSheetContent({
         !sameAddress(latestResolve.wallet_address, snapshot.recipientAddress)
       ) {
         setRecipientVerificationError(true);
-        toast.error(t.toast.recipientUnverified);
         setStep(4);
         setIsSubmitting(false);
         setProgressState(null);
@@ -609,7 +665,6 @@ export function SendSheetContent({
       }
     } catch {
       setRecipientVerificationError(true);
-      toast.error(t.toast.recipientUnverified);
       setStep(4);
       setIsSubmitting(false);
       setProgressState(null);
@@ -621,7 +676,6 @@ export function SendSheetContent({
     const addrCheck = checkRecipientAddress(snapshot.recipientAddress, snapshot.senderAddress);
     if (!addrCheck.valid) {
       setSecurityError(t.sheets.send.securityBlockedUnsafeAddress);
-      toast.error(t.sheets.send.securityBlockedUnsafeAddress);
       setStep(4);
       setIsSubmitting(false);
       setProgressState(null);
@@ -633,15 +687,14 @@ export function SendSheetContent({
     let freshBals: { eth: bigint; usdc: bigint };
     try {
       freshBals = await fetchExactBalances(snapshot.senderAddress);
-      setExactBalances(freshBals);
+      setBalances(freshBals);
     } catch {
-      freshBals = exactBalances;
+      freshBals = balances ?? { eth: 0n, usdc: 0n };
     }
 
     if (snapshot.asset === 'USDC') {
       if (snapshot.amountUnits + snapshot.feeUnits > freshBals.usdc) {
         setSecurityError(t.sheets.send.notEnoughAsset.replace('{asset}', 'USDC'));
-        toast.error(t.toast.insufficientFunds);
         setStep(4);
         setIsSubmitting(false);
         setProgressState(null);
@@ -651,8 +704,8 @@ export function SendSheetContent({
     } else {
       if (snapshot.amountUnits + snapshot.feeUnits > freshBals.eth) {
         setSecurityError(t.sheets.send.notEnoughAsset.replace('{asset}', 'ETH'));
-        toast.error(t.toast.insufficientFunds);
         setStep(4);
+        setIsSubmitting(false);
         setProgressState(null);
         sendInProgressRef.current = false;
         return;
@@ -680,7 +733,6 @@ export function SendSheetContent({
 
         if (freshBals.eth < requiredEth) {
           setSecurityError(t.sheets.send.insufficientFundsOrGas);
-          toast.error(t.toast.insufficientFunds);
           setStep(4);
           setIsSubmitting(false);
           setProgressState(null);
@@ -689,7 +741,6 @@ export function SendSheetContent({
         }
       } catch (_simErr) {
         setSecurityError(t.sheets.send.securitySimulationFailed);
-        toast.error(t.toast.simulationFailed);
         setStep(4);
         setIsSubmitting(false);
         setProgressState(null);
@@ -707,7 +758,6 @@ export function SendSheetContent({
       if (snapshot.feeUnits > 0n && snapshot.treasuryAddress) {
         setFeeApprovalPending(true);
         await new Promise((r) => setTimeout(r, 600));
-        toast.info(t.toast.feePaid, { silent: true });
         setFeeApprovalPending(false);
       }
 
@@ -760,15 +810,12 @@ export function SendSheetContent({
       sendInProgressRef.current = false;
       if (reason === 'user_rejected') {
         toast.info(t.toast.sendCancelled);
-      } else if (reason === 'insufficient_funds') {
-        toast.error(t.toast.insufficientFunds);
       }
       return;
     }
 
     // 11. Valid hash exists - execute second fee transaction and backend tracking
     setTxHash(broadcastHash);
-    toast.info(t.toast.transferSent, { silent: true });
     setProgressState('waiting_confirmation');
     setStep(6);
 
@@ -798,9 +845,8 @@ export function SendSheetContent({
           address: profile.wallet_address,
           uiOptions: { showWalletUIs: false },
         });
-        toast.info(t.toast.feePaid, { silent: true });
       } catch (_feeErr) {
-        toast.warning(t.toast.feeFailed);
+        // Fee transfer optional on demo/testnet
       } finally {
         setFeeApprovalPending(false);
       }
@@ -960,22 +1006,34 @@ export function SendSheetContent({
         </div>
       )}
 
-      {/* Prerequisite 2: Zero ETH for Gas Fee Notice */}
-      {isEthZero && !isWalletUnverified && (
-        <div className="flex items-center justify-between gap-2 text-xs text-[#B45309]">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <AlertCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0" />
-            <span className="leading-snug font-medium">{t.sheets.send.needEthForFees}</span>
+      {/* Prerequisite 2: Insufficient ETH for Gas Fee Notice (Dynamic and null-aware) */}
+      {isInsufficientEth && !isWalletUnverified && balances !== null && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309]">
+          <div className="flex items-start gap-1.5 min-w-0">
+            <AlertCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0 mt-0.5" />
+            <span className="leading-snug font-medium">
+              {t.sheets.send.insufficientEthDetailed
+                .replace(
+                  '{needed}',
+                  ethRequiredWei > 0n ? formatEthFee(ethRequiredWei) : '~0.0001'
+                )
+                .replace(
+                  '{balance}',
+                  formatUnitsTrimmed(balances.eth, 18, 5)
+                )}
+            </span>
           </div>
-          <a
-            href={FAUCET_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 font-medium text-[#0052FF] hover:underline flex items-center gap-1 ml-2"
-          >
-            <span>{t.sheets.send.getTestEth}</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
+          {CHAIN_CONFIG.testnet && (
+            <a
+              href={FAUCET_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 font-semibold text-[#0052FF] hover:underline flex items-center gap-1 self-start sm:self-auto"
+            >
+              <span>{t.sheets.send.getTestEth}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
         </div>
       )}
 
@@ -1004,7 +1062,10 @@ export function SendSheetContent({
               </div>
               <button
                 type="button"
-                onClick={() => enrollMfa()}
+                onClick={() => {
+                  enrollRequestedRef.current = true;
+                  enrollMfa();
+                }}
                 className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-[#0052FF] hover:bg-[#0042D6] text-white transition-all shadow-sm active:scale-[0.98] cursor-pointer"
               >
                 {t.sheets.send.enablePasskeyBtn}
@@ -1015,9 +1076,9 @@ export function SendSheetContent({
               {/* USDC Row */}
               <button
                 type="button"
-                disabled={isWalletUnverified || !hasBetaAccess}
+                disabled={isWalletUnverified || !hasBetaAccess || balances === null}
                 onClick={() => {
-                  if (!hasBetaAccess) return;
+                  if (!hasBetaAccess || balances === null) return;
                   setSelectedAsset('USDC');
                   setStep(prefilledRecipientId ? 3 : 2);
                 }}
@@ -1033,9 +1094,13 @@ export function SendSheetContent({
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-mono text-sm font-bold text-[#0A0B0D]">
-                    {formatNumber(formatUnits(exactBalances.usdc, 6), { minDecimals: 2, maxDecimals: 2 })} USDC
-                  </div>
+                  {balances === null ? (
+                    <div className="h-4 w-20 bg-[#E5E7EB] rounded animate-pulse mb-1" />
+                  ) : (
+                    <div className="font-mono text-sm font-bold text-[#0A0B0D]">
+                      {formatNumber(formatUnits(balances.usdc, 6), { minDecimals: 2, maxDecimals: 2 })} USDC
+                    </div>
+                  )}
                   <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
                 </div>
               </button>
@@ -1043,9 +1108,9 @@ export function SendSheetContent({
               {/* ETH Row */}
               <button
                 type="button"
-                disabled={isWalletUnverified || !hasBetaAccess}
+                disabled={isWalletUnverified || !hasBetaAccess || balances === null}
                 onClick={() => {
-                  if (!hasBetaAccess) return;
+                  if (!hasBetaAccess || balances === null) return;
                   setSelectedAsset('ETH');
                   setStep(prefilledRecipientId ? 3 : 2);
                 }}
@@ -1061,9 +1126,13 @@ export function SendSheetContent({
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-mono text-sm font-bold text-[#0A0B0D]">
-                    {formatNumber(formatUnits(exactBalances.eth, 18), { minDecimals: 2, maxDecimals: 4 })} ETH
-                  </div>
+                  {balances === null ? (
+                    <div className="h-4 w-20 bg-[#E5E7EB] rounded animate-pulse mb-1" />
+                  ) : (
+                    <div className="font-mono text-sm font-bold text-[#0A0B0D]">
+                      {formatNumber(formatUnits(balances.eth, 18), { minDecimals: 2, maxDecimals: 4 })} ETH
+                    </div>
+                  )}
                   <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
                 </div>
               </button>
@@ -1201,19 +1270,22 @@ export function SendSheetContent({
           {/* Balance display + Max button */}
           <div className="flex items-center justify-between text-xs text-[#5B6577] py-1 border-b border-[#E5E7EB]">
             <span>
-              {t.sheets.send.balanceLabel
-                .replace(
-                  '{amount}',
-                  selectedAsset === 'USDC'
-                    ? formatUnitsTrimmed(exactBalances.usdc, 6)
-                    : formatUnitsTrimmed(exactBalances.eth, 18, 4)
-                )
-                .replace('{asset}', selectedAsset)}
+              {balances === null
+                ? t.sheets.send.loadingBalance
+                : t.sheets.send.balanceLabel
+                    .replace(
+                      '{amount}',
+                      selectedAsset === 'USDC'
+                        ? formatUnitsTrimmed(balances.usdc, 6)
+                        : formatUnitsTrimmed(balances.eth, 18, 4)
+                    )
+                    .replace('{asset}', selectedAsset)}
             </span>
             <button
               type="button"
+              disabled={balances === null}
               onClick={handleMaxAmount}
-              className="px-2 py-0.5 rounded-md bg-[#EEF4FF] hover:bg-[#BFDBFE] text-[#0052FF] font-semibold text-xs transition-colors cursor-pointer"
+              className="px-2 py-0.5 rounded-md bg-[#EEF4FF] hover:bg-[#BFDBFE] text-[#0052FF] font-semibold text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t.sheets.send.maxBtn}
             </button>
@@ -1242,13 +1314,27 @@ export function SendSheetContent({
 
             <div className="flex items-center justify-between text-xs min-h-[22px]">
               <div>
-                {!amountValidation.valid && amountInput && (
+                {!amountValidation.valid && (
                   <span className="text-[#DC2626]">
-                    {amountValidation.errorKey === 'notEnoughAsset'
+                    {amountValidation.errorKey === 'loadingBalance'
+                      ? t.sheets.send.loadingBalance
+                      : amountValidation.errorKey === 'notEnoughAsset'
                       ? t.sheets.send.notEnoughAsset.replace('{asset}', selectedAsset)
                       : amountValidation.errorKey === 'needEthForFees'
-                      ? t.sheets.send.needEthForFees
-                      : t.sheets.send.enterAmountPlaceholder}
+                      ? (isInsufficientEth && balances !== null
+                          ? t.sheets.send.insufficientEthDetailed
+                              .replace(
+                                '{needed}',
+                                ethRequiredWei > 0n ? formatEthFee(ethRequiredWei) : '~0.0001'
+                              )
+                              .replace(
+                                '{balance}',
+                                formatUnitsTrimmed(balances.eth, 18, 5)
+                              )
+                          : t.sheets.send.needEthForFees)
+                      : amountInput
+                      ? t.sheets.send.enterAmountPlaceholder
+                      : null}
                   </span>
                 )}
               </div>
@@ -1268,7 +1354,7 @@ export function SendSheetContent({
           <div className="pt-2">
             <button
               type="button"
-              disabled={!amountValidation.valid || !hasBetaAccess}
+              disabled={!amountValidation.valid || balances === null || !hasBetaAccess}
               onClick={() => {
                 setSendFailedBeforeHash(false);
                 setSecurityError(null);
@@ -1276,7 +1362,7 @@ export function SendSheetContent({
               }}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center cursor-pointer"
             >
-              {t.sheets.send.continueBtn}
+              {balances === null ? t.sheets.send.loadingBalance : t.sheets.send.continueBtn}
             </button>
           </div>
         </div>

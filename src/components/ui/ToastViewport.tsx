@@ -42,21 +42,38 @@ function ToastIcon({ kind }: { kind: ToastKind }) {
 interface ToastItemProps {
   toast: ActiveToast;
   onDismiss: (id: string) => void;
+  onPause: (id: string) => void;
+  onResume: (id: string) => void;
 }
 
-function ToastItem({ toast, onDismiss }: ToastItemProps) {
-  const [isHovered, setIsHovered] = useState(false);
+function ToastItem({ toast, onDismiss, onPause, onResume }: ToastItemProps) {
+  const [isInteracting, setIsInteracting] = useState(false);
   const isError = toast.kind === 'error';
+
+  const handleStartInteraction = () => {
+    setIsInteracting(true);
+    onPause(toast.id);
+  };
+
+  const handleEndInteraction = () => {
+    setIsInteracting(false);
+    onResume(toast.id);
+  };
 
   return (
     <div
       role={isError ? 'alert' : 'status'}
       aria-live={isError ? 'assertive' : 'polite'}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={handleStartInteraction}
+      onMouseLeave={handleEndInteraction}
+      onFocusCapture={handleStartInteraction}
+      onBlurCapture={handleEndInteraction}
+      onTouchStart={handleStartInteraction}
+      onTouchEnd={handleEndInteraction}
+      onTouchCancel={handleEndInteraction}
       className="pointer-events-auto w-full bg-white border border-[#E5E7EB] rounded-2xl shadow-xl p-3 flex items-start gap-3 animate-toast-in select-none transition-transform"
       style={{
-        transform: isHovered ? 'scale(1.01)' : 'none',
+        transform: isInteracting ? 'scale(1.01)' : 'none',
       }}
     >
       <ToastIcon kind={toast.kind} />
@@ -69,23 +86,23 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         type="button"
         onClick={() => onDismiss(toast.id)}
         aria-label="Close notification"
-        className="w-7 h-7 rounded-lg text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6] flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+        className="min-w-[44px] min-h-[44px] w-11 h-11 -mr-2 -mt-2 rounded-xl text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6] flex items-center justify-center shrink-0 transition-colors cursor-pointer"
       >
-        <X className="w-3.5 h-3.5" />
+        <X className="w-4 h-4" />
       </button>
     </div>
   );
 }
 
 export function ToastViewport() {
-  const { toasts, dismissToast } = useToast();
+  const { toasts, dismissToast, pauseToast, resumeToast } = useToast();
 
   if (typeof document === 'undefined') return null;
   if (toasts.length === 0) return null;
 
   return createPortal(
     <div
-      className="fixed top-0 left-0 right-0 z-[70] pointer-events-none flex flex-col items-center gap-2 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] max-w-md mx-auto"
+      className="fixed top-0 left-1/2 -translate-x-1/2 z-[70] pointer-events-none flex flex-col items-center gap-2 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] w-full max-w-md"
       aria-label="Notifications"
     >
       {toasts.map((toast) => (
@@ -93,6 +110,8 @@ export function ToastViewport() {
           key={toast.id}
           toast={toast}
           onDismiss={dismissToast}
+          onPause={pauseToast}
+          onResume={resumeToast}
         />
       ))}
     </div>,

@@ -177,6 +177,8 @@ export const id: Translations = {
       viewOnBasescan: 'Lihat di Basescan',
       doneBtn: 'Selesai',
       needEthForFees: 'Kamu butuh sedikit ETH tes buat biaya jaringan.',
+      insufficientEthDetailed: 'Saldo ETH kurang untuk biaya jaringan dan layanan. Butuh sekitar {needed} ETH, saldo {balance} ETH.',
+      loadingBalance: 'Memuat saldo...',
       getTestEth: 'Minta ETH tes',
       walletNotVerified: 'Wallet kamu belum terverifikasi. Keluar lalu masuk lagi.',
       betaAccessRevoked: 'Akses beta kamu tidak aktif. Hubungi tim Pukico.',

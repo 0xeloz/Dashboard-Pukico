@@ -36,7 +36,7 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
     try {
       await navigator.clipboard.writeText(walletAddress);
       setCopied(true);
-      toast.info(t.toast.copiedAddress, { silent: true });
+      toast.info(t.toast.copiedAddress);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -46,7 +46,7 @@ export function ReceiveView({ walletAddress, onBack, isDemoMode = false }: Recei
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
-      toast.info(t.toast.copiedAddress, { silent: true });
+      toast.info(t.toast.copiedAddress);
       setTimeout(() => setCopied(false), 1500);
     }
   };

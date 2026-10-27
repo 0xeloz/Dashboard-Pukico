@@ -68,7 +68,7 @@ export function AppLayout({
     try {
       await navigator.clipboard.writeText(formattedPukicoId);
       setCopiedId(true);
-      toast.info(t.toast.copiedId, { silent: true });
+      toast.info(t.toast.copiedId);
       setTimeout(() => setCopiedId(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -78,7 +78,7 @@ export function AppLayout({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopiedId(true);
-      toast.info(t.toast.copiedId, { silent: true });
+      toast.info(t.toast.copiedId);
       setTimeout(() => setCopiedId(false), 1500);
     }
   };

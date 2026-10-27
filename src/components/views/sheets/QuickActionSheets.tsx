@@ -61,11 +61,11 @@ export function ReceiveSheetContent({ profile, isDemoMode, onClose }: ReceiveShe
 
     if (type === 'address') {
       setCopiedAddress(true);
-      toast.info(t.toast.copiedAddress, { silent: true });
+      toast.info(t.toast.copiedAddress);
       setTimeout(() => setCopiedAddress(false), 1500);
     } else {
       setCopiedId(true);
-      toast.info(t.toast.copiedId, { silent: true });
+      toast.info(t.toast.copiedId);
       setTimeout(() => setCopiedId(false), 1500);
     }
   };
@@ -214,7 +214,7 @@ export function FaucetSheetContent({
     try {
       await navigator.clipboard.writeText(walletAddress);
       setCopied(true);
-      toast.info(t.toast.copiedAddress, { silent: true });
+      toast.info(t.toast.copiedAddress);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -224,7 +224,7 @@ export function FaucetSheetContent({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
-      toast.info(t.toast.copiedAddress, { silent: true });
+      toast.info(t.toast.copiedAddress);
       setTimeout(() => setCopied(false), 1500);
     }
   };

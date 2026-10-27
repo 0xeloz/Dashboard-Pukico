@@ -168,6 +168,8 @@ export const en = {
       viewOnBasescan: 'View on Basescan',
       doneBtn: 'Done',
       needEthForFees: 'You need a little test ETH for network fees.',
+      insufficientEthDetailed: 'Insufficient ETH balance for network and service fees. Need about {needed} ETH, balance {balance} ETH.',
+      loadingBalance: 'Loading balance...',
       getTestEth: 'Get test ETH',
       walletNotVerified: "Your wallet isn't verified yet. Log out and sign in again.",
       betaAccessRevoked: 'Your beta access is inactive. Contact the Pukico team.',

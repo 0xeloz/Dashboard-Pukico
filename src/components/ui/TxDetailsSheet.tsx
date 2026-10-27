@@ -38,7 +38,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
     try {
       await navigator.clipboard.writeText(tx.tx_hash);
       setCopied(true);
-      toast.info(t.toast.copiedHash, { silent: true });
+      toast.info(t.toast.copiedHash);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -48,7 +48,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
-      toast.info(t.toast.copiedHash, { silent: true });
+      toast.info(t.toast.copiedHash);
       setTimeout(() => setCopied(false), 1500);
     }
   };
