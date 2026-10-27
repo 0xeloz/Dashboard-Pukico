@@ -40,12 +40,12 @@ export function SettingsView({
   React.useEffect(() => {
     if (!prevPasskeyRef.current && isPasskeyActive) {
       if (enrollRequestedRef.current) {
-        toast.success(t.toast.passkeyActivated);
+        toast.success(t.toast.passkeyActive);
         enrollRequestedRef.current = false;
       }
     }
     prevPasskeyRef.current = isPasskeyActive;
-  }, [isPasskeyActive, t.toast.passkeyActivated, toast]);
+  }, [isPasskeyActive, t.toast.passkeyActive, toast]);
 
   const maskEmail = (emailStr: string) => {
     if (!emailStr) return t.settings.noEmail;
@@ -64,7 +64,7 @@ export function SettingsView({
     try {
       await navigator.clipboard.writeText(profile.wallet_address);
       setCopied(true);
-      toast.info(t.toast.copiedAddress);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     } catch {
       const input = document.createElement('input');
@@ -74,7 +74,7 @@ export function SettingsView({
       document.execCommand('copy');
       document.body.removeChild(input);
       setCopied(true);
-      toast.info(t.toast.copiedAddress);
+      toast.info(t.toast.copiedAddress, { silent: true });
       setTimeout(() => setCopied(false), 1500);
     }
   };

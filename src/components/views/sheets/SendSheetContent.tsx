@@ -158,12 +158,12 @@ export function SendSheetContent({
   useEffect(() => {
     if (!prevPasskeyRef.current && hasPasskeyMfa) {
       if (enrollRequestedRef.current) {
-        toast.success(t.toast.passkeyActivated);
+        toast.success(t.toast.passkeyActive);
         enrollRequestedRef.current = false;
       }
     }
     prevPasskeyRef.current = hasPasskeyMfa;
-  }, [hasPasskeyMfa, t.toast.passkeyActivated, toast]);
+  }, [hasPasskeyMfa, t.toast.passkeyActive, toast]);
 
   const [step, setStep] = useState<SendStep>(1);
   const [selectedAsset, setSelectedAsset] = useState<AssetType>('USDC');
@@ -578,6 +578,7 @@ export function SendSheetContent({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedDetailField(fieldId);
+      toast.info(t.toast.copied, { silent: true });
       setTimeout(() => {
         setCopiedDetailField((prev) => (prev === fieldId ? null : prev));
       }, 1500);
@@ -657,6 +658,7 @@ export function SendSheetContent({
         !sameAddress(latestResolve.wallet_address, snapshot.recipientAddress)
       ) {
         setRecipientVerificationError(true);
+        toast.error(t.toast.recipientUnverified);
         setStep(4);
         setIsSubmitting(false);
         setProgressState(null);
@@ -665,6 +667,7 @@ export function SendSheetContent({
       }
     } catch {
       setRecipientVerificationError(true);
+      toast.error(t.toast.recipientUnverified);
       setStep(4);
       setIsSubmitting(false);
       setProgressState(null);
@@ -695,6 +698,7 @@ export function SendSheetContent({
     if (snapshot.asset === 'USDC') {
       if (snapshot.amountUnits + snapshot.feeUnits > freshBals.usdc) {
         setSecurityError(t.sheets.send.notEnoughAsset.replace('{asset}', 'USDC'));
+        toast.error(t.toast.insufficientFunds);
         setStep(4);
         setIsSubmitting(false);
         setProgressState(null);
@@ -704,6 +708,7 @@ export function SendSheetContent({
     } else {
       if (snapshot.amountUnits + snapshot.feeUnits > freshBals.eth) {
         setSecurityError(t.sheets.send.notEnoughAsset.replace('{asset}', 'ETH'));
+        toast.error(t.toast.insufficientFunds);
         setStep(4);
         setIsSubmitting(false);
         setProgressState(null);
@@ -733,6 +738,7 @@ export function SendSheetContent({
 
         if (freshBals.eth < requiredEth) {
           setSecurityError(t.sheets.send.insufficientFundsOrGas);
+          toast.error(t.toast.insufficientFunds);
           setStep(4);
           setIsSubmitting(false);
           setProgressState(null);
@@ -741,6 +747,7 @@ export function SendSheetContent({
         }
       } catch (_simErr) {
         setSecurityError(t.sheets.send.securitySimulationFailed);
+        toast.error(t.toast.simulationFailed);
         setStep(4);
         setIsSubmitting(false);
         setProgressState(null);
@@ -751,6 +758,7 @@ export function SendSheetContent({
 
     // Demo Mode flow
     if (isDemoMode) {
+      toast.info(t.toast.transferSent, { silent: true });
       setStep(6);
       setProgressState('waiting_confirmation');
 
@@ -759,6 +767,7 @@ export function SendSheetContent({
         setFeeApprovalPending(true);
         await new Promise((r) => setTimeout(r, 600));
         setFeeApprovalPending(false);
+        toast.info(t.toast.feePaid, { silent: true });
       }
 
       const canonicalAmount = formatUnits(
@@ -810,11 +819,14 @@ export function SendSheetContent({
       sendInProgressRef.current = false;
       if (reason === 'user_rejected') {
         toast.info(t.toast.sendCancelled);
+      } else if (reason === 'insufficient_funds') {
+        toast.error(t.toast.insufficientFunds);
       }
       return;
     }
 
     // 11. Valid hash exists - execute second fee transaction and backend tracking
+    toast.info(t.toast.transferSent, { silent: true });
     setTxHash(broadcastHash);
     setProgressState('waiting_confirmation');
     setStep(6);
@@ -845,8 +857,9 @@ export function SendSheetContent({
           address: profile.wallet_address,
           uiOptions: { showWalletUIs: false },
         });
+        toast.info(t.toast.feePaid, { silent: true });
       } catch (_feeErr) {
-        // Fee transfer optional on demo/testnet
+        toast.warning(t.toast.feeFailed);
       } finally {
         setFeeApprovalPending(false);
       }

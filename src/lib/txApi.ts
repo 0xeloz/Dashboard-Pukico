@@ -480,57 +480,6 @@ export function getExplorerUrl(txHash: string): string {
   return `https://sepolia.basescan.org/tx/${txHash}`;
 }
 
-/**
- * 8. Fetch notifications from backend
- */
-export async function fetchServerNotifications(
-  options: ApiOptions = {}
-): Promise<{ ok: boolean; items?: any[] }> {
-  if (options.isDemoMode || !ENV.SUPABASE_URL) {
-    return { ok: true, items: [] };
-  }
-
-  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
-
-  try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: buildHeaders(options.privyToken),
-      body: JSON.stringify({ action: 'notifications' }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, items: [] };
-    return { ok: true, items: data.notifications || data.items || [] };
-  } catch {
-    return { ok: false, items: [] };
-  }
-}
-
-/**
- * 9. Mark backend notifications as read
- */
-export async function markServerNotificationsRead(
-  options: ApiOptions = {}
-): Promise<{ ok: boolean }> {
-  if (options.isDemoMode || !ENV.SUPABASE_URL) {
-    return { ok: true };
-  }
-
-  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
-
-  try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: buildHeaders(options.privyToken),
-      body: JSON.stringify({ action: 'mark_read' }),
-    });
-
-    return { ok: res.ok };
-  } catch {
-    return { ok: false };
-  }
-}
 
 /**
  * Shorten an Ethereum address to 0x1234…abcd

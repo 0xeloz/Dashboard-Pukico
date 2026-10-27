@@ -47,16 +47,16 @@ interface ToastItemProps {
 }
 
 function ToastItem({ toast, onDismiss, onPause, onResume }: ToastItemProps) {
-  const [isInteracting, setIsInteracting] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const isError = toast.kind === 'error';
 
-  const handleStartInteraction = () => {
-    setIsInteracting(true);
+  const handleMouseEnter = () => {
+    setIsHovered(true);
     onPause(toast.id);
   };
 
-  const handleEndInteraction = () => {
-    setIsInteracting(false);
+  const handleMouseLeave = () => {
+    setIsHovered(false);
     onResume(toast.id);
   };
 
@@ -64,16 +64,14 @@ function ToastItem({ toast, onDismiss, onPause, onResume }: ToastItemProps) {
     <div
       role={isError ? 'alert' : 'status'}
       aria-live={isError ? 'assertive' : 'polite'}
-      onMouseEnter={handleStartInteraction}
-      onMouseLeave={handleEndInteraction}
-      onFocusCapture={handleStartInteraction}
-      onBlurCapture={handleEndInteraction}
-      onTouchStart={handleStartInteraction}
-      onTouchEnd={handleEndInteraction}
-      onTouchCancel={handleEndInteraction}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={handleMouseEnter}
+      onTouchEnd={handleMouseLeave}
+      onTouchCancel={handleMouseLeave}
       className="pointer-events-auto w-full bg-white border border-[#E5E7EB] rounded-2xl shadow-xl p-3 flex items-start gap-3 animate-toast-in select-none transition-transform"
       style={{
-        transform: isInteracting ? 'scale(1.01)' : 'none',
+        transform: isHovered ? 'scale(1.01)' : 'none',
       }}
     >
       <ToastIcon kind={toast.kind} />
@@ -102,7 +100,7 @@ export function ToastViewport() {
 
   return createPortal(
     <div
-      className="fixed top-0 left-1/2 -translate-x-1/2 z-[70] pointer-events-none flex flex-col items-center gap-2 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] w-full max-w-md"
+      className="fixed top-0 left-1/2 -translate-x-1/2 z-[70] pointer-events-none flex flex-col items-center gap-2 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] w-full max-w-sm sm:max-w-md"
       aria-label="Notifications"
     >
       {toasts.map((toast) => (
