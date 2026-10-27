@@ -89,8 +89,12 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleLogout = useCallback(async () => {
+    try {
+      sessionStorage.removeItem('pukico.history_filters');
+    } catch {}
     setIsAuthenticated(false);
   }, []);
+
 
   const value: AuthContextType = {
     isDemoMode: true,

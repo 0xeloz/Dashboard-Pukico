@@ -465,8 +465,8 @@ export async function resubmitPendingTransactions(options: ApiOptions = {}): Pro
   await syncPendingTxs(options);
 }
 
-export const DEMO_TXS: TxRecord[] = [
-  // a. Sent 5 USDC: fee 0.02 USDC, status 'paid'
+const CORE_DEMO_TXS: TxRecord[] = [
+  // a. Sent 5 USDC (today): fee 0.02 USDC, status 'paid'
   {
     tx_hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     direction: 'out',
@@ -482,7 +482,7 @@ export const DEMO_TXS: TxRecord[] = [
     confirmed_at: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
     explorer_url: 'https://sepolia.basescan.org/tx/0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
   },
-  // d. Received 10 USDC: incoming transaction, no service fee info
+  // d. Received 10 USDC (today): incoming transaction, no service fee info
   {
     tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     direction: 'in',
@@ -497,7 +497,54 @@ export const DEMO_TXS: TxRecord[] = [
     confirmed_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
     explorer_url: 'https://sepolia.basescan.org/tx/0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
   },
-  // b. Legacy transaction: outgoing, legacy fee status (hidden service fee row)
+  // Sent 25 USDC (today) to @galang
+  {
+    tx_hash: '0xgalang010101010101010101010101010101010101010101010101010101010101',
+    direction: 'out',
+    asset: 'USDC',
+    amount: '25.00',
+    counterparty: 'galang',
+    to_pukico_id: 'galang',
+    status: 'confirmed',
+    service_fee: '0.12',
+    fee_status: 'paid',
+    fee_tx_hash: '0xfeegalang11111111111111111111111111111111111111111111111111111111',
+    created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0xgalang010101010101010101010101010101010101010101010101010101010101',
+  },
+  // Sent 15 USDC (yesterday) to @galang1
+  {
+    tx_hash: '0xgalang020202020202020202020202020202020202020202020202020202020202',
+    direction: 'out',
+    asset: 'USDC',
+    amount: '15.00',
+    counterparty: 'galang1',
+    to_pukico_id: 'galang1',
+    status: 'confirmed',
+    service_fee: '0.07',
+    fee_status: 'paid',
+    fee_tx_hash: '0xfeegalang22222222222222222222222222222222222222222222222222222222',
+    created_at: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0xgalang020202020202020202020202020202020202020202020202020202020202',
+  },
+  // Received 0.05 ETH (yesterday) from @satoshi
+  {
+    tx_hash: '0xsatoshi0101010101010101010101010101010101010101010101010101010101',
+    direction: 'in',
+    asset: 'ETH',
+    amount: '0.05',
+    counterparty: 'satoshi',
+    from_pukico_id: 'satoshi',
+    status: 'confirmed',
+    service_fee: null,
+    fee_status: null,
+    created_at: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
+    explorer_url: 'https://sepolia.basescan.org/tx/0xsatoshi0101010101010101010101010101010101010101010101010101010101',
+  },
+  // b. Legacy transaction (2 days ago): outgoing, legacy fee status (hidden service fee row)
   {
     tx_hash: '0x7777777777abcdef7777777777abcdef7777777777abcdef7777777777abcdef',
     direction: 'out',
@@ -508,11 +555,11 @@ export const DEMO_TXS: TxRecord[] = [
     status: 'confirmed',
     service_fee: null,
     fee_status: 'legacy',
-    created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-    confirmed_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    created_at: new Date(Date.now() - 52 * 3600 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 52 * 3600 * 1000).toISOString(),
     explorer_url: 'https://sepolia.basescan.org/tx/0x7777777777abcdef7777777777abcdef7777777777abcdef7777777777abcdef',
   },
-  // c. Failed / unpaid fee: outgoing, fee_status 'unpaid' with "Bayar sekarang" button
+  // c. Failed / unpaid fee (2 days ago): outgoing, fee_status 'unpaid' with "Bayar sekarang" button
   {
     tx_hash: '0x9999999999abcdef9999999999abcdef9999999999abcdef9999999999abcdef',
     direction: 'out',
@@ -523,11 +570,41 @@ export const DEMO_TXS: TxRecord[] = [
     status: 'confirmed',
     service_fee: '0.25',
     fee_status: 'unpaid',
-    created_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-    confirmed_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+    created_at: new Date(Date.now() - 54 * 3600 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 54 * 3600 * 1000).toISOString(),
     explorer_url: 'https://sepolia.basescan.org/tx/0x9999999999abcdef9999999999abcdef9999999999abcdef9999999999abcdef',
   },
 ];
+
+const GENERATED_DEMO_TXS: TxRecord[] = Array.from({ length: 80 }).map((_, i) => {
+  const dayOffset = Math.floor(i / 2) + 3;
+  const isOut = i % 2 === 0;
+  const isUsdc = i % 3 !== 0;
+  const counterparties = ['galang', 'galang1', 'rina', 'budi', 'citra', 'dewi', 'eko', 'farhan'];
+  const cp = counterparties[i % counterparties.length];
+  const hash = `0xgen${(i + 1).toString(16).padStart(4, '0')}${'a'.repeat(58)}`;
+  const date = new Date(Date.now() - dayOffset * 86400000 - (i % 5) * 3600000).toISOString();
+  const amt = isUsdc ? (10 + (i % 40)).toFixed(2) : (0.01 * (1 + (i % 10))).toFixed(4);
+
+  return {
+    tx_hash: hash,
+    direction: isOut ? 'out' : 'in',
+    asset: isUsdc ? 'USDC' : 'ETH',
+    amount: amt,
+    counterparty: cp,
+    to_pukico_id: isOut ? cp : undefined,
+    from_pukico_id: isOut ? undefined : cp,
+    status: i === 12 ? 'failed' : i === 7 ? 'pending' : 'confirmed',
+    service_fee: isOut ? (isUsdc ? '0.05' : '0.0001') : null,
+    fee_status: isOut ? 'paid' : null,
+    created_at: date,
+    confirmed_at: i === 7 || i === 12 ? null : date,
+    explorer_url: `https://sepolia.basescan.org/tx/${hash}`,
+  };
+});
+
+export const DEMO_TXS: TxRecord[] = [...CORE_DEMO_TXS, ...GENERATED_DEMO_TXS];
+
 
 /**
  * 7. List transactions

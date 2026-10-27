@@ -200,10 +200,14 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
       privyLogin();
     },
     logout: async () => {
+      try {
+        sessionStorage.removeItem('pukico.history_filters');
+      } catch {}
       setProfile(null);
       setSessionError(null);
       await privyLogout();
     },
+
     retrySession: runSessionSync,
     refreshSession,
     setDemoProfileField: () => {},
