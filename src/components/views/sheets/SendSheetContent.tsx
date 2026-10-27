@@ -21,7 +21,13 @@ import { useToast } from '../../../context/ToastContext';
 import { useT } from '../../../i18n';
 import { publicClient, BASE_SEPOLIA_USDC_ADDRESS } from '../../../lib/viemClient';
 import { ENV, CHAIN_CONFIG } from '../../../lib/config';
-import { formatEthFee, formatAssetAmount, formatEthBalance } from '../../../lib/formatters';
+import {
+  formatEthFee,
+  formatAssetAmount,
+  formatEthBalance,
+  formatUsdcUnits,
+  formatUsdcString,
+} from '../../../lib/formatters';
 import {
   resolvePukicoId,
   submitTx,
@@ -66,6 +72,14 @@ interface SendSheetContentProps {
 
 type SendStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 type PreHashFailureReason = 'user_rejected' | 'insufficient_funds' | 'generic';
+
+interface LockedSummary {
+  asset: AssetType;
+  amountUnits: bigint;
+  feeUnits: bigint;
+  totalUnits: bigint;
+  recipientId: string;
+}
 
 function identifyPreHashFailureReason(err: unknown): PreHashFailureReason {
   if (!err || typeof err !== 'object') {
@@ -287,6 +301,12 @@ export function SendSheetContent({
   const [txHash, setTxHash] = useState<string>('');
   const [finalTxRecord, setFinalTxRecord] = useState<TxRecord | null>(null);
   const [finalStatus, setFinalStatus] = useState<'confirmed' | 'failed' | 'timeout' | 'no_access' | null>(null);
+  const [lockedSummary, setLockedSummary] = useState<LockedSummary | null>(null);
+
+  const handleClose = useCallback(() => {
+    setLockedSummary(null);
+    onClose();
+  }, [onClose]);
 
   // Double-send prevention lock ref
   const sendInProgressRef = useRef<boolean>(false);
@@ -640,6 +660,14 @@ export function SendSheetContent({
       senderAddress: profile.wallet_address as `0x${string}`,
       timestamp: Date.now(),
     };
+
+    setLockedSummary({
+      asset: selectedAsset,
+      amountUnits,
+      feeUnits,
+      totalUnits: amountUnits + feeUnits,
+      recipientId: resolvedRecipient.id,
+    });
 
     // 5. Ensure embeddedWalletAddress matches profile.wallet_address
     if (embeddedWalletAddress && !sameAddress(embeddedWalletAddress, snapshot.senderAddress)) {
@@ -1125,6 +1153,7 @@ export function SendSheetContent({
                 disabled={isWalletUnverified || !hasBetaAccess || balances === null}
                 onClick={() => {
                   if (!hasBetaAccess || balances === null) return;
+                  setLockedSummary(null);
                   setSelectedAsset('USDC');
                   setStep(prefilledRecipientId ? 3 : 2);
                 }}
@@ -1144,7 +1173,7 @@ export function SendSheetContent({
                     <div className="h-4 w-20 bg-[#E5E7EB] rounded animate-pulse mb-1" />
                   ) : (
                     <div className="font-mono text-sm font-bold text-[#0A0B0D]">
-                      {formatNumber(formatUnits(balances.usdc, 6), { minDecimals: 2, maxDecimals: 2 })} USDC
+                      {formatUsdcUnits(balances.usdc)} USDC
                     </div>
                   )}
                   <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
@@ -1193,7 +1222,10 @@ export function SendSheetContent({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setStep(1)}
+              onClick={() => {
+                setLockedSummary(null);
+                setStep(1);
+              }}
               className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
               aria-label={t.sheets.send.backBtn}
             >
@@ -1302,7 +1334,10 @@ export function SendSheetContent({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setStep(prefilledRecipientId ? 1 : 2)}
+              onClick={() => {
+                setLockedSummary(null);
+                setStep(prefilledRecipientId ? 1 : 2);
+              }}
               className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
               aria-label={t.sheets.send.backBtn}
             >
@@ -1421,6 +1456,7 @@ export function SendSheetContent({
             <button
               type="button"
               onClick={() => {
+                setLockedSummary(null);
                 setSendFailedBeforeHash(false);
                 setRecipientVerificationError(false);
                 setSecurityError(null);
@@ -1465,7 +1501,9 @@ export function SendSheetContent({
                 <div className="py-2 flex items-center justify-between">
                   <span className="text-[#5B6577]">{t.sheets.send.recipientGets}</span>
                   <span className="font-bold font-mono text-[#0A0B0D]">
-                    {formatUnitsTrimmed(amountUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                    {selectedAsset === 'USDC'
+                      ? formatUsdcUnits(amountUnits)
+                      : formatUnitsTrimmed(amountUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
                   </span>
                 </div>
                 <div className="py-2 flex items-center justify-between text-xs">
@@ -1476,13 +1514,17 @@ export function SendSheetContent({
                     </span>
                   </span>
                   <span className="font-mono text-[#0A0B0D] font-medium">
-                    +{formatUnitsTrimmed(feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                    +{selectedAsset === 'USDC'
+                      ? formatUsdcUnits(feeUnits)
+                      : formatUnitsTrimmed(feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
                   </span>
                 </div>
                 <div className="py-2.5 flex items-center justify-between font-semibold">
                   <span className="text-[#0A0B0D]">{t.sheets.send.totalFromYou}</span>
                   <span className="font-bold font-mono text-[#0052FF]">
-                    {formatUnitsTrimmed(amountUnits + feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
+                    {selectedAsset === 'USDC'
+                      ? formatUsdcUnits(amountUnits + feeUnits)
+                      : formatUnitsTrimmed(amountUnits + feeUnits, ASSET_DECIMALS[selectedAsset])} {selectedAsset}
                   </span>
                 </div>
               </>
@@ -1490,7 +1532,9 @@ export function SendSheetContent({
               <div className="py-2.5 flex items-center justify-between">
                 <span className="text-[#5B6577]">{t.sheets.send.amountLabel}</span>
                 <span className="font-bold font-mono text-[#0A0B0D]">
-                  {formatAssetAmount(amountInput, selectedAsset)} {selectedAsset}
+                  {selectedAsset === 'USDC'
+                    ? formatUsdcUnits(amountUnits)
+                    : formatAssetAmount(amountInput, selectedAsset)} {selectedAsset}
                 </span>
               </div>
             )}
@@ -1744,6 +1788,14 @@ export function SendSheetContent({
                 ? t.sheets.send.waitingApproval
                 : t.sheets.send.waitingConfirmation}
             </h4>
+            {lockedSummary && (
+              <p className="text-xs text-[#5B6577] font-mono">
+                {lockedSummary.asset === 'USDC'
+                  ? formatUsdcUnits(lockedSummary.amountUnits)
+                  : formatUnitsTrimmed(lockedSummary.amountUnits, ASSET_DECIMALS[lockedSummary.asset], 8)}{' '}
+                {lockedSummary.asset} → @{lockedSummary.recipientId}
+              </p>
+            )}
             {txHash && (
               <p className="text-xs text-[#5B6577] font-mono break-all px-4">
                 {shortenAddress(txHash)}
@@ -1756,71 +1808,111 @@ export function SendSheetContent({
       {/* ================= STEP 7: FINAL SERVER STATUS ================= */}
       {step === 7 && (
         <div className="py-4 text-center space-y-5">
-          {finalStatus === 'confirmed' && (
-            <>
-              <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#047857] mx-auto flex items-center justify-center">
-                <Check className="w-8 h-8 stroke-[2.5]" />
-              </div>
+          {finalStatus === 'confirmed' && (() => {
+            const displayAsset = lockedSummary?.asset ?? selectedAsset;
+            const displayAmount =
+              displayAsset === 'USDC'
+                ? formatUsdcUnits(lockedSummary?.amountUnits ?? amountUnits)
+                : formatUnitsTrimmed(
+                    lockedSummary?.amountUnits ?? amountUnits,
+                    ASSET_DECIMALS[displayAsset],
+                    8
+                  );
+            const displayFee =
+              displayAsset === 'USDC'
+                ? formatUsdcUnits(lockedSummary?.feeUnits ?? feeUnits)
+                : formatUnitsTrimmed(
+                    lockedSummary?.feeUnits ?? feeUnits,
+                    ASSET_DECIMALS[displayAsset],
+                    8
+                  );
+            const displayTotal =
+              displayAsset === 'USDC'
+                ? formatUsdcUnits(lockedSummary?.totalUnits ?? (amountUnits + feeUnits))
+                : formatUnitsTrimmed(
+                    lockedSummary?.totalUnits ?? (amountUnits + feeUnits),
+                    ASSET_DECIMALS[displayAsset],
+                    8
+                  );
+            const displayRecipient = lockedSummary?.recipientId || resolvedRecipient?.id || '';
 
-              <div className="space-y-1">
-                <h4 className="text-base font-bold text-[#0A0B0D]">
-                  {t.sheets.send.sentSuccess
-                    .replace('{amount}', formatAssetAmount(amountInput, selectedAsset))
-                    .replace('{asset}', selectedAsset)
-                    .replace('{id}', resolvedRecipient?.id || '')}
-                </h4>
-                <p className="text-xs text-[#5B6577]">
-                  {t.sheets.send.confirmedOnBase}
-                </p>
-              </div>
+            return (
+              <>
+                <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#047857] mx-auto flex items-center justify-center">
+                  <Check className="w-8 h-8 stroke-[2.5]" />
+                </div>
 
-              {/* Fee info summary */}
-              {(finalTxRecord?.network_fee_wei || feeUnits > 0n || finalTxRecord?.fee_tx_hash) && (
+                <div className="space-y-1">
+                  <h4 className="text-base font-bold text-[#0A0B0D]">
+                    {t.sheets.send.sentSuccess
+                      .replace('{amount}', displayAmount)
+                      .replace('{asset}', displayAsset)
+                      .replace('{id}', displayRecipient)}
+                  </h4>
+                  <p className="text-xs text-[#5B6577]">
+                    {t.sheets.send.confirmedOnBase}
+                  </p>
+                </div>
+
+                {/* Rows: Penerima menerima, Biaya layanan, Total dari kamu */}
                 <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-2xl p-3 text-left text-xs space-y-2 max-w-sm mx-auto">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#5B6577]">{t.sheets.send.recipientGets}</span>
+                    <span className="font-mono font-semibold text-[#0A0B0D]">
+                      {displayAmount} {displayAsset}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#5B6577]">{t.sheets.send.serviceFee}</span>
+                    <span className="font-mono font-semibold text-[#0A0B0D]">
+                      {displayFee} {displayAsset}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-[#E5E7EB]/60 font-semibold">
+                    <span className="text-[#0A0B0D]">{t.sheets.send.totalFromYou}</span>
+                    <span className="font-mono font-bold text-[#0052FF]">
+                      {displayTotal} {displayAsset}
+                    </span>
+                  </div>
+
                   {finalTxRecord?.network_fee_wei && (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between pt-1 border-t border-[#E5E7EB]/60">
                       <span className="text-[#5B6577]">{t.sheets.send.networkFee}</span>
                       <span className="font-mono font-semibold text-[#0A0B0D]">
                         {formatEthFee(finalTxRecord.network_fee_wei)} ETH
                       </span>
                     </div>
                   )}
-                  {(feeUnits > 0n || finalTxRecord?.fee_tx_hash) && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-[#5B6577]">{t.sheets.send.serviceFee}</span>
-                      <span className="font-mono font-semibold text-[#0A0B0D]">
-                        {formatAssetAmount(formatUnits(feeUnits, ASSET_DECIMALS[selectedAsset]), selectedAsset)} {selectedAsset}
-                      </span>
-                    </div>
-                  )}
                 </div>
-              )}
 
-              {(finalTxRecord?.explorer_url || txHash) && (
-                <div>
-                  <a
-                    href={finalTxRecord?.explorer_url || getExplorerUrl(txHash)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0052FF] hover:underline"
+                {(finalTxRecord?.explorer_url || txHash) && (
+                  <div>
+                    <a
+                      href={finalTxRecord?.explorer_url || getExplorerUrl(txHash)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0052FF] hover:underline"
+                    >
+                      <span>{t.sheets.send.viewOnBasescan}</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                )}
+
+                <div className="pt-3">
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all hover:bg-[#0042D6] active:scale-[0.99] cursor-pointer"
                   >
-                    <span>{t.sheets.send.viewOnBasescan}</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                    {t.sheets.send.doneBtn}
+                  </button>
                 </div>
-              )}
-
-              <div className="pt-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all hover:bg-[#0042D6] active:scale-[0.99] cursor-pointer"
-                >
-                  {t.sheets.send.doneBtn}
-                </button>
-              </div>
-            </>
-          )}
+              </>
+            );
+          })()}
 
           {finalStatus === 'failed' && (
             <>
@@ -1851,7 +1943,7 @@ export function SendSheetContent({
               <div className="pt-3">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="w-full h-12 rounded-2xl bg-[#E5E7EB] text-[#0A0B0D] font-semibold text-sm transition-all hover:bg-[#D1D5DB] cursor-pointer"
                 >
                   {t.sheets.send.doneBtn}
@@ -1892,7 +1984,7 @@ export function SendSheetContent({
               <div className="pt-3">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all hover:bg-[#0042D6] cursor-pointer"
                 >
                   {t.sheets.send.doneBtn}
@@ -1930,7 +2022,7 @@ export function SendSheetContent({
               <div className="pt-3">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all hover:bg-[#0042D6] cursor-pointer"
                 >
                   {t.sheets.send.doneBtn}

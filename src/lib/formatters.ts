@@ -1,4 +1,59 @@
-import { formatEther, parseEther } from 'viem';
+import { formatEther, parseEther, formatUnits, parseUnits } from 'viem';
+
+/**
+ * Format raw USDC units (bigint, 6 decimals):
+ * - Uses formatUnits(raw, 6)
+ * - Exact string manipulation without parseFloat/Number/toLocaleString
+ * - Strips trailing zeros but retains at least 2 decimals, up to 6 decimals
+ * - Commas for thousands separator on the integer part
+ * Examples:
+ *   25000n -> "0.025"
+ *   5025000n -> "5.025"
+ *   5000000n -> "5.00"
+ *   4975000n -> "4.975"
+ *   1234500000n -> "1,234.50"
+ */
+export function formatUsdcUnits(raw: bigint): string {
+  const isNegative = raw < 0n;
+  const absVal = isNegative ? -raw : raw;
+  const full = formatUnits(absVal, 6);
+  const [intPart, fracPart = ''] = full.split('.');
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  let trimmedFrac = fracPart.replace(/0+$/, '');
+  if (trimmedFrac.length < 2) {
+    trimmedFrac = trimmedFrac.padEnd(2, '0');
+  }
+  const result = `${formattedInt}.${trimmedFrac}`;
+  return isNegative ? `-${result}` : result;
+}
+
+/**
+ * Format string USDC amount (e.g. from server / tx.amount):
+ * Parses with parseUnits(..., 6) then formats with formatUsdcUnits.
+ * If invalid or cannot parse, returns original string.
+ */
+export function formatUsdcString(amount: string): string {
+  if (typeof amount !== 'string') {
+    if (typeof amount === 'number') {
+      amount = String(amount);
+    } else {
+      return '';
+    }
+  }
+  const clean = amount.replace(/,/g, '').trim();
+  if (!clean) return amount;
+  try {
+    let sanitized = clean;
+    const dotIdx = sanitized.indexOf('.');
+    if (dotIdx !== -1 && sanitized.length - dotIdx - 1 > 6) {
+      sanitized = sanitized.slice(0, dotIdx + 7);
+    }
+    const raw = parseUnits(sanitized, 6);
+    return formatUsdcUnits(raw);
+  } catch {
+    return amount;
+  }
+}
 
 /**
  * Formatting helpers for localized date, time, and currency amounts
@@ -112,8 +167,8 @@ export function formatRelativeTime(
 /**
  * Format ETH network fee:
  * - If 0 wei -> "0"
- * - If < 0.000001 ETH -> "< 0.000001"
- * - Otherwise -> max 8 decimals without trailing zeros
+ * - If < 1e-9 ETH (10^9 wei) -> "< 0.000000001"
+ * - Otherwise -> exact value up to 9 decimals without trailing zeros (e.g. 0.00000012)
  */
 export function formatEthFee(wei: bigint | string | number): string {
   let weiBig: bigint;
@@ -125,23 +180,23 @@ export function formatEthFee(wei: bigint | string | number): string {
 
   if (weiBig === 0n) return '0';
 
-  // 0.000001 ETH = 10^12 wei (1_000_000_000_000n)
-  if (weiBig < 1000000000000n) {
-    return '< 0.000001';
+  // 1e-9 ETH = 10^9 wei (1_000_000_000n)
+  if (weiBig < 1000000000n) {
+    return '< 0.000000001';
   }
 
   const ethStr = formatEther(weiBig);
   const parts = ethStr.split('.');
   if (parts.length === 1) return parts[0];
 
-  let dec = parts[1].slice(0, 8);
+  let dec = parts[1].slice(0, 9);
   dec = dec.replace(/0+$/, '');
   return dec ? `${parts[0]}.${dec}` : parts[0];
 }
 
 /**
  * Format asset amount:
- * - USDC: always exactly 2 decimals (e.g. 10.00)
+ * - USDC: uses formatUsdcString (exact, min 2 max 6 decimals without trailing zeros)
  * - ETH: max 8 decimals without trailing zeros (e.g. 0.05, 1, 0.00012345)
  */
 export function formatAssetAmount(
@@ -151,16 +206,12 @@ export function formatAssetAmount(
   if (amount === undefined || amount === null || amount === '') {
     return asset === 'USDC' ? '0.00' : '0';
   }
-  const cleanStr = String(amount).replace(/,/g, '').trim();
-  const num = parseFloat(cleanStr);
-  if (isNaN(num)) return String(amount);
 
   if (asset === 'USDC') {
-    return num.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+    return formatUsdcString(String(amount));
   }
+
+  const cleanStr = String(amount).replace(/,/g, '').trim();
 
   // ETH: max 8 decimals without trailing zeros
   const parts = cleanStr.split('.');

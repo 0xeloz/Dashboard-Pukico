@@ -21,7 +21,7 @@ import {
   FaucetSheetContent,
 } from './sheets/QuickActionSheets';
 import { useFriends } from '../../context/FriendsContext';
-import { formatEthBalance } from '../../lib/formatters';
+import { formatEthBalance, formatUsdcUnits, formatUsdcString } from '../../lib/formatters';
 import { useT } from '../../i18n';
 import type { UserProfile } from '../../types';
 
@@ -69,7 +69,7 @@ export function HomeView({
   const hasBetaAccess = profile?.beta_access === true || profile?.role === 'admin';
 
   // Global SWR balances and transactions
-  const { usdc, eth, refreshing, refresh } = useBalance();
+  const { usdc, eth, usdcRaw, refreshing, refresh } = useBalance();
   const { txs, refresh: refreshTx } = useTx();
   const [selectedDetailTx, setSelectedDetailTx] = useState<TxRecord | null>(null);
 
@@ -335,7 +335,11 @@ export function HomeView({
             <div className="flex flex-col">
               <div key={balanceAnimKey} className="animate-balance-change flex items-baseline gap-2">
                 <span className="text-[30px] font-bold tracking-tight text-white font-mono tabular-nums leading-tight transition-opacity duration-150">
-                  {isBalanceHidden ? '••••' : formatNumber(usdc.value, { minDecimals: 2, maxDecimals: 2 })}
+                  {isBalanceHidden
+                    ? '••••'
+                    : usdcRaw !== null
+                    ? formatUsdcUnits(usdcRaw)
+                    : formatUsdcString(usdc.value ?? '0')}
                 </span>
                 <span className="text-base font-semibold text-white/80">USDC</span>
               </div>
@@ -484,7 +488,13 @@ export function HomeView({
               ) : (
                 <>
                   <div className="font-mono text-[15px] font-bold text-[#0A0B0D] tabular-nums transition-opacity duration-150">
-                    {isBalanceHidden ? '••••' : `${formatNumber(usdc.value, { minDecimals: 2, maxDecimals: 2 })} USDC`}
+                    {isBalanceHidden
+                      ? '••••'
+                      : `${
+                          usdcRaw !== null
+                            ? formatUsdcUnits(usdcRaw)
+                            : formatUsdcString(usdc.value ?? '0')
+                        } USDC`}
                   </div>
                   <div className="text-[11px] text-[#5B6577] mt-0.5">{t.common.testnet}</div>
                 </>

@@ -17,7 +17,7 @@ import {
   useNotifications,
   type ServerNotificationItem,
 } from '../../context/NotificationsContext';
-import { formatRelativeTime } from '../../lib/formatters';
+import { formatRelativeTime, formatAssetAmount } from '../../lib/formatters';
 
 interface NotificationPanelProps {
   isOpen: boolean;
@@ -133,20 +133,21 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
       }
 
       let message = '';
+      const formattedAmount = formatAssetAmount(item.data.amount, item.data.asset);
       if (item.kind === 'tx_received') {
         message = t.notifications.kinds.tx_received
-          .replace('{amount}', item.data.amount)
+          .replace('{amount}', formattedAmount)
           .replace('{asset}', item.data.asset)
           .replace('{counterparty}', item.data.counterparty);
       } else if (item.kind === 'tx_sent') {
         message = t.notifications.kinds.tx_sent
-          .replace('{amount}', item.data.amount)
+          .replace('{amount}', formattedAmount)
           .replace('{asset}', item.data.asset)
           .replace('{counterparty}', item.data.counterparty);
       } else if (item.kind === 'tx_failed') {
         message = t.notifications.kinds.tx_failed.replace('{counterparty}', item.data.counterparty);
       } else {
-        message = `${item.data.amount} ${item.data.asset}`;
+        message = `${formattedAmount} ${item.data.asset}`;
       }
 
       const title =

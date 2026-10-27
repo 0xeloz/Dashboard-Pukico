@@ -10,7 +10,7 @@ import {
   getBaseSepoliaBalanceRaw,
   getBaseSepoliaUsdcBalanceRaw,
 } from '../lib/viemClient';
-import { formatEthBalance } from '../lib/formatters';
+import { formatEthBalance, formatUsdcUnits } from '../lib/formatters';
 import { formatUnits } from 'viem';
 
 export type BalanceStatus = 'idle' | 'loading' | 'refreshing' | 'error';
@@ -226,10 +226,7 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
 
             if (rawUsdc !== null) {
               setUsdcRaw(rawUsdc);
-              const formattedUsdc = parseFloat(formatUnits(rawUsdc, 6)).toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              });
+              const formattedUsdc = formatUsdcUnits(rawUsdc);
               setUsdc({ value: formattedUsdc, status: 'idle', updatedAt: now, error: null });
             } else {
               setUsdc((prev) => ({
@@ -241,10 +238,7 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
 
             if (rawEth !== null && rawUsdc !== null) {
               saveCachedBalances(currentWallet, {
-                usdc: parseFloat(formatUnits(rawUsdc, 6)).toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                }),
+                usdc: formatUsdcUnits(rawUsdc),
                 eth: formatEthBalance(rawEth),
                 ethWei: rawEth.toString(),
                 usdcRaw: rawUsdc.toString(),
@@ -308,10 +302,7 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
           const totalDeduct = amountUnits + feeUnits;
           const newUsdcRaw = currentUsdc > totalDeduct ? currentUsdc - totalDeduct : 0n;
           setUsdcRaw(newUsdcRaw);
-          const formattedUsdc = parseFloat(formatUnits(newUsdcRaw, 6)).toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          });
+          const formattedUsdc = formatUsdcUnits(newUsdcRaw);
           setUsdc({ value: formattedUsdc, status: 'idle', updatedAt: now, error: null });
         }
         if (estimatedGasWei && estimatedGasWei > 0n) {
