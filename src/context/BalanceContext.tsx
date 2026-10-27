@@ -335,40 +335,58 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
     }
   }, [walletAddress, isDemoMode, refresh]);
 
-  // Visibility / focus listener (revalidate if data is older than 20 seconds)
+  // Background polling while document is visible: stops completely when hidden
   useEffect(() => {
-    if (isDemoMode) return;
+    if (isDemoMode || !walletAddress) return;
 
-    const handleRevalidate = () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearTimer = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const scheduleNext = () => {
+      clearTimer();
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
+        return; // Hentikan saat tab hidden
+      }
+
+      timer = setTimeout(async () => {
+        if (document.visibilityState === 'visible') {
+          await refresh();
+          scheduleNext();
+        }
+      }, 45000);
+    };
+
+    const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         const age = Date.now() - (lastFetchTimeRef.current || 0);
-        if (age > 20000) {
+        if (age > 45000) {
           refresh();
         }
+        scheduleNext();
+      } else {
+        clearTimer();
       }
     };
 
-    document.addEventListener('visibilitychange', handleRevalidate);
-    window.addEventListener('focus', handleRevalidate);
+    if (document.visibilityState === 'visible') {
+      scheduleNext();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleRevalidate);
-      window.removeEventListener('focus', handleRevalidate);
+      clearTimer();
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
     };
-  }, [refresh, isDemoMode]);
-
-  // 30s background polling while document is visible
-  useEffect(() => {
-    if (isDemoMode) return;
-
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        refresh();
-      }
-    }, 30000);
-
-    return () => clearInterval(timer);
-  }, [refresh, isDemoMode]);
+  }, [refresh, isDemoMode, walletAddress]);
 
   return (
     <BalanceContext.Provider

@@ -118,7 +118,7 @@ export function NotificationsProvider({
 
   const seenIdsRef = useRef<Set<string>>(loadSeenIds(walletAddress));
   const isInitialFetchRef = useRef<boolean>(true);
-  const inFlightPromiseRef = useRef<Promise<void> | null>(null);
+  const inFlightPromiseRef = useRef<Promise<boolean> | null>(null);
   const walletRef = useRef(walletAddress);
   walletRef.current = walletAddress;
 
@@ -159,9 +159,9 @@ export function NotificationsProvider({
   );
 
   const refresh = useCallback(
-    async (isBackfill = false): Promise<void> => {
+    async (isBackfill = false): Promise<boolean> => {
       const currentWallet = walletRef.current;
-      if (!currentWallet) return;
+      if (!currentWallet) return false;
 
       if (inFlightPromiseRef.current) {
         return inFlightPromiseRef.current;
@@ -176,7 +176,7 @@ export function NotificationsProvider({
         refreshBalance: curRefreshBalance,
       } = latestRef.current;
 
-      const promise = (async () => {
+      const promise = (async (): Promise<boolean> => {
         try {
           const token = curGetAccessToken ? await curGetAccessToken().catch(() => null) : null;
           const res = await fetchNotifications({
@@ -187,6 +187,7 @@ export function NotificationsProvider({
 
           if (res.ok) {
             const fetched = res.items;
+            let hasNewItem = false;
 
             // Handle seen tracking and toasts
             if (isInitialFetchRef.current) {
@@ -200,6 +201,7 @@ export function NotificationsProvider({
               // On subsequent fetches: identify NEW tx_received items
               for (const item of fetched) {
                 if (!seenIdsRef.current.has(item.id)) {
+                  hasNewItem = true;
                   seenIdsRef.current.add(item.id);
 
                   // Only show toast for incoming transfers (tx_received)
@@ -230,9 +232,11 @@ export function NotificationsProvider({
             }
 
             setRawItems(fetched);
+            return hasNewItem;
           }
+          return false;
         } catch (_err) {
-          // Ignore polling errors
+          return false;
         } finally {
           inFlightPromiseRef.current = null;
         }
@@ -278,65 +282,116 @@ export function NotificationsProvider({
     return visibleItems.filter((item) => !item.read).length;
   }, [visibleItems]);
 
+  const consecutiveNoNewRef = useRef<number>(0);
+  const currentIntervalRef = useRef<number>(45000);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPollTimer = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleNextPoll = useCallback(
+    (delayMs?: number) => {
+      clearPollTimer();
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible' || !walletRef.current) {
+        return; // Jangan polling saat tab hidden
+      }
+
+      const delay = delayMs ?? currentIntervalRef.current;
+      pollTimerRef.current = setTimeout(async () => {
+        if (document.visibilityState !== 'visible' || !walletRef.current) {
+          clearPollTimer();
+          return;
+        }
+
+        const hasNew = await refresh(false);
+        if (hasNew) {
+          consecutiveNoNewRef.current = 0;
+          currentIntervalRef.current = 45000;
+        } else {
+          consecutiveNoNewRef.current += 1;
+          if (consecutiveNoNewRef.current >= 3) {
+            currentIntervalRef.current = 90000;
+          }
+        }
+
+        scheduleNextPoll();
+      }, delay);
+    },
+    [clearPollTimer, refresh]
+  );
+
+  const resetToFastIntervalAndPoll = useCallback(() => {
+    consecutiveNoNewRef.current = 0;
+    currentIntervalRef.current = 45000;
+    if (document.visibilityState === 'visible' && walletRef.current) {
+      refresh(false);
+      scheduleNextPoll(45000);
+    } else {
+      clearPollTimer();
+    }
+  }, [clearPollTimer, refresh, scheduleNextPoll]);
+
   // Initial fetch with backfill: true - only runs when walletAddress changes
   useEffect(() => {
     if (walletAddress) {
+      consecutiveNoNewRef.current = 0;
+      currentIntervalRef.current = 45000;
       refresh(true);
-    }
-  }, [walletAddress]);
-
-  // Background polling every 20s while tab is visible
-  useEffect(() => {
-    if (!walletAddress) return;
-
-    const timer = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        refresh(false);
+        scheduleNextPoll(45000);
       }
-    }, 20000);
+    }
+    return () => clearPollTimer();
+  }, [walletAddress, refresh, scheduleNextPoll, clearPollTimer]);
 
-    return () => clearInterval(timer);
-  }, [walletAddress, refresh]);
-
-  // Revalidate on focus or visibilitychange
+  // Focus & visibilitychange listener: stop on hidden, resume & reset to 45s on visible
   useEffect(() => {
     if (!walletAddress) return;
 
-    const handleFocus = () => {
+    const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
-        refresh(false);
+        resetToFastIntervalAndPoll();
+      } else {
+        clearPollTimer();
       }
     };
 
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      clearPollTimer();
     };
-  }, [walletAddress, refresh]);
+  }, [walletAddress, resetToFastIntervalAndPoll, clearPollTimer]);
 
-  // Listen to 'pukico:tx_updated' custom events
+  // Listen to 'pukico:tx_updated' custom events (reset to 45s and poll immediately)
   useEffect(() => {
     if (!walletAddress) return;
 
     const handleTxUpdated = () => {
-      refresh(false);
+      resetToFastIntervalAndPoll();
     };
 
     window.addEventListener('pukico:tx_updated', handleTxUpdated);
     return () => {
       window.removeEventListener('pukico:tx_updated', handleTxUpdated);
     };
-  }, [walletAddress, refresh]);
+  }, [walletAddress, resetToFastIntervalAndPoll]);
 
   return (
     <NotificationsContext.Provider
       value={{
         items: visibleItems,
         unreadCount,
-        refresh: () => refresh(false),
+        refresh: async () => {
+          await refresh(false);
+        },
         markAllRead,
         clearAllServerNotifications,
         selectedTxForSheet,

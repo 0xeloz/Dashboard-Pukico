@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   listTxs,
   syncPendingTxs,
+  getPendingTxs,
   type TxRecord,
   DEMO_TXS,
 } from '../lib/txApi';
@@ -121,8 +122,11 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
         const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
         const apiOpts = { privyToken: token, isDemoMode };
 
-        // 1. First sync pending transactions
-        await syncPendingTxs(apiOpts).catch(() => null);
+        // 1. Only sync pending transactions if there are actually pending transactions
+        const hasPending = getPendingTxs().length > 0 || txsRef.current.some((t) => t.status === 'pending');
+        if (hasPending) {
+          await syncPendingTxs(apiOpts).catch(() => null);
+        }
 
         // 2. Fetch transaction list
         const listRes = await listTxs(50, apiOpts).catch(() => ({ ok: false, txs: [] }));
@@ -192,40 +196,62 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
     }
   }, [walletAddress, isDemoMode, refresh]);
 
-  // Revalidate on visibilitychange or focus if data is older than 20 seconds
+  // Background polling while document is visible: stops completely when hidden
   useEffect(() => {
-    if (isDemoMode) return;
+    if (isDemoMode || !walletAddress) return;
 
-    const handleRevalidate = () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearTimer = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const scheduleNext = () => {
+      clearTimer();
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
+        return; // Hentikan saat tab hidden
+      }
+
+      // If pending transactions exist, poll at 30s to detect confirmation; otherwise relaxed 60s
+      const hasPending = getPendingTxs().length > 0 || txsRef.current.some((t) => t.status === 'pending');
+      const delay = hasPending ? 30000 : 60000;
+
+      timer = setTimeout(async () => {
+        if (document.visibilityState === 'visible') {
+          await refresh();
+          scheduleNext();
+        }
+      }, delay);
+    };
+
+    const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         const age = Date.now() - (lastFetchTimeRef.current || 0);
-        if (age > 20000) {
+        if (age > 45000) {
           refresh();
         }
+        scheduleNext();
+      } else {
+        clearTimer();
       }
     };
 
-    document.addEventListener('visibilitychange', handleRevalidate);
-    window.addEventListener('focus', handleRevalidate);
+    if (document.visibilityState === 'visible') {
+      scheduleNext();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleRevalidate);
-      window.removeEventListener('focus', handleRevalidate);
+      clearTimer();
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
     };
-  }, [refresh, isDemoMode]);
-
-  // 30s background polling while document is visible
-  useEffect(() => {
-    if (isDemoMode) return;
-
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        refresh();
-      }
-    }, 30000);
-
-    return () => clearInterval(timer);
-  }, [refresh, isDemoMode]);
+  }, [refresh, isDemoMode, walletAddress]);
 
   // Listen to 'pukico:tx_updated' custom events (e.g. from Send flow)
   useEffect(() => {
