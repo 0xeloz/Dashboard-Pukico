@@ -20,6 +20,7 @@ import {
   isFeeActive,
 } from '../../lib/fees';
 import { fetchExactBalances, sameAddress } from '../../lib/txGuards';
+import { formatEthBalance } from '../../lib/formatters';
 import { useToast } from '../../context/ToastContext';
 import type { UserProfile, RpcStatusInfo } from '../../types';
 
@@ -313,7 +314,7 @@ function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
               {loading
                 ? 'Loading...'
                 : balances
-                ? `${formatUnits(balances.usdc, 6)} USDC · ${formatUnits(balances.eth, 18).slice(0, 8)} ETH`
+                ? `${formatUnits(balances.usdc, 6)} USDC · ${formatEthBalance(balances.eth)} ETH`
                 : '—'}
             </span>
           </div>

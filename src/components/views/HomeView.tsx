@@ -21,6 +21,7 @@ import {
   FaucetSheetContent,
 } from './sheets/QuickActionSheets';
 import { useFriends } from '../../context/FriendsContext';
+import { formatEthBalance } from '../../lib/formatters';
 import { useT } from '../../i18n';
 import type { UserProfile } from '../../types';
 
@@ -229,7 +230,7 @@ export function HomeView({
     ? '••••'
     : isEthInitialLoading
     ? '…'
-    : formatNumber(eth.value, { minDecimals: 2, maxDecimals: 4 });
+    : formatEthBalance(eth.value ?? '0');
 
   return (
     <div
@@ -519,7 +520,7 @@ export function HomeView({
               ) : (
                 <>
                   <div className="font-mono text-[15px] font-bold text-[#0A0B0D] tabular-nums transition-opacity duration-150">
-                    {isBalanceHidden ? '••••' : `${formatNumber(eth.value, { minDecimals: 2, maxDecimals: 4 })} ETH`}
+                    {isBalanceHidden ? '••••' : `${formatEthBalance(eth.value ?? '0')} ETH`}
                   </div>
                   <div className="text-[11px] text-[#5B6577] mt-0.5">{t.common.testnet}</div>
                 </>

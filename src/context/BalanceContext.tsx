@@ -1,5 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { getBaseSepoliaBalance, getBaseSepoliaUsdcBalance } from '../lib/viemClient';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
+import {
+  getBaseSepoliaBalanceRaw,
+  getBaseSepoliaUsdcBalanceRaw,
+} from '../lib/viemClient';
+import { formatEthBalance } from '../lib/formatters';
+import { formatUnits } from 'viem';
 
 export type BalanceStatus = 'idle' | 'loading' | 'refreshing' | 'error';
 
@@ -13,8 +25,20 @@ export interface AssetState {
 export interface BalanceContextType {
   usdc: AssetState;
   eth: AssetState;
+  ethWei: bigint | null;
+  usdcRaw: bigint | null;
   refreshing: boolean;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { force?: boolean }) => Promise<void>;
+  refreshUntilChanged: (
+    prevWei: bigint | null,
+    opts?: { tries?: number; intervalMs?: number }
+  ) => Promise<void>;
+  setOptimisticBalance: (params: {
+    asset: 'USDC' | 'ETH';
+    amountUnits: bigint;
+    feeUnits: bigint;
+    estimatedGasWei?: bigint;
+  }) => void;
   isDemoMode: boolean;
 }
 
@@ -29,6 +53,8 @@ function getStorageKey(walletAddress: string): string {
 interface StoredBalances {
   usdc: string;
   eth: string;
+  ethWei?: string;
+  usdcRaw?: string;
   updatedAt: number;
 }
 
@@ -63,8 +89,33 @@ interface BalanceProviderProps {
 }
 
 export function BalanceProvider({ walletAddress, isDemoMode, children }: BalanceProviderProps) {
-  // Stored cache read on initialization
-  const initialCache = useRef<StoredBalances | null>(!isDemoMode && walletAddress ? loadCachedBalances(walletAddress) : null);
+  const initialCache = useRef<StoredBalances | null>(
+    !isDemoMode && walletAddress ? loadCachedBalances(walletAddress) : null
+  );
+
+  const [ethWei, setEthWei] = useState<bigint | null>(() => {
+    if (isDemoMode) return 50000000000000000n; // 0.05 ETH
+    if (initialCache.current?.ethWei) {
+      try {
+        return BigInt(initialCache.current.ethWei);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const [usdcRaw, setUsdcRaw] = useState<bigint | null>(() => {
+    if (isDemoMode) return 125500000n; // 125.50 USDC
+    if (initialCache.current?.usdcRaw) {
+      try {
+        return BigInt(initialCache.current.usdcRaw);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   const [usdc, setUsdc] = useState<AssetState>(() => {
     if (isDemoMode) {
@@ -92,106 +143,187 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
   const inFlightPromiseRef = useRef<Promise<void> | null>(null);
   const lastFetchTimeRef = useRef<number>(initialCache.current ? initialCache.current.updatedAt : 0);
 
-  // Keep latest wallet in ref for async callbacks
   const walletRef = useRef(walletAddress);
   walletRef.current = walletAddress;
 
-  const usdcValueRef = useRef(usdc.value);
-  usdcValueRef.current = usdc.value;
-  const ethValueRef = useRef(eth.value);
-  ethValueRef.current = eth.value;
+  const ethWeiRef = useRef(ethWei);
+  ethWeiRef.current = ethWei;
 
-  const refresh = useCallback(async (): Promise<void> => {
-    if (isDemoMode) {
-      setRefreshing(true);
-      await new Promise((r) => setTimeout(r, 600));
-      setUsdc({ value: '125.50', status: 'idle', updatedAt: Date.now(), error: null });
-      setEth({ value: '0.05', status: 'idle', updatedAt: Date.now(), error: null });
-      setRefreshing(false);
-      return;
-    }
+  const usdcRawRef = useRef(usdcRaw);
+  usdcRawRef.current = usdcRaw;
 
-    const currentWallet = walletRef.current;
-    if (!currentWallet) return;
+  const refresh = useCallback(
+    async (opts?: { force?: boolean }): Promise<void> => {
+      if (isDemoMode) {
+        setRefreshing(true);
+        await new Promise((r) => setTimeout(r, 400));
+        setEthWei(50000000000000000n);
+        setUsdcRaw(125500000n);
+        setUsdc({ value: '125.50', status: 'idle', updatedAt: Date.now(), error: null });
+        setEth({ value: '0.05', status: 'idle', updatedAt: Date.now(), error: null });
+        setRefreshing(false);
+        return;
+      }
 
-    // Join in-flight requests
-    if (inFlightPromiseRef.current) {
-      return inFlightPromiseRef.current;
-    }
+      const currentWallet = walletRef.current;
+      if (!currentWallet) return;
 
-    const thisFetchId = ++fetchIdRef.current;
-
-    // Transition statuses
-    setUsdc((prev) => ({
-      ...prev,
-      status: prev.value !== null ? 'refreshing' : 'loading',
-      error: null,
-    }));
-    setEth((prev) => ({
-      ...prev,
-      status: prev.value !== null ? 'refreshing' : 'loading',
-      error: null,
-    }));
-    setRefreshing(true);
-
-    const promise = (async () => {
-      let usdcRes: string | null = null;
-      let ethRes: string | null = null;
-
-      try {
-        const [usdcData, ethData] = await Promise.all([
-          getBaseSepoliaUsdcBalance(currentWallet).catch(() => null),
-          getBaseSepoliaBalance(currentWallet).catch(() => null),
-        ]);
-        usdcRes = usdcData;
-        ethRes = ethData;
-      } finally {
-        if (thisFetchId === fetchIdRef.current) {
-          const now = Date.now();
-          lastFetchTimeRef.current = now;
-
-          let finalUsdc = usdcValueRef.current;
-          let finalEth = ethValueRef.current;
-
-          setUsdc((prev) => {
-            if (usdcRes !== null) {
-              finalUsdc = usdcRes;
-              return { value: usdcRes, status: 'idle', updatedAt: now, error: null };
-            }
-            if (prev.value !== null) {
-              return { ...prev, status: 'idle', error: "Couldn't refresh" };
-            }
-            return { value: null, status: 'error', updatedAt: null, error: "Couldn't load balance" };
-          });
-
-          setEth((prev) => {
-            if (ethRes !== null) {
-              finalEth = ethRes;
-              return { value: ethRes, status: 'idle', updatedAt: now, error: null };
-            }
-            if (prev.value !== null) {
-              return { ...prev, status: 'idle', error: "Couldn't refresh" };
-            }
-            return { value: null, status: 'error', updatedAt: null, error: "Couldn't load balance" };
-          });
-
-          if (finalUsdc && finalEth) {
-            saveCachedBalances(currentWallet, {
-              usdc: finalUsdc,
-              eth: finalEth,
-              updatedAt: now,
-            });
+      // If force is requested and there's an in-flight request, wait for it to finish, then proceed to fetch fresh
+      if (inFlightPromiseRef.current) {
+        if (opts?.force) {
+          try {
+            await inFlightPromiseRef.current;
+          } catch {
+            // Ignore prior failure
           }
-
-          setRefreshing(false);
-          inFlightPromiseRef.current = null;
+        } else {
+          return inFlightPromiseRef.current;
         }
       }
-    })();
 
-    inFlightPromiseRef.current = promise;
-    return promise;
-  }, [isDemoMode]);
+      const thisFetchId = ++fetchIdRef.current;
+
+      setUsdc((prev) => ({
+        ...prev,
+        status: prev.value !== null ? 'refreshing' : 'loading',
+        error: null,
+      }));
+      setEth((prev) => ({
+        ...prev,
+        status: prev.value !== null ? 'refreshing' : 'loading',
+        error: null,
+      }));
+      setRefreshing(true);
+
+      const promise = (async () => {
+        let rawUsdc: bigint | null = null;
+        let rawEth: bigint | null = null;
+
+        try {
+          const [uBal, eBal] = await Promise.all([
+            getBaseSepoliaUsdcBalanceRaw(currentWallet).catch(() => null),
+            getBaseSepoliaBalanceRaw(currentWallet).catch(() => null),
+          ]);
+          rawUsdc = uBal;
+          rawEth = eBal;
+        } finally {
+          if (thisFetchId === fetchIdRef.current) {
+            const now = Date.now();
+            lastFetchTimeRef.current = now;
+
+            if (rawEth !== null) {
+              setEthWei(rawEth);
+              const formattedEth = formatEthBalance(rawEth);
+              setEth({ value: formattedEth, status: 'idle', updatedAt: now, error: null });
+            } else {
+              setEth((prev) => ({
+                ...prev,
+                status: prev.value !== null ? 'idle' : 'error',
+                error: prev.value !== null ? "Couldn't refresh" : "Couldn't load balance",
+              }));
+            }
+
+            if (rawUsdc !== null) {
+              setUsdcRaw(rawUsdc);
+              const formattedUsdc = parseFloat(formatUnits(rawUsdc, 6)).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              });
+              setUsdc({ value: formattedUsdc, status: 'idle', updatedAt: now, error: null });
+            } else {
+              setUsdc((prev) => ({
+                ...prev,
+                status: prev.value !== null ? 'idle' : 'error',
+                error: prev.value !== null ? "Couldn't refresh" : "Couldn't load balance",
+              }));
+            }
+
+            if (rawEth !== null && rawUsdc !== null) {
+              saveCachedBalances(currentWallet, {
+                usdc: parseFloat(formatUnits(rawUsdc, 6)).toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }),
+                eth: formatEthBalance(rawEth),
+                ethWei: rawEth.toString(),
+                usdcRaw: rawUsdc.toString(),
+                updatedAt: now,
+              });
+            }
+
+            setRefreshing(false);
+            inFlightPromiseRef.current = null;
+          }
+        }
+      })();
+
+      inFlightPromiseRef.current = promise;
+      return promise;
+    },
+    [isDemoMode]
+  );
+
+  // Poll until balance changes (used after tx confirmed / received)
+  const refreshUntilChanged = useCallback(
+    async (
+      prevWei: bigint | null,
+      opts: { tries?: number; intervalMs?: number } = {}
+    ): Promise<void> => {
+      const maxTries = opts.tries ?? 5;
+      const interval = opts.intervalMs ?? 2000;
+
+      for (let i = 0; i < maxTries; i++) {
+        await refresh({ force: true });
+        if (prevWei !== null && ethWeiRef.current !== null && ethWeiRef.current !== prevWei) {
+          break;
+        }
+        if (i < maxTries - 1) {
+          await new Promise((r) => setTimeout(r, interval));
+        }
+      }
+    },
+    [refresh]
+  );
+
+  // Optimistic balance reduction after broadcast
+  const setOptimisticBalance = useCallback(
+    ({
+      asset,
+      amountUnits,
+      feeUnits,
+      estimatedGasWei = 0n,
+    }: {
+      asset: 'USDC' | 'ETH';
+      amountUnits: bigint;
+      feeUnits: bigint;
+      estimatedGasWei?: bigint;
+    }) => {
+      const now = Date.now();
+      if (asset === 'USDC') {
+        const currentUsdc = usdcRawRef.current;
+        if (currentUsdc !== null) {
+          const totalDeduct = amountUnits + feeUnits;
+          const newUsdcRaw = currentUsdc > totalDeduct ? currentUsdc - totalDeduct : 0n;
+          setUsdcRaw(newUsdcRaw);
+          const formattedUsdc = parseFloat(formatUnits(newUsdcRaw, 6)).toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+          setUsdc({ value: formattedUsdc, status: 'idle', updatedAt: now, error: null });
+        }
+      } else {
+        const currentEth = ethWeiRef.current;
+        if (currentEth !== null) {
+          const totalDeduct = amountUnits + feeUnits + estimatedGasWei;
+          const newEthWei = currentEth > totalDeduct ? currentEth - totalDeduct : 0n;
+          setEthWei(newEthWei);
+          const formattedEth = formatEthBalance(newEthWei);
+          setEth({ value: formattedEth, status: 'idle', updatedAt: now, error: null });
+        }
+      }
+    },
+    []
+  );
 
   // Initial mount fetch
   useEffect(() => {
@@ -240,8 +372,12 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
       value={{
         usdc,
         eth,
+        ethWei,
+        usdcRaw,
         refreshing,
         refresh,
+        refreshUntilChanged,
+        setOptimisticBalance,
         isDemoMode,
       }}
     >

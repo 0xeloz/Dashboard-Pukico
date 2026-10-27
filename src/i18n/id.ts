@@ -35,6 +35,7 @@ export const id: Translations = {
     admin: 'Admin',
     verified: 'Terverifikasi',
     loading: 'Memuat...',
+    view: 'Lihat',
   },
   nav: {
     home: 'Beranda',
@@ -53,8 +54,14 @@ export const id: Translations = {
     clearAll: 'Hapus semua',
     markAllRead: 'Tandai semua dibaca',
     unreadCount: '{count} belum dibaca',
+    kinds: {
+      tx_received: 'Kamu menerima {amount} {asset} dari @{counterparty}',
+      tx_sent: 'Kamu mengirim {amount} {asset} ke @{counterparty}',
+      tx_failed: 'Transfer ke @{counterparty} gagal',
+    },
   },
   toast: {
+    sending: 'Mengirim transfer…',
     sendCancelled: 'Pengiriman dibatalkan',
     insufficientFunds: 'Saldo tidak mencukupi',
     recipientUnverified: 'Penerima gagal diverifikasi',

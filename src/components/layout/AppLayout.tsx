@@ -15,6 +15,7 @@ import { NotificationPanel } from '../ui/NotificationPanel';
 import { GenericNetworkIcon } from '../ui/PukicoBrand';
 import { useT } from '../../i18n';
 import { useToast } from '../../context/ToastContext';
+import { useNotifications } from '../../context/NotificationsContext';
 import type { ActiveTab, UserProfile } from '../../types';
 
 interface AppLayoutProps {
@@ -55,7 +56,9 @@ export function AppLayout({
   children,
 }: AppLayoutProps) {
   const { t, phase } = useT();
-  const { unreadCount, toast } = useToast();
+  const { unreadCount: localUnread, toast } = useToast();
+  const { unreadCount: serverUnread } = useNotifications();
+  const unreadCount = localUnread + serverUnread;
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
 

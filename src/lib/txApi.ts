@@ -21,6 +21,8 @@ export interface TxRecord {
   created_at?: string;
   confirmed_at?: string | null;
   explorer_url?: string;
+  network_fee_wei?: string;
+  fee_tx_hash?: string;
 }
 
 export interface PendingTxEntry {
@@ -91,7 +93,7 @@ export function removePendingTx(txHash: string): void {
 /**
  * Construct default request headers for Supabase Edge Functions
  */
-function buildHeaders(privyToken?: string | null): Record<string, string> {
+export function buildHeaders(privyToken?: string | null): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -197,6 +199,7 @@ export async function submitTx(
     asset: 'USDC' | 'ETH';
     to_pukico_id: string;
     amount: string;
+    fee_tx_hash?: string;
   },
   options: ApiOptions = {}
 ): Promise<{ ok: boolean; status: number; tx?: TxRecord; error?: string }> {
@@ -210,6 +213,7 @@ export async function submitTx(
         asset: params.asset,
         amount: params.amount,
         to_pukico_id: params.to_pukico_id,
+        fee_tx_hash: params.fee_tx_hash,
         status: 'confirmed',
         created_at: new Date().toISOString(),
         confirmed_at: new Date().toISOString(),
@@ -234,6 +238,7 @@ export async function submitTx(
         asset: params.asset,
         to_pukico_id: params.to_pukico_id,
         amount: params.amount,
+        fee_tx_hash: params.fee_tx_hash,
       }),
     });
 
@@ -262,6 +267,7 @@ export async function submitTxWithRetry(
     asset: 'USDC' | 'ETH';
     to_pukico_id: string;
     amount: string;
+    fee_tx_hash?: string;
   },
   options: ApiOptions = {}
 ): Promise<{ ok: boolean; tx?: TxRecord; error?: string }> {

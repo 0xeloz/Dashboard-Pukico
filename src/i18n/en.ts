@@ -26,6 +26,7 @@ export const en = {
     admin: 'Admin',
     verified: 'Verified',
     loading: 'Loading...',
+    view: 'View',
   },
   nav: {
     home: 'Home',
@@ -44,8 +45,14 @@ export const en = {
     clearAll: 'Clear all',
     markAllRead: 'Mark all as read',
     unreadCount: '{count} unread',
+    kinds: {
+      tx_received: 'You received {amount} {asset} from @{counterparty}',
+      tx_sent: 'You sent {amount} {asset} to @{counterparty}',
+      tx_failed: 'Transfer to @{counterparty} failed',
+    },
   },
   toast: {
+    sending: 'Sending transfer…',
     sendCancelled: 'Transfer cancelled',
     insufficientFunds: 'Insufficient balance or ETH gas',
     recipientUnverified: 'Recipient could not be verified',

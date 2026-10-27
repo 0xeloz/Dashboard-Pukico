@@ -1,8 +1,66 @@
-import { formatEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 
 /**
  * Formatting helpers for localized date, time, and currency amounts
  */
+
+/**
+ * Format ETH balance:
+ * - Tampilkan sampai 8 desimal tanpa nol di belakang
+ * - "< 0.00000001" jika sangat kecil
+ * - "0" jika nol
+ */
+export function formatEthBalance(
+  val: bigint | string | number | null | undefined
+): string {
+  if (val === null || val === undefined || val === '') return '0';
+
+  let weiBig: bigint;
+  if (typeof val === 'bigint') {
+    weiBig = val;
+  } else if (typeof val === 'string') {
+    const clean = val.replace(/,/g, '').trim();
+    if (!clean || clean === '0') return '0';
+    if (clean.startsWith('<')) return clean;
+    if (clean.includes('.')) {
+      try {
+        weiBig = parseEther(clean);
+      } catch {
+        return clean;
+      }
+    } else {
+      try {
+        weiBig = BigInt(clean);
+      } catch {
+        return clean;
+      }
+    }
+  } else if (typeof val === 'number') {
+    if (isNaN(val) || val === 0) return '0';
+    try {
+      weiBig = parseEther(val.toFixed(18));
+    } catch {
+      return String(val);
+    }
+  } else {
+    return '0';
+  }
+
+  if (weiBig === 0n) return '0';
+
+  // 0.00000001 ETH = 10^10 wei (10_000_000_000n)
+  if (weiBig < 10000000000n) {
+    return '< 0.00000001';
+  }
+
+  const ethStr = formatEther(weiBig);
+  const parts = ethStr.split('.');
+  if (parts.length === 1) return parts[0];
+
+  let dec = parts[1].slice(0, 8);
+  dec = dec.replace(/0+$/, '');
+  return dec ? `${parts[0]}.${dec}` : parts[0];
+}
 
 /**
  * Format relative time using Intl.RelativeTimeFormat

@@ -3,7 +3,7 @@ import { ExternalLink, Copy, Check, Clock, CheckCircle2, XCircle } from 'lucide-
 import { BottomSheet } from './BottomSheet';
 import { useT } from '../../i18n';
 import { useToast } from '../../context/ToastContext';
-import { formatAssetAmount, formatFullDateTime } from '../../lib/formatters';
+import { formatAssetAmount, formatFullDateTime, formatEthFee } from '../../lib/formatters';
 import { shortenAddress, getExplorerUrl, type TxRecord } from '../../lib/txApi';
 
 interface TxDetailsSheetProps {
@@ -148,6 +148,37 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
                     <Copy className="w-3.5 h-3.5" />
                   )}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Network Fee */}
+          {tx.network_fee_wei && (
+            <div className="flex items-center justify-between py-3">
+              <span className="text-sm text-[#5B6577] font-medium">{t.sheets.send.networkFee}</span>
+              <span className="font-mono text-sm font-semibold text-[#0A0B0D]">
+                {formatEthFee(tx.network_fee_wei)} ETH
+              </span>
+            </div>
+          )}
+
+          {/* 7. Service Fee */}
+          {tx.fee_tx_hash && (
+            <div className="flex items-center justify-between py-3">
+              <span className="text-sm text-[#5B6577] font-medium">{t.sheets.send.serviceFee}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-[#0A0B0D] select-all">
+                  {shortenAddress(tx.fee_tx_hash)}
+                </span>
+                <a
+                  href={getExplorerUrl(tx.fee_tx_hash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1 rounded-md text-[#5B6577] hover:text-[#0052FF]"
+                  title={t.sheets.send.viewOnBasescan}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
               </div>
             </div>
           )}

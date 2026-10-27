@@ -1,6 +1,7 @@
-import { createPublicClient, http, formatEther, formatUnits, isAddress, parseAbi } from 'viem';
+import { createPublicClient, http, formatUnits, isAddress, parseAbi } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { CHAIN_CONFIG } from './config';
+import { formatEthBalance } from './formatters';
 import type { RpcStatusInfo } from '../types';
 
 export const publicClient = createPublicClient({
@@ -17,48 +18,50 @@ const ERC20_BALANCE_ABI = parseAbi([
 ]);
 
 /**
- * Fetch native ETH balance on Base Sepolia
+ * Fetch raw native ETH balance in wei
  */
-export async function getBaseSepoliaBalance(address: string): Promise<string> {
+export async function getBaseSepoliaBalanceRaw(address: string): Promise<bigint> {
   if (!address || !isAddress(address)) {
     throw new Error('Invalid Ethereum address format');
   }
 
-  const balanceWei = await publicClient.getBalance({
+  return await publicClient.getBalance({
     address: address as `0x${string}`,
   });
-
-  const formatted = formatEther(balanceWei);
-  const num = parseFloat(formatted);
-
-  if (num === 0) {
-    return '0.0000';
-  } else if (num < 0.0001) {
-    return '< 0.0001';
-  } else {
-    return num.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 4,
-    });
-  }
 }
 
 /**
- * Fetch testnet USDC balance on Base Sepolia (6 decimals)
+ * Fetch native ETH balance on Base Sepolia formatted up to 8 decimals
  */
-export async function getBaseSepoliaUsdcBalance(address: string): Promise<string> {
+export async function getBaseSepoliaBalance(address: string): Promise<string> {
+  const balanceWei = await getBaseSepoliaBalanceRaw(address);
+  return formatEthBalance(balanceWei);
+}
+
+/**
+ * Fetch raw testnet USDC balance (6 decimals)
+ */
+export async function getBaseSepoliaUsdcBalanceRaw(address: string): Promise<bigint> {
   if (!address || !isAddress(address)) {
     throw new Error('Invalid Ethereum address format');
   }
 
-  try {
-    const rawBalance = await publicClient.readContract({
-      address: BASE_SEPOLIA_USDC_ADDRESS,
-      abi: ERC20_BALANCE_ABI,
-      functionName: 'balanceOf',
-      args: [address as `0x${string}`],
-    });
+  const rawBalance = await publicClient.readContract({
+    address: BASE_SEPOLIA_USDC_ADDRESS,
+    abi: ERC20_BALANCE_ABI,
+    functionName: 'balanceOf',
+    args: [address as `0x${string}`],
+  });
 
+  return rawBalance as bigint;
+}
+
+/**
+ * Fetch testnet USDC balance on Base Sepolia (6 decimals, formatted 2 decimals)
+ */
+export async function getBaseSepoliaUsdcBalance(address: string): Promise<string> {
+  try {
+    const rawBalance = await getBaseSepoliaUsdcBalanceRaw(address);
     const formatted = formatUnits(rawBalance, 6);
     const num = parseFloat(formatted);
 

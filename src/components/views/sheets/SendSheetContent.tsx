@@ -21,7 +21,7 @@ import { useToast } from '../../../context/ToastContext';
 import { useT } from '../../../i18n';
 import { publicClient, BASE_SEPOLIA_USDC_ADDRESS } from '../../../lib/viemClient';
 import { ENV, CHAIN_CONFIG } from '../../../lib/config';
-import { formatEthFee, formatAssetAmount } from '../../../lib/formatters';
+import { formatEthFee, formatAssetAmount, formatEthBalance } from '../../../lib/formatters';
 import {
   resolvePukicoId,
   submitTx,
@@ -142,7 +142,15 @@ export function SendSheetContent({
     hasPasskeyMfa,
     embeddedWalletAddress,
   } = useAuth();
-  const { usdc, eth, refresh: refreshBalanceCtx } = useBalance();
+  const {
+    usdc,
+    eth,
+    ethWei,
+    usdcRaw,
+    refresh: refreshBalanceCtx,
+    refreshUntilChanged,
+    setOptimisticBalance,
+  } = useBalance();
   const { txs } = useTx();
   const { friends } = useFriends();
   const { toast } = useToast();
@@ -777,7 +785,7 @@ export function SendSheetContent({
 
       setStep(7);
       setFinalStatus('confirmed');
-      toast.success(t.toast.transferConfirmed);
+      toast.success(t.toast.transferConfirmed, { silent: true });
       setFinalTxRecord({
         tx_hash: '0xdemo1111111111111111111111111111111111111111111111111111111111111111',
         asset: snapshot.asset,
@@ -795,6 +803,8 @@ export function SendSheetContent({
     let broadcastHash = '';
 
     // 10. Prompt wallet transaction for main transfer
+    toast.loading(t.toast.sending, { id: 'send-tx-status', title: t.toast.sending });
+
     try {
       if (!sendTransaction) {
         throw new Error('Wallet transaction provider not available.');
@@ -818,18 +828,28 @@ export function SendSheetContent({
       setIsSubmitting(false);
       sendInProgressRef.current = false;
       if (reason === 'user_rejected') {
-        toast.info(t.toast.sendCancelled);
+        toast.update('send-tx-status', 'info', t.toast.sendCancelled);
       } else if (reason === 'insufficient_funds') {
-        toast.error(t.toast.insufficientFunds);
+        toast.update('send-tx-status', 'error', t.toast.insufficientFunds);
+      } else {
+        toast.update('send-tx-status', 'error', t.toast.transferFailed);
       }
       return;
     }
 
     // 11. Valid hash exists - execute second fee transaction and backend tracking
-    toast.info(t.toast.transferSent, { silent: true });
+    toast.update('send-tx-status', 'info', t.toast.transferSent, { silent: true });
     setTxHash(broadcastHash);
     setProgressState('waiting_confirmation');
     setStep(6);
+
+    // Optimistically deduct balance immediately on broadcast hash
+    setOptimisticBalance({
+      asset: snapshot.asset,
+      amountUnits: snapshot.amountUnits,
+      feeUnits: snapshot.feeUnits,
+      estimatedGasWei: estimatedFeeWei ?? (snapshot.asset === 'ETH' ? 21000n * 2000000000n : 65000n * 2000000000n),
+    });
 
     const canonicalAmount = formatUnits(
       snapshot.amountUnits,
@@ -845,6 +865,7 @@ export function SendSheetContent({
     });
 
     // Execute fee transfer as secondary transfer (does not fail main transfer)
+    let feeTxHash: string | undefined = undefined;
     if (snapshot.feeUnits > 0n && snapshot.treasuryAddress) {
       setFeeApprovalPending(true);
       try {
@@ -853,10 +874,14 @@ export function SendSheetContent({
           snapshot.treasuryAddress,
           snapshot.feeUnits
         );
-        await sendTransaction(feeTxRequest, {
+        const feeResult = await sendTransaction(feeTxRequest, {
           address: profile.wallet_address,
           uiOptions: { showWalletUIs: false },
         });
+        const extractedFee = extractHash(feeResult);
+        if (extractedFee && isTxHash(extractedFee)) {
+          feeTxHash = extractedFee;
+        }
         toast.info(t.toast.feePaid, { silent: true });
       } catch (_feeErr) {
         toast.warning(t.toast.feeFailed);
@@ -877,6 +902,7 @@ export function SendSheetContent({
             asset: snapshot.asset,
             to_pukico_id: snapshot.recipientId,
             amount: canonicalAmount,
+            fee_tx_hash: feeTxHash,
           },
           { privyToken: token }
         );
@@ -924,20 +950,20 @@ export function SendSheetContent({
           if (syncRes.tx.status === 'confirmed') {
             setFinalTxRecord(syncRes.tx);
             setFinalStatus('confirmed');
-            toast.success(t.toast.transferConfirmed);
+            toast.success(t.toast.transferConfirmed, { silent: true });
             setStep(7);
             confirmed = true;
-            refreshBalanceCtx();
+            refreshUntilChanged(snapshot.asset === 'ETH' ? (balances?.eth ?? ethWei) : (balances?.usdc ?? usdcRaw));
             loadBalances();
             break;
           }
           if (syncRes.tx.status === 'failed') {
             setFinalTxRecord(syncRes.tx);
             setFinalStatus('failed');
-            toast.error(t.toast.transferFailed);
+            toast.error(t.toast.transferFailed, { silent: true });
             setStep(7);
             confirmed = true;
-            refreshBalanceCtx();
+            refreshUntilChanged(snapshot.asset === 'ETH' ? (balances?.eth ?? ethWei) : (balances?.usdc ?? usdcRaw));
             loadBalances();
             break;
           }
@@ -952,6 +978,7 @@ export function SendSheetContent({
                   asset: snapshot.asset,
                   to_pukico_id: snapshot.recipientId,
                   amount: canonicalAmount,
+                  fee_tx_hash: feeTxHash,
                 },
                 { privyToken: token }
               );
@@ -1143,7 +1170,7 @@ export function SendSheetContent({
                     <div className="h-4 w-20 bg-[#E5E7EB] rounded animate-pulse mb-1" />
                   ) : (
                     <div className="font-mono text-sm font-bold text-[#0A0B0D]">
-                      {formatNumber(formatUnits(balances.eth, 18), { minDecimals: 2, maxDecimals: 4 })} ETH
+                      {formatEthBalance(balances.eth)} ETH
                     </div>
                   )}
                   <div className="text-[11px] text-[#5B6577]">{t.common.testnet}</div>
@@ -1290,7 +1317,7 @@ export function SendSheetContent({
                       '{amount}',
                       selectedAsset === 'USDC'
                         ? formatUnitsTrimmed(balances.usdc, 6)
-                        : formatUnitsTrimmed(balances.eth, 18, 4)
+                        : formatEthBalance(balances.eth)
                     )
                     .replace('{asset}', selectedAsset)}
             </span>
@@ -1740,6 +1767,28 @@ export function SendSheetContent({
                   {t.sheets.send.confirmedOnBase}
                 </p>
               </div>
+
+              {/* Fee info summary */}
+              {(finalTxRecord?.network_fee_wei || feeUnits > 0n || finalTxRecord?.fee_tx_hash) && (
+                <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-2xl p-3 text-left text-xs space-y-2 max-w-sm mx-auto">
+                  {finalTxRecord?.network_fee_wei && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#5B6577]">{t.sheets.send.networkFee}</span>
+                      <span className="font-mono font-semibold text-[#0A0B0D]">
+                        {formatEthFee(finalTxRecord.network_fee_wei)} ETH
+                      </span>
+                    </div>
+                  )}
+                  {(feeUnits > 0n || finalTxRecord?.fee_tx_hash) && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#5B6577]">{t.sheets.send.serviceFee}</span>
+                      <span className="font-mono font-semibold text-[#0A0B0D]">
+                        {formatAssetAmount(formatUnits(feeUnits, ASSET_DECIMALS[selectedAsset]), selectedAsset)} {selectedAsset}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {(finalTxRecord?.explorer_url || txHash) && (
                 <div>
