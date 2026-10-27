@@ -953,7 +953,10 @@ export function SendSheetContent({
             toast.success(t.toast.transferConfirmed, { silent: true });
             setStep(7);
             confirmed = true;
-            refreshUntilChanged(snapshot.asset === 'ETH' ? (balances?.eth ?? ethWei) : (balances?.usdc ?? usdcRaw));
+            refreshUntilChanged(
+              snapshot.asset,
+              snapshot.asset === 'ETH' ? (balances?.eth ?? ethWei) : (balances?.usdc ?? usdcRaw)
+            );
             loadBalances();
             break;
           }
@@ -963,7 +966,10 @@ export function SendSheetContent({
             toast.error(t.toast.transferFailed, { silent: true });
             setStep(7);
             confirmed = true;
-            refreshUntilChanged(snapshot.asset === 'ETH' ? (balances?.eth ?? ethWei) : (balances?.usdc ?? usdcRaw));
+            refreshUntilChanged(
+              snapshot.asset,
+              snapshot.asset === 'ETH' ? (balances?.eth ?? ethWei) : (balances?.usdc ?? usdcRaw)
+            );
             loadBalances();
             break;
           }

@@ -122,6 +122,9 @@ export function NotificationsProvider({
   const walletRef = useRef(walletAddress);
   walletRef.current = walletAddress;
 
+  const latestRef = useRef({ t, toast, refreshTx, refreshBalance, txs, rawItems, getAccessToken });
+  latestRef.current = { t, toast, refreshTx, refreshBalance, txs, rawItems, getAccessToken };
+
   // When walletAddress changes, reload seen and clearedAt
   useEffect(() => {
     seenIdsRef.current = loadSeenIds(walletAddress);
@@ -133,11 +136,12 @@ export function NotificationsProvider({
   const openTxDetailsByHash = useCallback(
     (txHash: string) => {
       if (!txHash) return;
-      const found = txs.find((t) => t.tx_hash.toLowerCase() === txHash.toLowerCase());
+      const { txs: currentTxs, rawItems: currentRawItems } = latestRef.current;
+      const found = currentTxs.find((t) => t.tx_hash.toLowerCase() === txHash.toLowerCase());
       if (found) {
         setSelectedTxForSheet(found);
       } else {
-        const item = rawItems.find((i) => i.tx_hash.toLowerCase() === txHash.toLowerCase());
+        const item = currentRawItems.find((i) => i.tx_hash.toLowerCase() === txHash.toLowerCase());
         setSelectedTxForSheet({
           tx_hash: txHash,
           direction: item?.kind === 'tx_received' ? 'in' : 'out',
@@ -151,7 +155,7 @@ export function NotificationsProvider({
         });
       }
     },
-    [txs, rawItems]
+    []
   );
 
   const refresh = useCallback(
@@ -163,9 +167,17 @@ export function NotificationsProvider({
         return inFlightPromiseRef.current;
       }
 
+      const {
+        getAccessToken: curGetAccessToken,
+        t: curT,
+        toast: curToast,
+        refreshTx: curRefreshTx,
+        refreshBalance: curRefreshBalance,
+      } = latestRef.current;
+
       const promise = (async () => {
         try {
-          const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
+          const token = curGetAccessToken ? await curGetAccessToken().catch(() => null) : null;
           const res = await fetchNotifications({
             privyToken: token,
             isDemoMode,
@@ -191,16 +203,16 @@ export function NotificationsProvider({
 
                   // Only show toast for incoming transfers (tx_received)
                   if (item.kind === 'tx_received') {
-                    const template = t.notifications.kinds.tx_received;
+                    const template = curT.notifications.kinds.tx_received;
                     const notifMsg = template
                       .replace('{amount}', item.data.amount)
                       .replace('{asset}', item.data.asset)
                       .replace('{counterparty}', item.data.counterparty);
 
-                    toast.success(notifMsg, {
+                    curToast.success(notifMsg, {
                       duration: 6000,
                       action: {
-                        label: t.common.view || 'Lihat',
+                        label: curT.common.view || 'Lihat',
                         onClick: () => {
                           openTxDetailsByHash(item.tx_hash);
                         },
@@ -208,8 +220,8 @@ export function NotificationsProvider({
                     });
 
                     // Force refresh transaction feed and balances
-                    refreshTx().catch(() => null);
-                    refreshBalance({ force: true }).catch(() => null);
+                    curRefreshTx().catch(() => null);
+                    curRefreshBalance({ force: true }).catch(() => null);
                   }
                 }
               }
@@ -228,7 +240,7 @@ export function NotificationsProvider({
       inFlightPromiseRef.current = promise;
       return promise;
     },
-    [getAccessToken, isDemoMode, toast, t, openTxDetailsByHash, refreshTx, refreshBalance]
+    [isDemoMode, openTxDetailsByHash]
   );
 
   // Mark all server notifications as read
@@ -237,12 +249,13 @@ export function NotificationsProvider({
     setRawItems((prev) => prev.map((item) => ({ ...item, read: true })));
 
     try {
-      const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
+      const curGetToken = latestRef.current.getAccessToken;
+      const token = curGetToken ? await curGetToken().catch(() => null) : null;
       await markNotificationsRead({ privyToken: token, isDemoMode });
     } catch {
       // Ignore background errors
     }
-  }, [getAccessToken, isDemoMode]);
+  }, [isDemoMode]);
 
   // "Hapus semua" (Clear all) hides items by saving clearedAt timestamp
   const clearAllServerNotifications = useCallback(() => {
@@ -264,12 +277,12 @@ export function NotificationsProvider({
     return visibleItems.filter((item) => !item.read).length;
   }, [visibleItems]);
 
-  // Initial fetch with backfill: true
+  // Initial fetch with backfill: true - only runs when walletAddress changes
   useEffect(() => {
     if (walletAddress) {
       refresh(true);
     }
-  }, [walletAddress, refresh]);
+  }, [walletAddress]);
 
   // Background polling every 20s while tab is visible
   useEffect(() => {

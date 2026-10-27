@@ -30,7 +30,8 @@ export interface BalanceContextType {
   refreshing: boolean;
   refresh: (opts?: { force?: boolean }) => Promise<void>;
   refreshUntilChanged: (
-    prevWei: bigint | null,
+    asset: 'ETH' | 'USDC',
+    prevRaw: bigint | null,
     opts?: { tries?: number; intervalMs?: number }
   ) => Promise<void>;
   setOptimisticBalance: (params: {
@@ -266,7 +267,8 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
   // Poll until balance changes (used after tx confirmed / received)
   const refreshUntilChanged = useCallback(
     async (
-      prevWei: bigint | null,
+      asset: 'ETH' | 'USDC',
+      prevRaw: bigint | null,
       opts: { tries?: number; intervalMs?: number } = {}
     ): Promise<void> => {
       const maxTries = opts.tries ?? 5;
@@ -274,7 +276,8 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
 
       for (let i = 0; i < maxTries; i++) {
         await refresh({ force: true });
-        if (prevWei !== null && ethWeiRef.current !== null && ethWeiRef.current !== prevWei) {
+        const currentRaw = asset === 'ETH' ? ethWeiRef.current : usdcRawRef.current;
+        if (prevRaw !== null && currentRaw !== null && currentRaw !== prevRaw) {
           break;
         }
         if (i < maxTries - 1) {
@@ -310,6 +313,15 @@ export function BalanceProvider({ walletAddress, isDemoMode, children }: Balance
             maximumFractionDigits: 2,
           });
           setUsdc({ value: formattedUsdc, status: 'idle', updatedAt: now, error: null });
+        }
+        if (estimatedGasWei && estimatedGasWei > 0n) {
+          const currentEth = ethWeiRef.current;
+          if (currentEth !== null) {
+            const newEthWei = currentEth > estimatedGasWei ? currentEth - estimatedGasWei : 0n;
+            setEthWei(newEthWei);
+            const formattedEth = formatEthBalance(newEthWei);
+            setEth({ value: formattedEth, status: 'idle', updatedAt: now, error: null });
+          }
         }
       } else {
         const currentEth = ethWeiRef.current;
