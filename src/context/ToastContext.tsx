@@ -26,9 +26,15 @@ export interface ActiveToast {
 export interface StoredToastNotification {
   id: string;
   kind: ToastKind;
+  title?: string;
   message: string;
   created_at: string;
   read: boolean;
+  tx_hash?: string;
+  amount?: string;
+  asset?: string;
+  counterparty?: string;
+  type?: 'incoming_tx' | 'outgoing_tx' | 'system';
 }
 
 interface ToastTimerRecord {
@@ -51,6 +57,14 @@ export interface ToastContextType {
   dismissToast: (id: string) => void;
   pauseToast: (id: string) => void;
   resumeToast: (id: string) => void;
+  addNotification: (
+    entry: Omit<StoredToastNotification, 'id' | 'created_at' | 'read'> & {
+      id?: string;
+      created_at?: string;
+      read?: boolean;
+    }
+  ) => void;
+  markNotificationRead: (id: string) => void;
   markAllRead: () => void;
   clearAll: () => void;
 }
@@ -65,6 +79,22 @@ function getStorageKey(storageId?: string | null): string | null {
   return `pukico.notifications.${storageId.toLowerCase()}`;
 }
 
+const DEMO_INITIAL_NOTIFICATIONS: StoredToastNotification[] = [
+  {
+    id: 'demo-notif-initial-1',
+    kind: 'success',
+    type: 'incoming_tx',
+    title: 'Incoming Transfer',
+    message: 'Received 0.02 ETH from @rina',
+    amount: '0.02',
+    asset: 'ETH',
+    counterparty: 'rina',
+    tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    created_at: new Date(Date.now() - 51 * 60 * 1000).toISOString(),
+    read: false,
+  },
+];
+
 function loadStoredNotifications(storageId?: string | null): StoredToastNotification[] {
   if (typeof window === 'undefined') return [];
   const key = getStorageKey(storageId);
@@ -72,7 +102,14 @@ function loadStoredNotifications(storageId?: string | null): StoredToastNotifica
 
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return [];
+    if (!raw) {
+      // If demo mode wallet, seed initial unread incoming transfer
+      if (storageId.toLowerCase() === '0x1111111111111111111111111111111111111111') {
+        localStorage.setItem(key, JSON.stringify(DEMO_INITIAL_NOTIFICATIONS));
+        return DEMO_INITIAL_NOTIFICATIONS;
+      }
+      return [];
+    }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       return parsed.slice(0, MAX_STORED_NOTIFICATIONS);
@@ -226,6 +263,7 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
           message,
           created_at: new Date().toISOString(),
           read: false,
+          type: 'system',
         };
 
         setNotifications((prev) => {
@@ -238,6 +276,80 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
     [storageId, dismissToast]
   );
 
+  const addNotification = useCallback(
+    (
+      entry: Omit<StoredToastNotification, 'id' | 'created_at' | 'read'> & {
+        id?: string;
+        created_at?: string;
+        read?: boolean;
+      }
+    ) => {
+      if (!storageId) return;
+
+      setNotifications((prev) => {
+        // Prevent duplicate if tx_hash already exists
+        if (
+          entry.tx_hash &&
+          prev.some((n) => n.tx_hash && n.tx_hash.toLowerCase() === entry.tx_hash?.toLowerCase())
+        ) {
+          return prev;
+        }
+
+        // Prevent duplicate by custom id if provided
+        if (entry.id && prev.some((n) => n.id === entry.id)) {
+          return prev;
+        }
+
+        const newId = entry.id || `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const newItem: StoredToastNotification = {
+          id: newId,
+          kind: entry.kind,
+          title: entry.title,
+          message: entry.message,
+          created_at: entry.created_at || new Date().toISOString(),
+          read: entry.read ?? false,
+          tx_hash: entry.tx_hash,
+          amount: entry.amount,
+          asset: entry.asset,
+          counterparty: entry.counterparty,
+          type: entry.type || 'system',
+        };
+
+        const updated = [newItem, ...prev].slice(0, MAX_STORED_NOTIFICATIONS);
+        saveStoredNotifications(storageId, updated);
+        return updated;
+      });
+    },
+    [storageId]
+  );
+
+  const markNotificationRead = useCallback(
+    (id: string) => {
+      if (!storageId) return;
+      setNotifications((prev) => {
+        const updated = prev.map((item) => (item.id === id ? { ...item, read: true } : item));
+        saveStoredNotifications(storageId, updated);
+        return updated;
+      });
+    },
+    [storageId]
+  );
+
+  const markAllRead = useCallback(() => {
+    if (!storageId) return;
+    setNotifications((prev) => {
+      const updated = prev.map((item) => ({ ...item, read: true }));
+      saveStoredNotifications(storageId, updated);
+      return updated;
+    });
+  }, [storageId]);
+
+  const clearAll = useCallback(() => {
+    if (!storageId) return;
+    setNotifications([]);
+    saveStoredNotifications(storageId, []);
+  }, [storageId]);
+
   const toast = useMemo(
     () => ({
       success: (msg: string, opts?: ToastOptions) => addToast('success', msg, opts),
@@ -247,19 +359,6 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
     }),
     [addToast]
   );
-
-  const markAllRead = useCallback(() => {
-    setNotifications((prev) => {
-      const updated = prev.map((item) => ({ ...item, read: true }));
-      saveStoredNotifications(storageId, updated);
-      return updated;
-    });
-  }, [storageId]);
-
-  const clearAll = useCallback(() => {
-    setNotifications([]);
-    saveStoredNotifications(storageId, []);
-  }, [storageId]);
 
   const unreadCount = useMemo(() => {
     return notifications.filter((n) => !n.read).length;
@@ -285,6 +384,8 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
         dismissToast,
         pauseToast,
         resumeToast,
+        addNotification,
+        markNotificationRead,
         markAllRead,
         clearAll,
       }}

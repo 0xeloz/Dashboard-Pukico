@@ -6,6 +6,8 @@ import {
   DEMO_TXS,
 } from '../lib/txApi';
 import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
+import { useT } from '../i18n';
 
 export type TxFetchStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -14,6 +16,7 @@ export interface TxContextType {
   status: TxFetchStatus;
   refreshing: boolean;
   refresh: () => Promise<void>;
+  simulateIncomingTx: (asset?: 'USDC' | 'ETH', amount?: string, sender?: string) => void;
   isDemoMode: boolean;
 }
 
@@ -62,6 +65,8 @@ interface TxProviderProps {
 
 export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderProps) {
   const { getAccessToken } = useAuth();
+  const { addNotification, toast } = useToast();
+  const { t } = useT();
 
   // Initial cached data read
   const initialCache = useRef<StoredTxData | null>(
@@ -91,6 +96,59 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
 
   const txsRef = useRef(txs);
   txsRef.current = txs;
+
+  const knownTxHashesRef = useRef<Set<string>>(new Set(txs.map((t) => t.tx_hash.toLowerCase())));
+  const isInitialLoadRef = useRef<boolean>(true);
+
+  // Synchronize incoming transactions with notifications
+  const syncIncomingNotifications = useCallback(
+    (txList: TxRecord[], isFirstCheck: boolean) => {
+      for (const tx of txList) {
+        const isIncoming = tx.direction === 'in' || tx.direction === 'incoming';
+        if (!isIncoming) continue;
+
+        const hashKey = tx.tx_hash.toLowerCase();
+        const isNew = !knownTxHashesRef.current.has(hashKey);
+
+        const sender = tx.counterparty || tx.from_pukico_id || 'rina';
+        const notifMsg = t.notifications.receivedTransfer
+          .replace('{amount}', tx.amount)
+          .replace('{asset}', tx.asset)
+          .replace('{sender}', sender.replace(/^@/, ''));
+
+        // If new incoming transaction discovered during live polling, pop toast banner
+        if (isNew && !isFirstCheck) {
+          toast.success(notifMsg);
+        }
+
+        // Add to persistent notifications log
+        addNotification({
+          id: `tx-in-${tx.tx_hash.slice(0, 16)}`,
+          kind: 'success',
+          type: 'incoming_tx',
+          title: t.notifications.incomingTransferTitle,
+          message: notifMsg,
+          amount: tx.amount,
+          asset: tx.asset,
+          counterparty: sender.replace(/^@/, ''),
+          tx_hash: tx.tx_hash,
+          created_at: tx.confirmed_at || tx.created_at || new Date().toISOString(),
+          read: false,
+        });
+
+        knownTxHashesRef.current.add(hashKey);
+      }
+    },
+    [t, toast, addNotification]
+  );
+
+  // Sync initial incoming transactions (including demo mode initial)
+  useEffect(() => {
+    if (txs.length > 0) {
+      syncIncomingNotifications(txs, isInitialLoadRef.current);
+      isInitialLoadRef.current = false;
+    }
+  }, [txs, syncIncomingNotifications]);
 
   const refresh = useCallback(async (): Promise<void> => {
     if (isDemoMode) {
@@ -138,6 +196,8 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
               txs: listRes.txs,
               updatedAt: now,
             });
+            syncIncomingNotifications(listRes.txs, isInitialLoadRef.current);
+            isInitialLoadRef.current = false;
           } else {
             if (txsRef.current.length === 0) {
               setStatus('error');
@@ -160,7 +220,52 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
 
     inFlightPromiseRef.current = promise;
     return promise;
-  }, [isDemoMode, getAccessToken]);
+  }, [isDemoMode, getAccessToken, syncIncomingNotifications]);
+
+  // Simulate an incoming transfer (for testing / demo)
+  const simulateIncomingTx = useCallback(
+    (asset: 'USDC' | 'ETH' = 'USDC', amount = '10.00', sender = 'rina') => {
+      const mockHash = `0xsim${Date.now()}${Math.random().toString(16).slice(2, 10)}${'0'.repeat(40)}`.slice(0, 66);
+      const newTx: TxRecord = {
+        tx_hash: mockHash,
+        direction: 'in',
+        asset,
+        amount,
+        counterparty: sender,
+        from_pukico_id: sender,
+        status: 'confirmed',
+        created_at: new Date().toISOString(),
+        confirmed_at: new Date().toISOString(),
+        explorer_url: `https://sepolia.basescan.org/tx/${mockHash}`,
+      };
+
+      setTxs((prev) => [newTx, ...prev]);
+
+      const msg = t.notifications.receivedTransfer
+        .replace('{amount}', amount)
+        .replace('{asset}', asset)
+        .replace('{sender}', sender);
+
+      toast.success(msg);
+
+      addNotification({
+        id: `tx-in-${mockHash.slice(0, 16)}`,
+        kind: 'success',
+        type: 'incoming_tx',
+        title: t.notifications.incomingTransferTitle,
+        message: msg,
+        amount,
+        asset,
+        counterparty: sender,
+        tx_hash: mockHash,
+        created_at: new Date().toISOString(),
+        read: false,
+      });
+
+      knownTxHashesRef.current.add(mockHash.toLowerCase());
+    },
+    [t, toast, addNotification]
+  );
 
   // Initial mount fetch
   useEffect(() => {
@@ -225,6 +330,7 @@ export function TxProvider({ walletAddress, isDemoMode, children }: TxProviderPr
         status,
         refreshing,
         refresh,
+        simulateIncomingTx,
         isDemoMode,
       }}
     >

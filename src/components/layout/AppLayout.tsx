@@ -295,15 +295,18 @@ export function AppLayout({
                   type="button"
                   onClick={() => setIsNotificationOpen(true)}
                   className="w-9 h-9 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#EEF4FF] transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
-                  aria-label={t.notifications.title}
+                  aria-label={`${t.notifications.title}${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
                 >
                   <Bell className="w-4 h-4" />
                 </button>
                 {unreadCount > 0 && (
                   <span
                     aria-hidden="true"
-                    className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-[#0052FF] ring-2 ring-white pointer-events-none"
-                  />
+                    className="absolute top-0 right-0 flex h-2.5 w-2.5 pointer-events-none"
+                  >
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0052FF] opacity-60" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#0052FF] ring-2 ring-white" />
+                  </span>
                 )}
               </div>
             </div>
