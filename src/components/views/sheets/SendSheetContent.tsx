@@ -681,12 +681,18 @@ export function SendSheetContent({
       ? estimatedFeeWei
       : getDefaultPerTxGasWei(selectedAsset);
 
+  const feeActive = isFeeActive(isDemoMode) && !isFeeExempt;
+  const ethMinTxCount = feeActive ? 2n : 1n;
+  const ethGasNeeded = computeGasReserve(perTxGasWei, ethMinTxCount);
+  const isEthBalanceTooLow =
+    selectedAsset === 'ETH' && balances !== null && balances.eth <= ethGasNeeded;
+
   const ethRequiredWei = computeEthRequirement({
     asset: selectedAsset,
     amountUnits,
     feeUnits,
     perTxGasWei,
-    feeActive: isFeeActive(isDemoMode) && !isFeeExempt,
+    feeActive,
   });
 
   // Insufficient ETH check: ONLY when balances is known AND ETH < required
@@ -983,6 +989,10 @@ export function SendSheetContent({
       return { valid: false, errorKey: 'loadingBalance' };
     }
 
+    if (selectedAsset === 'ETH' && isEthBalanceTooLow) {
+      return { valid: false, errorKey: 'insufficientEthFees' };
+    }
+
     if (!amountInput || amountInput.trim() === '') {
       return { valid: false, errorKey: 'enterAmountPlaceholder' };
     }
@@ -1052,7 +1062,7 @@ export function SendSheetContent({
 
         if (parsed <= 10000n) {
           parsed = 0n;
-          formatted = '0.00';
+          formatted = '';
           break;
         }
 
@@ -1063,11 +1073,21 @@ export function SendSheetContent({
         parsed = parseAmountUnits(formatted, 'USDC');
       }
 
+      if (parsed <= 0n) {
+        return;
+      }
+
       setAmountInput(formatted);
     } else {
       const initialTxCount = feeActive ? 2n : 1n;
       const initialGasReserve = computeGasReserve(ceilingWei, initialTxCount);
+      if (balances.eth <= initialGasReserve) {
+        return;
+      }
       let maxUnits = computeMaxSendable(balances.eth, feeBps, initialGasReserve, isFeeExempt, 'ETH');
+      if (maxUnits <= 0n) {
+        return;
+      }
 
       let formatted = formatUnitsTrimmed(maxUnits, 18, 8);
       let parsed = parseAmountUnits(formatted, 'ETH');
@@ -1094,13 +1114,17 @@ export function SendSheetContent({
         const step = diff > 10000000000n ? diff : 10000000000n;
         if (parsed <= step) {
           parsed = 0n;
-          formatted = '0';
+          formatted = '';
           break;
         }
 
         parsed -= step;
         formatted = formatUnitsTrimmed(parsed, 18, 8);
         parsed = parseAmountUnits(formatted, 'ETH');
+      }
+
+      if (parsed <= 0n) {
+        return;
       }
 
       setAmountInput(formatted);
@@ -1812,12 +1836,21 @@ export function SendSheetContent({
       )}
 
       {/* Prerequisite 2: Insufficient ETH for Gas Fee Notice (Dynamic, only in input amount and review steps) */}
-      {isInsufficientEth && !isWalletUnverified && balances !== null && (step === 3 || step === 4) && (
+      {(isInsufficientEth || isEthBalanceTooLow) && !isWalletUnverified && balances !== null && (step === 3 || step === 4) && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309]">
           <div className="flex items-start gap-1.5 min-w-0">
             <AlertCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0 mt-0.5" />
             <span className="leading-snug font-medium">
               {(() => {
+                if (selectedAsset === 'ETH' && isEthBalanceTooLow) {
+                  const template =
+                    ethMinTxCount === 2n
+                      ? t.sheets.send.insufficientEthFees
+                      : (t.sheets.send.insufficientEthFeesSingle || t.sheets.send.insufficientEthFees);
+                  return template
+                    .replace('{needed}', fmt.ethBalance(ethGasNeeded))
+                    .replace('{balance}', fmt.ethBalance(balances.eth));
+                }
                 const txCount = isFeeActive(isDemoMode) && !isFeeExempt && feeUnits > 0n ? 2n : 1n;
                 const template =
                   selectedAsset === 'ETH'
@@ -2108,9 +2141,9 @@ export function SendSheetContent({
             </span>
             <button
               type="button"
-              disabled={balances === null}
+              disabled={balances === null || (selectedAsset === 'ETH' && isEthBalanceTooLow)}
               onClick={handleMaxAmount}
-              className="px-2 py-0.5 rounded-md bg-[#EEF4FF] hover:bg-[#BFDBFE] text-[#0052FF] font-semibold text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-2 py-0.5 rounded-md bg-[#EEF4FF] hover:bg-[#BFDBFE] text-[#0052FF] font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {t.sheets.send.maxBtn}
             </button>
@@ -2138,6 +2171,14 @@ export function SendSheetContent({
                   <span className="text-[#DC2626]">
                     {amountValidation.errorKey === 'loadingBalance'
                       ? t.sheets.send.loadingBalance
+                      : amountValidation.errorKey === 'insufficientEthFees'
+                      ? (balances !== null
+                          ? (ethMinTxCount === 2n
+                              ? t.sheets.send.insufficientEthFees
+                              : (t.sheets.send.insufficientEthFeesSingle || t.sheets.send.insufficientEthFees))
+                              .replace('{needed}', fmt.ethBalance(ethGasNeeded))
+                              .replace('{balance}', fmt.ethBalance(balances.eth))
+                          : '')
                       : amountValidation.errorKey === 'notEnoughAsset'
                       ? t.sheets.send.notEnoughAsset.replace('{asset}', selectedAsset)
                       : amountValidation.errorKey === 'needEthForFees'
@@ -2179,7 +2220,7 @@ export function SendSheetContent({
           <div className="pt-2">
             <button
               type="button"
-              disabled={!amountValidation.valid || isInsufficientEth || balances === null || !hasBetaAccess}
+              disabled={!amountValidation.valid || isInsufficientEth || isEthBalanceTooLow || balances === null || !hasBetaAccess}
               onClick={() => {
                 setSendFailedBeforeHash(false);
                 setSecurityError(null);
