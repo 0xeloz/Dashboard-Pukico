@@ -12,7 +12,7 @@ import {
   ChevronUp,
   Fingerprint,
 } from 'lucide-react';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, isAddress, encodeFunctionData, erc20Abi } from 'viem';
 import { useAuth } from '../../../context/AuthContext';
 import { useBalance } from '../../../context/BalanceContext';
 import { useTx } from '../../../context/TxContext';
@@ -296,10 +296,9 @@ export function SendSheetContent({
 
   // Step 3: Amount & Fees
   const [amountInput, setAmountInput] = useState<string>('');
-  const [estimatedFeeEth, setEstimatedFeeEth] = useState<string | null>(null);
-  const [estimatedFeeWei, setEstimatedFeeWei] = useState<bigint | null>(null);
+  const [estimatedFeeWei, setEstimatedFeeWei] = useState<bigint | null>(null); // perTxCeilingWei
+  const [perTxExpectedWei, setPerTxExpectedWei] = useState<bigint | null>(null); // perTxExpectedWei
   const [isEstimatingFee, setIsEstimatingFee] = useState<boolean>(false);
-  const feeEstimateDebounceRef = useRef<number | null>(null);
 
   // Step 4: Large transfer confirmation & security states
   const [largeTransferInput, setLargeTransferInput] = useState<string>('');
@@ -413,7 +412,7 @@ export function SendSheetContent({
       const neededFee = BigInt(feeRecord.feeUnits);
       const gasPrice = await getGasPriceCeiling(publicClient as any).catch(() => 2000000000n);
       const feeGasLimit = feeRecord.asset === 'ETH' ? 21000n : 65000n;
-      const gasWei = (feeGasLimit * gasPrice * 125n) / 100n;
+      const gasWei = computeGasReserve(feeGasLimit * gasPrice, 1n);
 
       const sufficient =
         feeRecord.asset === 'USDC'
@@ -560,7 +559,7 @@ export function SendSheetContent({
   const amountUnits = parseAmountUnits(amountInput, selectedAsset);
   const feeUnits = computeServiceFee(amountUnits, feeBps, isFeeExempt, selectedAsset);
 
-  // Single source of truth for required ETH: gas for 1 or 2 transactions (with 25% buffer) + optional ETH transfer and fee
+  // Single source of truth for required ETH: gas for 1 or 2 transactions (ceiling) + optional ETH transfer and fee
   const perTxGasWei =
     estimatedFeeWei && estimatedFeeWei > 0n
       ? estimatedFeeWei
@@ -577,6 +576,11 @@ export function SendSheetContent({
   // Insufficient ETH check: ONLY when balances is known AND ETH < required
   const isInsufficientEth =
     balances !== null && balances.eth < ethRequiredWei;
+
+  // Realistic total expected fee displayed to user: perTxExpectedWei x txCount
+  const txCount = isFeeActive(isDemoMode) && !isFeeExempt && feeUnits > 0n ? 2n : 1n;
+  const totalExpectedGasWei = perTxExpectedWei ? perTxExpectedWei * txCount : null;
+  const estimatedFeeEth = totalExpectedGasWei ? formatEthFee(totalExpectedGasWei) : null;
 
   // Large transfer threshold check
   const isLargeTransfer = amountUnits >= LARGE_TRANSFER_THRESHOLD[selectedAsset];
@@ -722,57 +726,93 @@ export function SendSheetContent({
     })();
   };
 
-  // Fee Estimation with gas consideration for both transactions if fee is active
+  // Fee Estimation for a SINGLE transaction:
+  // Stores (a) perTxCeilingWei (in estimatedFeeWei) and (b) perTxExpectedWei
   const calculateFee = useCallback(
-    async (asset: AssetType, targetAddr: string, valStr: string) => {
+    async (asset: AssetType, targetAddr?: string, valStr?: string) => {
       setIsEstimatingFee(true);
       try {
-        const maxFeePerGas = await getGasPriceCeiling(publicClient as any);
         let gasLimit = asset === 'ETH' ? 21000n : 65000n;
 
-        // If service fee will be sent in a second transaction, account for second transfer gas
-        const willSendFeeTx = isFeeActive(isDemoMode) && !isFeeExempt && feeUnits > 0n;
-        const feeTxGas = asset === 'ETH' ? 21000n : 65000n;
+        // Gas limit: pakai publicClient.estimateGas untuk transfer sebenarnya
+        // (ke alamat penerima, nilai/ data sesungguhnya) dikali 1,2;
+        // jika estimateGas gagal, fallback ke 21000 (ETH) atau 65000 (USDC).
+        const sender = profile?.wallet_address as `0x${string}` | undefined;
+        const recipient = (targetAddr || resolvedRecipient?.address) as `0x${string}` | undefined;
 
-        const totalGasLimit = gasLimit + (willSendFeeTx ? feeTxGas : 0n);
-        const totalWei = totalGasLimit * maxFeePerGas;
+        if (sender && recipient && isAddress(recipient)) {
+          try {
+            let estimated: bigint;
+            if (asset === 'ETH') {
+              const valUnits = valStr ? parseAmountUnits(valStr, 'ETH') : 0n;
+              estimated = await (publicClient as any).estimateGas({
+                account: sender,
+                to: recipient,
+                value: valUnits > 0n ? valUnits : 1n,
+              });
+            } else {
+              const valUnits = valStr ? parseAmountUnits(valStr, 'USDC') : 0n;
+              const data = encodeFunctionData({
+                abi: erc20Abi,
+                functionName: 'transfer',
+                args: [recipient, valUnits > 0n ? valUnits : 1000000n],
+              });
+              estimated = await (publicClient as any).estimateGas({
+                account: sender,
+                to: BASE_SEPOLIA_USDC_ADDRESS as `0x${string}`,
+                data,
+              });
+            }
+            if (estimated && estimated > 0n) {
+              gasLimit = (estimated * 120n) / 100n;
+            }
+          } catch {
+            // estimateGas gagal -> fallback ke 21000 (ETH) atau 65000 (USDC)
+            gasLimit = asset === 'ETH' ? 21000n : 65000n;
+          }
+        }
 
-        setEstimatedFeeWei(totalWei);
-        setEstimatedFeeEth(formatEthFee(totalWei));
+        // Simpan dua nilai per transaksi:
+        // (a) perTxCeilingWei = gasLimit x maxFeePerGas (batas atas, hanya untuk pengecekan syarat saldo, tanpa buffer tambahan 25% karena sudah batas atas)
+        // (b) perTxExpectedWei = gasLimit x harga gas saat ini (baseFee/gasPrice dari jaringan, bukan ceiling) untuk ditampilkan ke pengguna sebagai "Sekitar"
+        const [feeData, curGasPrice] = await Promise.all([
+          (publicClient as any).estimateFeesPerGas().catch(() => null),
+          (publicClient as any).getGasPrice().catch(() => null),
+        ]);
+
+        const maxFeePerGas = feeData?.maxFeePerGas ?? feeData?.gasPrice ?? curGasPrice ?? 2000000000n;
+        const gasPrice = curGasPrice ?? feeData?.gasPrice ?? feeData?.maxPriorityFeePerGas ?? maxFeePerGas;
+
+        const ceilingWei = gasLimit * maxFeePerGas;
+        const expectedWei = gasLimit * gasPrice;
+
+        setEstimatedFeeWei(ceilingWei);
+        setPerTxExpectedWei(expectedWei);
+
+        return { ceilingWei, expectedWei };
       } catch {
         const fallbackGas = asset === 'ETH' ? 21000n : 65000n;
-        const fallbackWei = fallbackGas * 2000000000n;
-        setEstimatedFeeWei(fallbackWei);
-        setEstimatedFeeEth(null);
+        const fallbackCeiling = fallbackGas * 2000000000n;
+        const fallbackExpected = fallbackGas * 2000000000n;
+        setEstimatedFeeWei(fallbackCeiling);
+        setPerTxExpectedWei(fallbackExpected);
+        return { ceilingWei: fallbackCeiling, expectedWei: fallbackExpected };
       } finally {
         setIsEstimatingFee(false);
       }
     },
-    [isDemoMode, isFeeExempt, feeUnits]
+    [profile?.wallet_address, resolvedRecipient?.address]
   );
 
+  // Hitung ulang taksiran saat sheet dibuka dan saat aset berganti, bukan setiap perubahan jumlah.
   useEffect(() => {
-    if (step === 3 && resolvedRecipient?.address) {
-      if (feeEstimateDebounceRef.current) {
-        window.clearTimeout(feeEstimateDebounceRef.current);
-      }
-      feeEstimateDebounceRef.current = window.setTimeout(() => {
-        calculateFee(selectedAsset, resolvedRecipient.address, amountInput);
-      }, 500);
-    }
-
-    return () => {
-      if (feeEstimateDebounceRef.current) {
-        window.clearTimeout(feeEstimateDebounceRef.current);
-      }
-    };
-  }, [step, selectedAsset, resolvedRecipient?.address, amountInput, calculateFee]);
+    calculateFee(selectedAsset, resolvedRecipient?.address);
+  }, [selectedAsset, resolvedRecipient?.address, calculateFee]);
 
   // Clean up timers on unmount
   useEffect(() => {
     return () => {
       if (resolveDebounceRef.current) window.clearTimeout(resolveDebounceRef.current);
-      if (feeEstimateDebounceRef.current) window.clearTimeout(feeEstimateDebounceRef.current);
       if (resolveControllerRef.current) resolveControllerRef.current.abort();
     };
   }, []);
@@ -812,23 +852,98 @@ export function SendSheetContent({
   const amountValidation = validateAmount();
 
   // Max Button handler leaving room for service fee and ETH gas
-  const handleMaxAmount = () => {
+  const handleMaxAmount = async () => {
     if (!balances) return;
+
+    // Bila taksiran gas belum tersedia saat Maks ditekan, tunggu/hitung dulu (isEstimatingFee) sebelum mengisi jumlah, jangan memakai nilai default 2 gwei.
+    let ceilingWei = estimatedFeeWei;
+    if (ceilingWei === null || ceilingWei === 0n || isEstimatingFee) {
+      const res = await calculateFee(selectedAsset, resolvedRecipient?.address, amountInput);
+      ceilingWei = res.ceilingWei;
+    }
+    if (!ceilingWei || ceilingWei === 0n) {
+      ceilingWei = getDefaultPerTxGasWei(selectedAsset);
+    }
+
+    const feeActive = isFeeActive(isDemoMode) && !isFeeExempt;
+
     if (selectedAsset === 'USDC') {
-      const maxUnits = computeMaxSendable(balances.usdc, feeBps, 0n, isFeeExempt, 'USDC');
-      const full = formatUnits(maxUnits, 6);
-      const [intP, decP = ''] = full.split('.');
-      setAmountInput(`${intP}.${decP.padEnd(2, '0').slice(0, 2)}`);
+      let maxUnits = computeMaxSendable(balances.usdc, feeBps, 0n, isFeeExempt, 'USDC');
+      let full = formatUnits(maxUnits, 6);
+      let [intP, decP = ''] = full.split('.');
+      let formatted = `${intP}.${decP.padEnd(2, '0').slice(0, 2)}`;
+      let parsed = parseAmountUnits(formatted, 'USDC');
+
+      // Verifikasi dengan computeEthRequirement <= saldo ETH dan total USDC <= saldo USDC
+      // Kurangi jumlah (langkah 0,01 untuk USDC = 10000 units) sampai lolos atau 0
+      while (parsed > 0n) {
+        const fee = computeServiceFee(parsed, feeBps, isFeeExempt, 'USDC');
+        const reqEth = computeEthRequirement({
+          asset: 'USDC',
+          amountUnits: parsed,
+          feeUnits: fee,
+          perTxGasWei: ceilingWei,
+          feeActive,
+        });
+
+        if (reqEth <= balances.eth && parsed + fee <= balances.usdc) {
+          break;
+        }
+
+        if (parsed <= 10000n) {
+          parsed = 0n;
+          formatted = '0.00';
+          break;
+        }
+
+        parsed -= 10000n;
+        const nextFull = formatUnits(parsed, 6);
+        const [nextIp, nextDp = ''] = nextFull.split('.');
+        formatted = `${nextIp}.${nextDp.padEnd(2, '0').slice(0, 2)}`;
+        parsed = parseAmountUnits(formatted, 'USDC');
+      }
+
+      setAmountInput(formatted);
     } else {
-      const perTxGas =
-        estimatedFeeWei && estimatedFeeWei > 0n
-          ? estimatedFeeWei
-          : getDefaultPerTxGasWei('ETH');
-      const feeActive = isFeeActive(isDemoMode) && !isFeeExempt;
-      const txCount = feeActive ? 2n : 1n;
-      const gasReserve = computeGasReserve(perTxGas, txCount);
-      const maxUnits = computeMaxSendable(balances.eth, feeBps, gasReserve, isFeeExempt, 'ETH');
-      setAmountInput(formatUnitsTrimmed(maxUnits, 18, 8));
+      const initialTxCount = feeActive ? 2n : 1n;
+      const initialGasReserve = computeGasReserve(ceilingWei, initialTxCount);
+      let maxUnits = computeMaxSendable(balances.eth, feeBps, initialGasReserve, isFeeExempt, 'ETH');
+
+      let formatted = formatUnitsTrimmed(maxUnits, 18, 8);
+      let parsed = parseAmountUnits(formatted, 'ETH');
+
+      // Verifikasi dengan computeEthRequirement(amount, computeServiceFee(amount), perTxGasWei, feeActive) <= saldo ETH;
+      // bila belum lolos, kurangi jumlah (langkah 1 unit untuk ETH) sampai lolos atau 0.
+      while (parsed > 0n) {
+        const fee = computeServiceFee(parsed, feeBps, isFeeExempt, 'ETH');
+        const reqEth = computeEthRequirement({
+          asset: 'ETH',
+          amountUnits: parsed,
+          feeUnits: fee,
+          perTxGasWei: ceilingWei,
+          feeActive,
+        });
+
+        if (reqEth <= balances.eth) {
+          break;
+        }
+
+        // Reduce amount step by step until passing or 0
+        const diff = reqEth - balances.eth;
+        // In 8-decimal representation, the step is 10^10 wei (0.00000001 ETH)
+        const step = diff > 10000000000n ? diff : 10000000000n;
+        if (parsed <= step) {
+          parsed = 0n;
+          formatted = '0';
+          break;
+        }
+
+        parsed -= step;
+        formatted = formatUnitsTrimmed(parsed, 18, 8);
+        parsed = parseAmountUnits(formatted, 'ETH');
+      }
+
+      setAmountInput(formatted);
     }
   };
 
@@ -1033,17 +1148,13 @@ export function SendSheetContent({
 
     if (!isDemoMode) {
       try {
-        const estimatedGas = await simulateTransfer(
+        await simulateTransfer(
           publicClient as any,
           snapshot.senderAddress,
           mainTxRequest
         );
-        const gasCeiling = await getGasPriceCeiling(publicClient as any);
-        const totalGasWei = estimatedGas * gasCeiling;
-        const requiredEth =
-          snapshot.asset === 'ETH' ? snapshot.amountUnits + snapshot.feeUnits + totalGasWei : totalGasWei;
 
-        if (freshBals.eth < requiredEth) {
+        if (freshBals.eth < freshEthRequired) {
           setSecurityError(t.sheets.send.insufficientFundsOrGas);
           toast.error(t.toast.insufficientFunds);
           setStep(3);
@@ -1219,9 +1330,7 @@ export function SendSheetContent({
       try {
         const freshAfterMain = await fetchExactBalances(snapshot.senderAddress);
         setBalances(freshAfterMain);
-        const gasCeiling = await getGasPriceCeiling(publicClient as any).catch(() => 2000000000n);
-        const feeGasLimit = snapshot.asset === 'ETH' ? 21000n : 65000n;
-        const feeGasWei = (feeGasLimit * gasCeiling * 125n) / 100n;
+        const feeGasWei = computeGasReserve(currentPerTxGas, 1n);
 
         if (snapshot.asset === 'ETH') {
           if (freshAfterMain.eth < snapshot.feeUnits + feeGasWei) {

@@ -97,11 +97,11 @@ export function getDefaultPerTxGasWei(asset: 'USDC' | 'ETH'): bigint {
 }
 
 /**
- * Compute the required gas reserve for txCount transactions with a 25% safety buffer.
- * Buffer 25% is required because the EVM network verifies maximum upper-bound gas fees upfront.
+ * Compute the required gas reserve for txCount transactions.
+ * Uses 100% of perTxGasWei (perTxCeilingWei) without additional buffer since ceiling already represents the upper bound.
  */
 export function computeGasReserve(perTxGasWei: bigint, txCount: bigint): bigint {
-  return (perTxGasWei * txCount * 125n) / 100n;
+  return perTxGasWei * txCount;
 }
 
 export interface ComputeEthRequirementParams {
@@ -115,7 +115,7 @@ export interface ComputeEthRequirementParams {
 /**
  * Single source of truth for total ETH needed for transfer, Pukico service fee, and gas.
  * txCount = (feeActive && feeUnits > 0n) ? 2n : 1n
- * gasReserve = (perTxGasWei * txCount * 125n) / 100n
+ * gasReserve = perTxGasWei * txCount
  * asset 'ETH' -> amountUnits + feeUnits + gasReserve
  * asset 'USDC' -> gasReserve
  */

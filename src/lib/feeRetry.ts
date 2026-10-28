@@ -1,5 +1,5 @@
 import { parseUnits } from 'viem';
-import { getTreasuryAddress, getFeeBps, computeServiceFee, removePendingFee } from './fees';
+import { getTreasuryAddress, getFeeBps, computeServiceFee, removePendingFee, computeGasReserve } from './fees';
 import {
   buildTransferRequest,
   extractHash,
@@ -119,7 +119,7 @@ export async function retryFeePayment({
     const freshBals = await fetchExactBalances(walletAddress);
     const gasPrice = await getGasPriceCeiling(publicClient as any).catch(() => 2000000000n);
     const gasLimit = tx.asset === 'ETH' ? 21000n : 65000n;
-    const gasWei = (gasLimit * gasPrice * 125n) / 100n;
+    const gasWei = computeGasReserve(gasLimit * gasPrice, 1n);
 
     if (tx.asset === 'ETH') {
       if (freshBals.eth < feeUnits + gasWei) {
