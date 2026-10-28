@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { LangProvider, useT } from './i18n';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BalanceProvider } from './context/BalanceContext';
@@ -369,6 +370,7 @@ export default function App() {
     <LangProvider>
       <AuthProvider>
         <Dashboard />
+        <Analytics />
       </AuthProvider>
     </LangProvider>
   );
