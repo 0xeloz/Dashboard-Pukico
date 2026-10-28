@@ -96,7 +96,11 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
       });
 
       if (res.ok && res.feeTxHash) {
-        toast.update('retry-fee-status', 'success', t.toast.feePaid, { silent: true });
+        toast.update('retry-fee-status', 'success', t.toast.feePaid, {
+          silent: true,
+          title: t.history.serviceFee,
+        });
+        toast.removeStoredNotification(`fee-failed:${currentTx.tx_hash}`);
         // Update local context immediately for instant feedback
         updateTxRecord(currentTx.tx_hash, {
           fee_status: 'paid',
@@ -104,12 +108,25 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
         });
         await refresh();
       } else if (res.error === 'user_rejected') {
-        toast.update('retry-fee-status', 'info', t.toast.sendCancelled);
+        toast.update('retry-fee-status', 'info', t.toast.sendCancelled, {
+          title: t.history.serviceFee,
+        });
+      } else if (res.error === 'insufficient_eth') {
+        toast.update('retry-fee-status', 'warning', t.toast.feeInsufficientEth, {
+          silent: true,
+          title: t.history.serviceFee,
+        });
       } else {
-        toast.update('retry-fee-status', 'error', t.toast.feeFailed);
+        toast.update('retry-fee-status', 'error', t.toast.feeFailed, {
+          silent: true,
+          title: t.history.serviceFee,
+        });
       }
     } catch {
-      toast.update('retry-fee-status', 'error', t.toast.feeFailed);
+      toast.update('retry-fee-status', 'error', t.toast.feeFailed, {
+        silent: true,
+        title: t.history.serviceFee,
+      });
     } finally {
       setIsPayingFee(false);
     }

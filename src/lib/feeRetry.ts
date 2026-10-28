@@ -1,6 +1,14 @@
 import { parseUnits } from 'viem';
 import { getTreasuryAddress, getFeeBps, computeServiceFee, removePendingFee } from './fees';
-import { buildTransferRequest, extractHash, isTxHash, type AssetType } from './txGuards';
+import {
+  buildTransferRequest,
+  extractHash,
+  isTxHash,
+  fetchExactBalances,
+  getGasPriceCeiling,
+  type AssetType,
+} from './txGuards';
+import { publicClient } from './viemClient';
 import { submitTxWithRetry, type TxRecord } from './txApi';
 
 export interface RetryFeePaymentParams {
@@ -106,6 +114,26 @@ export async function retryFeePayment({
     return { ok: false, error: 'Calculated fee amount is zero.' };
   }
 
+  // Pre-check on-chain fresh balance before attempting fee broadcast
+  try {
+    const freshBals = await fetchExactBalances(walletAddress);
+    const gasPrice = await getGasPriceCeiling(publicClient as any).catch(() => 2000000000n);
+    const gasLimit = tx.asset === 'ETH' ? 21000n : 65000n;
+    const gasWei = (gasLimit * gasPrice * 125n) / 100n;
+
+    if (tx.asset === 'ETH') {
+      if (freshBals.eth < feeUnits + gasWei) {
+        return { ok: false, error: 'insufficient_eth' };
+      }
+    } else {
+      if (freshBals.eth < gasWei || freshBals.usdc < feeUnits) {
+        return { ok: false, error: 'insufficient_eth' };
+      }
+    }
+  } catch {
+    // If balance check fails, allow attempt to proceed
+  }
+
   const feeTxRequest = buildTransferRequest(
     tx.asset as AssetType,
     treasuryAddress,
@@ -136,6 +164,18 @@ export async function retryFeePayment({
       if (isUserRejected(err)) {
         return { ok: false, error: 'user_rejected' };
       }
+
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isInsufficientFunds =
+        /insufficient funds/i.test(errMsg) ||
+        /exceeds.*balance/i.test(errMsg) ||
+        (err as any)?.name === 'InsufficientFundsError' ||
+        (err as any)?.cause?.name === 'InsufficientFundsError';
+
+      if (isInsufficientFunds) {
+        return { ok: false, error: 'insufficient_eth' };
+      }
+
       console.warn(`[feeRetry] Attempt ${attempt} failed:`, err);
     }
   }

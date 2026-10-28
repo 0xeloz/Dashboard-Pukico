@@ -19,6 +19,7 @@ export interface ToastOptions {
   title?: string;
   action?: ToastAction;
   id?: string;
+  dedupeKey?: string;
   persist?: boolean;
   silent?: boolean;
   duration?: number;
@@ -66,6 +67,7 @@ export interface ToastContextType {
   info: (message: string, options?: ToastOptions) => string;
   loading: (message: string, options?: ToastOptions) => string;
   update: (id: string, kind: ToastKind, message: string, options?: ToastOptions) => void;
+  removeStoredNotification: (idOrPrefix: string) => void;
   toast: {
     success: (message: string, options?: ToastOptions) => string;
     error: (message: string, options?: ToastOptions) => string;
@@ -73,6 +75,7 @@ export interface ToastContextType {
     info: (message: string, options?: ToastOptions) => string;
     loading: (message: string, options?: ToastOptions) => string;
     update: (id: string, kind: ToastKind, message: string, options?: ToastOptions) => void;
+    removeStoredNotification: (idOrPrefix: string) => void;
   };
   dismissToast: (id: string) => void;
   pauseToast: (id: string) => void;
@@ -321,8 +324,13 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
 
       // Save non-silent to local notifications log (exclude loading state)
       if (!isSilent && kind !== 'loading' && storageId) {
+        const notifId =
+          options?.dedupeKey ||
+          (options?.id && options.id.startsWith('fee-failed:') ? options.id : null) ||
+          `notif-${now}-${Math.random().toString(36).slice(2, 7)}`;
+
         const notifEntry: StoredToastNotification = {
-          id: `notif-${now}-${Math.random().toString(36).slice(2, 7)}`,
+          id: notifId,
           kind,
           message,
           messageKey: options?.messageKey,
@@ -332,7 +340,14 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
         };
 
         setNotifications((prev) => {
-          const updated = [notifEntry, ...prev].slice(0, MAX_STORED_NOTIFICATIONS);
+          const existingIdx = prev.findIndex((n) => n.id === notifId);
+          let updated: StoredToastNotification[];
+          if (existingIdx >= 0) {
+            updated = [...prev];
+            updated[existingIdx] = notifEntry;
+          } else {
+            updated = [notifEntry, ...prev].slice(0, MAX_STORED_NOTIFICATIONS);
+          }
           saveStoredNotifications(storageId, updated);
           return updated;
         });
@@ -372,12 +387,20 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
             });
           }
 
+          // Requirement 9: Overwrite title if explicitly passed or drop loading title when transitioning out of loading
+          const updatedTitle =
+            options?.title !== undefined
+              ? options.title
+              : prev[index].kind === 'loading' && kind !== 'loading'
+              ? undefined
+              : prev[index].title;
+
           const updated = [...prev];
           updated[index] = {
             id,
             kind,
             message,
-            title: options?.title ?? prev[index].title,
+            title: updatedTitle,
             action: options?.action ?? prev[index].action,
             duration,
             createdAt: now,
@@ -390,11 +413,18 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
         // If in queue, update it in queue
         const qIndex = queueRef.current.findIndex((t) => t.id === id);
         if (qIndex >= 0) {
+          const updatedTitle =
+            options?.title !== undefined
+              ? options.title
+              : queueRef.current[qIndex].kind === 'loading' && kind !== 'loading'
+              ? undefined
+              : queueRef.current[qIndex].title;
+
           queueRef.current[qIndex] = {
             id,
             kind,
             message,
-            title: options?.title ?? queueRef.current[qIndex].title,
+            title: updatedTitle,
             action: options?.action ?? queueRef.current[qIndex].action,
             duration,
             createdAt: now,
@@ -410,8 +440,14 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
 
       // Save to notification log if non-silent and non-loading
       if (!isSilent && kind !== 'loading' && storageId) {
+        const notifId =
+          options?.dedupeKey ||
+          (options?.id && options.id.startsWith('fee-failed:') ? options.id : null) ||
+          (id.startsWith('fee-failed:') ? id : null) ||
+          `notif-${now}-${Math.random().toString(36).slice(2, 7)}`;
+
         const notifEntry: StoredToastNotification = {
-          id: `notif-${now}-${Math.random().toString(36).slice(2, 7)}`,
+          id: notifId,
           kind,
           message,
           messageKey: options?.messageKey,
@@ -421,13 +457,35 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
         };
 
         setNotifications((prev) => {
-          const updated = [notifEntry, ...prev].slice(0, MAX_STORED_NOTIFICATIONS);
+          const existingIdx = prev.findIndex((n) => n.id === notifId);
+          let updated: StoredToastNotification[];
+          if (existingIdx >= 0) {
+            updated = [...prev];
+            updated[existingIdx] = notifEntry;
+          } else {
+            updated = [notifEntry, ...prev].slice(0, MAX_STORED_NOTIFICATIONS);
+          }
           saveStoredNotifications(storageId, updated);
           return updated;
         });
       }
     },
     [clearTimer, dismissToast, addToast, storageId]
+  );
+
+  const removeStoredNotification = useCallback(
+    (idOrPrefix: string) => {
+      setNotifications((prev) => {
+        const updated = prev.filter(
+          (n) => n.id !== idOrPrefix && !n.id.startsWith(idOrPrefix)
+        );
+        if (storageId) {
+          saveStoredNotifications(storageId, updated);
+        }
+        return updated;
+      });
+    },
+    [storageId]
   );
 
   const markAllRead = useCallback(() => {
@@ -461,8 +519,9 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
       info,
       loading,
       update,
+      removeStoredNotification,
     }),
-    [success, error, warning, info, loading, update]
+    [success, error, warning, info, loading, update, removeStoredNotification]
   );
 
   const unreadCount = useMemo(() => {
@@ -491,6 +550,7 @@ export function ToastProvider({ storageId, children }: ToastProviderProps) {
         info,
         loading,
         update,
+        removeStoredNotification,
         toast,
         dismissToast,
         pauseToast,

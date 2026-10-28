@@ -88,6 +88,49 @@ export function computeServiceFee(
   return fee > 0n ? fee : 1n;
 }
 
+export const DEFAULT_ETH_GAS_LIMIT = 21000n;
+export const DEFAULT_USDC_GAS_LIMIT = 65000n;
+export const DEFAULT_GAS_PRICE_WEI = 2000000000n; // 2 gwei fallback
+
+export function getDefaultPerTxGasWei(asset: 'USDC' | 'ETH'): bigint {
+  return (asset === 'ETH' ? DEFAULT_ETH_GAS_LIMIT : DEFAULT_USDC_GAS_LIMIT) * DEFAULT_GAS_PRICE_WEI;
+}
+
+/**
+ * Compute the required gas reserve for txCount transactions with a 25% safety buffer.
+ * Buffer 25% is required because the EVM network verifies maximum upper-bound gas fees upfront.
+ */
+export function computeGasReserve(perTxGasWei: bigint, txCount: bigint): bigint {
+  return (perTxGasWei * txCount * 125n) / 100n;
+}
+
+export interface ComputeEthRequirementParams {
+  asset: 'USDC' | 'ETH';
+  amountUnits: bigint;
+  feeUnits: bigint;
+  perTxGasWei: bigint;
+  feeActive: boolean;
+}
+
+/**
+ * Single source of truth for total ETH needed for transfer, Pukico service fee, and gas.
+ * txCount = (feeActive && feeUnits > 0n) ? 2n : 1n
+ * gasReserve = (perTxGasWei * txCount * 125n) / 100n
+ * asset 'ETH' -> amountUnits + feeUnits + gasReserve
+ * asset 'USDC' -> gasReserve
+ */
+export function computeEthRequirement({
+  asset,
+  amountUnits,
+  feeUnits,
+  perTxGasWei,
+  feeActive,
+}: ComputeEthRequirementParams): bigint {
+  const txCount = feeActive && feeUnits > 0n ? 2n : 1n;
+  const gasReserve = computeGasReserve(perTxGasWei, txCount);
+  return asset === 'ETH' ? amountUnits + feeUnits + gasReserve : gasReserve;
+}
+
 /**
  * Calculate maximum sendable amount considering fee and optional gas reservation.
  * amount + fee <= available

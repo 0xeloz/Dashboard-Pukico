@@ -56,6 +56,9 @@ import {
   computeServiceFee,
   computeMaxSendable,
   maxSendableWithFee,
+  computeEthRequirement,
+  computeGasReserve,
+  getDefaultPerTxGasWei,
   getTreasuryAddress,
   getFeeBps,
   isFeeActive,
@@ -363,6 +366,7 @@ export function SendSheetContent({
             const extractedFee = extractHash(feeResult);
             if (extractedFee && isTxHash(extractedFee)) {
               removePendingFee(profile.wallet_address, item.txHash);
+              toast.removeStoredNotification(`fee-failed:${item.txHash}`);
               const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
               await submitTxWithRetry(
                 {
@@ -383,7 +387,7 @@ export function SendSheetContent({
         console.error('[fee] Silent fee check error', err);
       }
     })();
-  }, [profile?.wallet_address, isDemoMode, sendTransaction, getAccessToken]);
+  }, [profile?.wallet_address, isDemoMode, sendTransaction, getAccessToken, toast]);
 
   // Requirement 10: Retry paying current pending fee from step 7
   const handleRetryCurrentFee = async () => {
@@ -402,8 +406,35 @@ export function SendSheetContent({
     setIsRetryingPendingFee(true);
     toast.loading(t.toast.feePaying, { id: 'fee-tx-status', title: t.toast.feePaying });
 
+    // Pre-check fresh on-chain ETH balance before manual retry
+    try {
+      const freshBals = await fetchExactBalances(profile.wallet_address);
+      setBalances(freshBals);
+      const neededFee = BigInt(feeRecord.feeUnits);
+      const gasPrice = await getGasPriceCeiling(publicClient as any).catch(() => 2000000000n);
+      const feeGasLimit = feeRecord.asset === 'ETH' ? 21000n : 65000n;
+      const gasWei = (feeGasLimit * gasPrice * 125n) / 100n;
+
+      const sufficient =
+        feeRecord.asset === 'USDC'
+          ? freshBals.usdc >= neededFee && freshBals.eth >= gasWei
+          : freshBals.eth >= neededFee + gasWei;
+
+      if (!sufficient) {
+        toast.update('fee-tx-status', 'warning', t.toast.feeInsufficientEth, {
+          silent: true,
+          title: t.history.serviceFee,
+        });
+        setIsRetryingPendingFee(false);
+        return;
+      }
+    } catch {
+      // Allow attempt if balance check failed
+    }
+
     const retryDelays = [0, 1500, 3000];
     let retriedFeeTxHash: string | undefined = undefined;
+    let failureReason: string | null = null;
 
     for (let attempt = 1; attempt <= 3; attempt++) {
       if (attempt > 1) {
@@ -434,15 +465,24 @@ export function SendSheetContent({
           reason,
           error: err instanceof Error ? err.message : String(err),
         });
+        failureReason = reason;
         if (reason === 'user_rejected') {
+          break;
+        }
+        if (reason === 'insufficient_funds') {
+          failureReason = 'insufficient_eth';
           break;
         }
       }
     }
 
     if (retriedFeeTxHash && isTxHash(retriedFeeTxHash)) {
-      toast.update('fee-tx-status', 'success', t.toast.feePaid, { silent: true });
+      toast.update('fee-tx-status', 'success', t.toast.feePaid, {
+        silent: true,
+        title: t.history.serviceFee,
+      });
       removePendingFee(profile.wallet_address, currentHash);
+      toast.removeStoredNotification(`fee-failed:${currentHash}`);
       setPendingFeeCurrentTx(false);
 
       try {
@@ -469,7 +509,14 @@ export function SendSheetContent({
         });
       }
     } else {
-      toast.update('fee-tx-status', 'warning', t.toast.feeFailed);
+      const errMsg =
+        failureReason === 'insufficient_eth'
+          ? t.toast.feeInsufficientEth
+          : t.toast.feeFailed;
+      toast.update('fee-tx-status', 'warning', errMsg, {
+        silent: true,
+        title: t.history.serviceFee,
+      });
     }
 
     setIsRetryingPendingFee(false);
@@ -513,16 +560,23 @@ export function SendSheetContent({
   const amountUnits = parseAmountUnits(amountInput, selectedAsset);
   const feeUnits = computeServiceFee(amountUnits, feeBps, isFeeExempt, selectedAsset);
 
-  // Dynamic required ETH calculation for gas + service fee + optional ETH transfer
-  const ethRequiredWei =
-    estimatedFeeWei !== null
-      ? (selectedAsset === 'ETH' ? amountUnits + feeUnits + estimatedFeeWei : estimatedFeeWei)
-      : 0n;
+  // Single source of truth for required ETH: gas for 1 or 2 transactions (with 25% buffer) + optional ETH transfer and fee
+  const perTxGasWei =
+    estimatedFeeWei && estimatedFeeWei > 0n
+      ? estimatedFeeWei
+      : getDefaultPerTxGasWei(selectedAsset);
 
-  // Insufficient ETH check: ONLY when balances is known AND ETH < required (or 0 if quote not yet available)
+  const ethRequiredWei = computeEthRequirement({
+    asset: selectedAsset,
+    amountUnits,
+    feeUnits,
+    perTxGasWei,
+    feeActive: isFeeActive(isDemoMode) && !isFeeExempt,
+  });
+
+  // Insufficient ETH check: ONLY when balances is known AND ETH < required
   const isInsufficientEth =
-    balances !== null &&
-    (ethRequiredWei > 0n ? balances.eth < ethRequiredWei : balances.eth === 0n);
+    balances !== null && balances.eth < ethRequiredWei;
 
   // Large transfer threshold check
   const isLargeTransfer = amountUnits >= LARGE_TRANSFER_THRESHOLD[selectedAsset];
@@ -746,10 +800,8 @@ export function SendSheetContent({
         return { valid: false, errorKey: 'needEthForFees' };
       }
     } else {
-      // ETH: amount + fee + gas
-      const reserveFee = estimatedFeeWei && estimatedFeeWei > 0n ? estimatedFeeWei : 21000n * 2000000000n;
-      const totalNeeded = amountUnits + feeUnits + reserveFee;
-      if (totalNeeded > balances.eth) {
+      // ETH: requirement from computeEthRequirement (amount + fee + gasReserve)
+      if (balances.eth < ethRequiredWei) {
         return { valid: false, errorKey: 'notEnoughAsset' };
       }
     }
@@ -768,9 +820,14 @@ export function SendSheetContent({
       const [intP, decP = ''] = full.split('.');
       setAmountInput(`${intP}.${decP.padEnd(2, '0').slice(0, 2)}`);
     } else {
-      const reserveFee = estimatedFeeWei && estimatedFeeWei > 0n ? estimatedFeeWei : 21000n * 2000000000n;
-      const totalGasReserve = isFeeActive(isDemoMode) && !isFeeExempt ? reserveFee * 2n : reserveFee;
-      const maxUnits = computeMaxSendable(balances.eth, feeBps, totalGasReserve, isFeeExempt, 'ETH');
+      const perTxGas =
+        estimatedFeeWei && estimatedFeeWei > 0n
+          ? estimatedFeeWei
+          : getDefaultPerTxGasWei('ETH');
+      const feeActive = isFeeActive(isDemoMode) && !isFeeExempt;
+      const txCount = feeActive ? 2n : 1n;
+      const gasReserve = computeGasReserve(perTxGas, txCount);
+      const maxUnits = computeMaxSendable(balances.eth, feeBps, gasReserve, isFeeExempt, 'ETH');
       setAmountInput(formatUnitsTrimmed(maxUnits, 18, 8));
     }
   };
@@ -914,7 +971,7 @@ export function SendSheetContent({
       return;
     }
 
-    // 8. Read latest on-chain balance and verify balance >= amount + fee
+    // 8. Read latest on-chain balance and verify balance with computeEthRequirement (syarat A)
     let freshBals: { eth: bigint; usdc: bigint };
     try {
       freshBals = await fetchExactBalances(snapshot.senderAddress);
@@ -923,21 +980,43 @@ export function SendSheetContent({
       freshBals = balances ?? { eth: 0n, usdc: 0n };
     }
 
+    const currentPerTxGas =
+      estimatedFeeWei && estimatedFeeWei > 0n
+        ? estimatedFeeWei
+        : getDefaultPerTxGasWei(snapshot.asset);
+
+    const freshEthRequired = computeEthRequirement({
+      asset: snapshot.asset,
+      amountUnits: snapshot.amountUnits,
+      feeUnits: snapshot.feeUnits,
+      perTxGasWei: currentPerTxGas,
+      feeActive: isFeeActive(isDemoMode) && !isFeeExempt,
+    });
+
     if (snapshot.asset === 'USDC') {
       if (snapshot.amountUnits + snapshot.feeUnits > freshBals.usdc) {
         setSecurityError(t.sheets.send.notEnoughAsset.replace('{asset}', 'USDC'));
         toast.error(t.toast.insufficientFunds);
-        setStep(4);
+        setStep(3);
+        setIsSubmitting(false);
+        setProgressState(null);
+        sendInProgressRef.current = false;
+        return;
+      }
+      if (freshBals.eth < freshEthRequired) {
+        setSecurityError(t.sheets.send.needEthForFees);
+        toast.error(t.toast.insufficientFunds);
+        setStep(3);
         setIsSubmitting(false);
         setProgressState(null);
         sendInProgressRef.current = false;
         return;
       }
     } else {
-      if (snapshot.amountUnits + snapshot.feeUnits > freshBals.eth) {
+      if (freshBals.eth < freshEthRequired) {
         setSecurityError(t.sheets.send.notEnoughAsset.replace('{asset}', 'ETH'));
         toast.error(t.toast.insufficientFunds);
-        setStep(4);
+        setStep(3);
         setIsSubmitting(false);
         setProgressState(null);
         sendInProgressRef.current = false;
@@ -967,7 +1046,7 @@ export function SendSheetContent({
         if (freshBals.eth < requiredEth) {
           setSecurityError(t.sheets.send.insufficientFundsOrGas);
           toast.error(t.toast.insufficientFunds);
-          setStep(4);
+          setStep(3);
           setIsSubmitting(false);
           setProgressState(null);
           sendInProgressRef.current = false;
@@ -1135,74 +1214,35 @@ export function SendSheetContent({
         });
       }
 
-      // ALUR 3: Kirim transaksi fee dengan retry: maksimal 3 percobaan, jeda 1500 ms lalu 3000 ms.
-      const retryDelays = [0, 1500, 3000];
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        if (attempt > 1) {
-          const delay = retryDelays[attempt - 1];
-          await new Promise((r) => setTimeout(r, delay));
-        }
+      // Check fresh on-chain balance before attempting fee
+      let hasEnoughForFee = true;
+      try {
+        const freshAfterMain = await fetchExactBalances(snapshot.senderAddress);
+        setBalances(freshAfterMain);
+        const gasCeiling = await getGasPriceCeiling(publicClient as any).catch(() => 2000000000n);
+        const feeGasLimit = snapshot.asset === 'ETH' ? 21000n : 65000n;
+        const feeGasWei = (feeGasLimit * gasCeiling * 125n) / 100n;
 
-        try {
-          const feeTxRequest = buildTransferRequest(
-            snapshot.asset,
-            snapshot.treasuryAddress!,
-            snapshot.feeUnits
-          );
-          const feeResult = await sendTransaction(feeTxRequest, {
-            address: profile.wallet_address,
-            uiOptions: { showWalletUIs: false },
-          });
-          const extractedFee = extractHash(feeResult);
-          if (extractedFee && isTxHash(extractedFee)) {
-            feeTxHash = extractedFee;
-            break;
-          } else {
-            throw new Error('Invalid fee transaction hash returned');
+        if (snapshot.asset === 'ETH') {
+          if (freshAfterMain.eth < snapshot.feeUnits + feeGasWei) {
+            hasEnoughForFee = false;
           }
-        } catch (err: unknown) {
-          const reason = identifyPreHashFailureReason(err);
-          console.error('[fee]', {
-            attempt,
-            reason,
-            error: err instanceof Error ? err.message : String(err),
-          });
-          if (reason === 'user_rejected') {
-            break; // Jangan retry jika error adalah penolakan pengguna
+        } else {
+          if (freshAfterMain.eth < feeGasWei || freshAfterMain.usdc < snapshot.feeUnits) {
+            hasEnoughForFee = false;
           }
         }
+      } catch {
+        // Proceed with attempt if balance check failed
       }
 
-      setFeeApprovalPending(false);
-
-      // ALUR 4: Jika fee berhasil (hash valid): submit ulang ke backend dengan fee_tx_hash
-      if (feeTxHash && isTxHash(feeTxHash)) {
-        toast.update('fee-tx-status', 'success', t.toast.feePaid, { silent: true });
-        removePendingFee(profile.wallet_address, broadcastHash);
-        setPendingFeeCurrentTx(false);
-
-        try {
-          const freshToken = getAccessToken ? await getAccessToken().catch(() => null) : null;
-          await submitTxWithRetry(
-            {
-              tx_hash: broadcastHash,
-              asset: snapshot.asset,
-              to_pukico_id: snapshot.recipientId,
-              amount: canonicalAmount,
-              fee_tx_hash: feeTxHash,
-            },
-            { privyToken: freshToken }
-          );
-        } catch (resubmitErr) {
-          console.error('[fee]', {
-            attempt: 'fee_resubmit',
-            reason: 'backend_resubmit_failed',
-            error: resubmitErr instanceof Error ? resubmitErr.message : String(resubmitErr),
-          });
-        }
-      } else {
-        // ALUR 5 & 9: Gagal setelah retry: simpan catatan fee tertunda & update toast warning
-        toast.update('fee-tx-status', 'warning', t.toast.feeFailed);
+      if (!hasEnoughForFee) {
+        setFeeApprovalPending(false);
+        toast.update('fee-tx-status', 'warning', t.toast.feeInsufficientEth, {
+          title: t.history.serviceFee,
+          id: `fee-failed:${broadcastHash}`,
+          dedupeKey: `fee-failed:${broadcastHash}`,
+        });
         savePendingFee(profile.wallet_address, {
           txHash: broadcastHash,
           asset: snapshot.asset,
@@ -1213,6 +1253,107 @@ export function SendSheetContent({
           amount: canonicalAmount,
         });
         setPendingFeeCurrentTx(true);
+      } else {
+        // ALUR 3: Kirim transaksi fee dengan retry: maksimal 3 percobaan, jeda 1500 ms lalu 3000 ms.
+        const retryDelays = [0, 1500, 3000];
+        let failureReason: string | null = null;
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          if (attempt > 1) {
+            const delay = retryDelays[attempt - 1];
+            await new Promise((r) => setTimeout(r, delay));
+          }
+
+          try {
+            const feeTxRequest = buildTransferRequest(
+              snapshot.asset,
+              snapshot.treasuryAddress!,
+              snapshot.feeUnits
+            );
+            const feeResult = await sendTransaction(feeTxRequest, {
+              address: profile.wallet_address,
+              uiOptions: { showWalletUIs: false },
+            });
+            const extractedFee = extractHash(feeResult);
+            if (extractedFee && isTxHash(extractedFee)) {
+              feeTxHash = extractedFee;
+              break;
+            } else {
+              throw new Error('Invalid fee transaction hash returned');
+            }
+          } catch (err: unknown) {
+            const reason = identifyPreHashFailureReason(err);
+            console.error('[fee]', {
+              attempt,
+              reason,
+              error: err instanceof Error ? err.message : String(err),
+            });
+            failureReason = reason;
+            if (reason === 'user_rejected') {
+              break; // Jangan retry jika error adalah penolakan pengguna
+            }
+            if (reason === 'insufficient_funds') {
+              failureReason = 'insufficient_eth';
+              break; // Jangan retry jika dana tidak cukup
+            }
+          }
+        }
+
+        setFeeApprovalPending(false);
+
+        // ALUR 4: Jika fee berhasil (hash valid): submit ulang ke backend dengan fee_tx_hash
+        if (feeTxHash && isTxHash(feeTxHash)) {
+          toast.update('fee-tx-status', 'success', t.toast.feePaid, {
+            silent: true,
+            title: t.history.serviceFee,
+          });
+          removePendingFee(profile.wallet_address, broadcastHash);
+          toast.removeStoredNotification(`fee-failed:${broadcastHash}`);
+          setPendingFeeCurrentTx(false);
+
+          try {
+            const freshToken = getAccessToken ? await getAccessToken().catch(() => null) : null;
+            await submitTxWithRetry(
+              {
+                tx_hash: broadcastHash,
+                asset: snapshot.asset,
+                to_pukico_id: snapshot.recipientId,
+                amount: canonicalAmount,
+                fee_tx_hash: feeTxHash,
+              },
+              { privyToken: freshToken }
+            );
+          } catch (resubmitErr) {
+            console.error('[fee]', {
+              attempt: 'fee_resubmit',
+              reason: 'backend_resubmit_failed',
+              error: resubmitErr instanceof Error ? resubmitErr.message : String(resubmitErr),
+            });
+          }
+        } else {
+          // ALUR 5 & 9: Gagal setelah retry: simpan catatan fee tertunda & update toast warning
+          const errMsg =
+            failureReason === 'insufficient_eth'
+              ? t.toast.feeInsufficientEth
+              : t.toast.feeFailed;
+
+          toast.update('fee-tx-status', 'warning', errMsg, {
+            title: t.history.serviceFee,
+            id: `fee-failed:${broadcastHash}`,
+            dedupeKey: `fee-failed:${broadcastHash}`,
+          });
+
+          savePendingFee(profile.wallet_address, {
+            txHash: broadcastHash,
+            asset: snapshot.asset,
+            feeUnits: snapshot.feeUnits.toString(),
+            treasuryAddress: snapshot.treasuryAddress!,
+            createdAt: Date.now(),
+            recipientId: snapshot.recipientId,
+            amount: canonicalAmount,
+          });
+          setPendingFeeCurrentTx(true);
+        }
       }
     }
 
@@ -1349,21 +1490,27 @@ export function SendSheetContent({
         </div>
       )}
 
-      {/* Prerequisite 2: Insufficient ETH for Gas Fee Notice (Dynamic and null-aware) */}
-      {isInsufficientEth && !isWalletUnverified && balances !== null && (
+      {/* Prerequisite 2: Insufficient ETH for Gas Fee Notice (Dynamic, only in input amount and review steps) */}
+      {isInsufficientEth && !isWalletUnverified && balances !== null && (step === 3 || step === 4) && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309]">
           <div className="flex items-start gap-1.5 min-w-0">
             <AlertCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0 mt-0.5" />
             <span className="leading-snug font-medium">
-              {t.sheets.send.insufficientEthDetailed
-                .replace(
-                  '{needed}',
-                  ethRequiredWei > 0n ? formatEthFee(ethRequiredWei) : '~0.0001'
-                )
-                .replace(
-                  '{balance}',
-                  formatUnitsTrimmed(balances.eth, 18, 5)
-                )}
+              {(() => {
+                const txCount = isFeeActive(isDemoMode) && !isFeeExempt && feeUnits > 0n ? 2n : 1n;
+                const template =
+                  selectedAsset === 'ETH'
+                    ? (txCount === 2n
+                        ? t.sheets.send.insufficientEthDetailedEth
+                        : t.sheets.send.insufficientEthDetailedEthSingle)
+                    : (txCount === 2n
+                        ? t.sheets.send.insufficientEthDetailed
+                        : t.sheets.send.insufficientEthDetailedSingle);
+
+                return template
+                  .replace('{needed}', fmt.ethBalance(ethRequiredWei))
+                  .replace('{balance}', fmt.ethBalance(balances.eth));
+              })()}
             </span>
           </div>
           {CHAIN_CONFIG.testnet && (
@@ -1674,15 +1821,20 @@ export function SendSheetContent({
                       ? t.sheets.send.notEnoughAsset.replace('{asset}', selectedAsset)
                       : amountValidation.errorKey === 'needEthForFees'
                       ? (isInsufficientEth && balances !== null
-                          ? t.sheets.send.insufficientEthDetailed
-                              .replace(
-                                '{needed}',
-                                ethRequiredWei > 0n ? fmt.ethFee(ethRequiredWei) : (lang === 'id' ? '~0,0001' : '~0.0001')
-                              )
-                              .replace(
-                                '{balance}',
-                                fmt.units(balances.eth, 18, 5)
-                              )
+                          ? (() => {
+                              const txCount = isFeeActive(isDemoMode) && !isFeeExempt && feeUnits > 0n ? 2n : 1n;
+                              const template =
+                                selectedAsset === 'ETH'
+                                  ? (txCount === 2n
+                                      ? t.sheets.send.insufficientEthDetailedEth
+                                      : t.sheets.send.insufficientEthDetailedEthSingle)
+                                  : (txCount === 2n
+                                      ? t.sheets.send.insufficientEthDetailed
+                                      : t.sheets.send.insufficientEthDetailedSingle);
+                              return template
+                                .replace('{needed}', fmt.ethBalance(ethRequiredWei))
+                                .replace('{balance}', fmt.ethBalance(balances.eth));
+                            })()
                           : t.sheets.send.needEthForFees)
                       : amountInput
                       ? t.sheets.send.enterAmountPlaceholder
@@ -1706,7 +1858,7 @@ export function SendSheetContent({
           <div className="pt-2">
             <button
               type="button"
-              disabled={!amountValidation.valid || balances === null || !hasBetaAccess}
+              disabled={!amountValidation.valid || isInsufficientEth || balances === null || !hasBetaAccess}
               onClick={() => {
                 setSendFailedBeforeHash(false);
                 setSecurityError(null);
@@ -2043,7 +2195,14 @@ export function SendSheetContent({
           <div className="pt-2">
             <button
               type="button"
-              disabled={isSubmitting || !hasBetaAccess || (isLargeTransfer && !isLargeConfirmed)}
+              disabled={
+                isSubmitting ||
+                !hasBetaAccess ||
+                !amountValidation.valid ||
+                isInsufficientEth ||
+                balances === null ||
+                (isLargeTransfer && !isLargeConfirmed)
+              }
               onClick={handleExecuteSend}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
