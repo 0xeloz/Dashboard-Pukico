@@ -287,15 +287,11 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
                   {t.history.serviceFee}
                 </span>
                 <div className="flex items-center gap-2">
-                  {formattedServiceFee ? (
+                  {formattedServiceFee && (
                     <span className="font-mono text-sm font-semibold text-[#0A0B0D]">
                       {formattedServiceFee}
                     </span>
-                  ) : currentTx.fee_status === 'pending' ? (
-                    <span className="text-xs text-[#5B6577] font-medium">
-                      {t.history.feeStatusPending}
-                    </span>
-                  ) : null}
+                  )}
                   {renderFeeStatusBadge(currentTx.fee_status)}
                 </div>
               </div>

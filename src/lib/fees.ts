@@ -97,11 +97,10 @@ export function getDefaultPerTxGasWei(asset: 'USDC' | 'ETH'): bigint {
 }
 
 /**
- * Compute the required gas reserve for txCount transactions.
- * Uses 100% of perTxGasWei (perTxCeilingWei) without additional buffer since ceiling already represents the upper bound.
+ * Compute the required gas reserve for txCount transactions with a 50% safety buffer.
  */
 export function computeGasReserve(perTxGasWei: bigint, txCount: bigint): bigint {
-  return perTxGasWei * txCount;
+  return (perTxGasWei * txCount * 150n) / 100n;
 }
 
 export interface ComputeEthRequirementParams {
@@ -211,6 +210,7 @@ export interface PendingFeeRecord {
   createdAt: number;
   recipientId?: string;
   amount?: string;
+  reason?: string;
 }
 
 export function getPendingFeeStorageKey(walletAddress: string): string {
@@ -257,3 +257,35 @@ export function removePendingFee(walletAddress: string, txHash: string): void {
     console.error('Failed to remove pending fee from localStorage', e);
   }
 }
+
+export interface FeeLogEntry {
+  timestamp: number;
+  txHash: string;
+  attempt: number;
+  reason: string;
+  message: string;
+  asset?: 'USDC' | 'ETH';
+  feeUnits?: string;
+}
+
+const LAST_FEE_LOG_KEY = 'pukico.last_fee_log';
+
+export function getLastFeeLog(): FeeLogEntry | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LAST_FEE_LOG_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastFeeLog(log: FeeLogEntry): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_FEE_LOG_KEY, JSON.stringify(log));
+  } catch {
+    // Ignore storage errors
+  }
+}
+

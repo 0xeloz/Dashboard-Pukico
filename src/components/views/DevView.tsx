@@ -18,6 +18,8 @@ import {
   CONFIGURED_TREASURY_ADDRESS,
   CONFIGURED_FEE_BPS,
   isFeeActive,
+  getLastFeeLog,
+  type FeeLogEntry,
 } from '../../lib/fees';
 import { fetchExactBalances, sameAddress } from '../../lib/txGuards';
 import { formatEthBalance, formatUsdcUnits } from '../../lib/formatters';
@@ -214,6 +216,9 @@ export function DevView({ profile, onRedirectToHome }: DevViewProps) {
 
       {/* Treasury (Revenue) Section */}
       <TreasuryCard adminWalletAddress={profile.wallet_address} />
+
+      {/* Latest Fee Log (Diagnostics) */}
+      <LatestFeeLogSection />
 
       {/* JSON Profile (Blok kode tetap diizinkan) */}
       <div className="py-4 space-y-2.5">
@@ -493,4 +498,65 @@ function TreasuryCard({ adminWalletAddress }: { adminWalletAddress: string }) {
     </div>
   );
 }
+
+function LatestFeeLogSection() {
+  const [feeLog, setFeeLog] = useState<FeeLogEntry | null>(() => getLastFeeLog());
+
+  const handleRefresh = () => {
+    setFeeLog(getLastFeeLog());
+  };
+
+  return (
+    <div className="py-4 border-b border-[#E5E7EB] space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Terminal className="w-4 h-4 text-[#0052FF]" />
+          <h3 className="text-sm font-semibold text-[#0A0B0D]">Latest Fee Transaction Log</h3>
+        </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          className="text-xs text-[#0052FF] font-semibold hover:underline cursor-pointer"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {feeLog ? (
+        <div className="p-3 bg-white border border-[#E5E7EB] rounded-xl text-xs space-y-1.5 font-mono">
+          <div className="flex items-center justify-between">
+            <span className="text-[#5B6577]">Reason:</span>
+            <span className={`font-bold ${feeLog.reason === 'success' ? 'text-[#047857]' : 'text-[#B45309]'}`}>
+              {feeLog.reason}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[#5B6577]">Tx Hash:</span>
+            <span className="text-[#0A0B0D] select-all truncate max-w-[200px]">
+              {feeLog.txHash}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[#5B6577]">Attempt:</span>
+            <span className="text-[#0A0B0D]">{feeLog.attempt}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[#5B6577]">Time:</span>
+            <span className="text-[#5B6577]">{new Date(feeLog.timestamp).toLocaleTimeString()}</span>
+          </div>
+          {feeLog.message && (
+            <div className="pt-1 border-t border-[#E5E7EB] text-[#5B6577] text-[11px] break-words">
+              {feeLog.message}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-xs text-[#5B6577] italic py-1">
+          No fee transactions logged yet in this session.
+        </div>
+      )}
+    </div>
+  );
+}
+
 

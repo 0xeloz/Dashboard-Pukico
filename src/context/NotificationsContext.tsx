@@ -214,6 +214,7 @@ export function NotificationsProvider({
 
                     curToast.success(notifMsg, {
                       duration: 6000,
+                      silent: true,
                       action: {
                         label: curT.common.view || 'Lihat',
                         onClick: () => {

@@ -114,19 +114,27 @@ export async function retryFeePayment({
     return { ok: false, error: 'Calculated fee amount is zero.' };
   }
 
+  const gasLimit = tx.asset === 'ETH' ? 21000n : 65000n;
+  const fees = await (publicClient as any).estimateFeesPerGas().catch(() => null);
+  const baseMaxFee = fees?.maxFeePerGas ?? fees?.gasPrice ?? 2000000000n;
+  const maxFeePerGas = (baseMaxFee * 120n) / 100n;
+  const maxPriorityFeePerGas = fees?.maxPriorityFeePerGas ?? 1000000n;
+  const feeCeilingWei = gasLimit * maxFeePerGas;
+
   // Pre-check on-chain fresh balance before attempting fee broadcast
   try {
     const freshBals = await fetchExactBalances(walletAddress);
-    const gasPrice = await getGasPriceCeiling(publicClient as any).catch(() => 2000000000n);
-    const gasLimit = tx.asset === 'ETH' ? 21000n : 65000n;
-    const gasWei = computeGasReserve(gasLimit * gasPrice, 1n);
+    const neededEthForFee =
+      tx.asset === 'ETH'
+        ? feeUnits + (feeCeilingWei * 110n) / 100n
+        : (feeCeilingWei * 110n) / 100n;
 
     if (tx.asset === 'ETH') {
-      if (freshBals.eth < feeUnits + gasWei) {
+      if (freshBals.eth < neededEthForFee) {
         return { ok: false, error: 'insufficient_eth' };
       }
     } else {
-      if (freshBals.eth < gasWei || freshBals.usdc < feeUnits) {
+      if (freshBals.eth < neededEthForFee || freshBals.usdc < feeUnits) {
         return { ok: false, error: 'insufficient_eth' };
       }
     }
@@ -137,7 +145,13 @@ export async function retryFeePayment({
   const feeTxRequest = buildTransferRequest(
     tx.asset as AssetType,
     treasuryAddress,
-    feeUnits
+    feeUnits,
+    {
+      gasLimit,
+      gas: gasLimit,
+      maxFeePerGas,
+      maxPriorityFeePerGas,
+    }
   );
 
   // Send fee transaction with retry: max 3 attempts, delays: 0ms, 1500ms, 3000ms

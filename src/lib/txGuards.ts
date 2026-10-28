@@ -105,26 +105,45 @@ export async function fetchExactBalances(
   }
 }
 
+export interface TransferGasOptions {
+  gasLimit?: bigint;
+  gas?: bigint;
+  maxFeePerGas?: bigint;
+  maxPriorityFeePerGas?: bigint;
+}
+
 export interface TransferRequest {
   to: `0x${string}`;
   value?: bigint;
   data?: `0x${string}`;
   chainId: number;
+  gasLimit?: bigint;
+  gas?: bigint;
+  maxFeePerGas?: bigint;
+  maxPriorityFeePerGas?: bigint;
 }
 
 /**
- * Build request object for Viem/Privy sendTransaction.
+ * Build request object for Viem/Privy sendTransaction with optional explicit gas params.
  */
 export function buildTransferRequest(
   asset: AssetType,
   recipientAddress: `0x${string}`,
-  amountUnits: bigint
+  amountUnits: bigint,
+  gasOptions?: TransferGasOptions
 ): TransferRequest {
+  const baseReq = {
+    chainId: CHAIN_CONFIG.id,
+    ...(gasOptions?.gasLimit ? { gasLimit: gasOptions.gasLimit, gas: gasOptions.gasLimit } : {}),
+    ...(gasOptions?.maxFeePerGas ? { maxFeePerGas: gasOptions.maxFeePerGas } : {}),
+    ...(gasOptions?.maxPriorityFeePerGas ? { maxPriorityFeePerGas: gasOptions.maxPriorityFeePerGas } : {}),
+  };
+
   if (asset === 'ETH') {
     return {
       to: recipientAddress,
       value: amountUnits,
-      chainId: CHAIN_CONFIG.id,
+      ...baseReq,
     };
   }
 
@@ -137,7 +156,7 @@ export function buildTransferRequest(
   return {
     to: BASE_SEPOLIA_USDC_ADDRESS as `0x${string}`,
     data,
-    chainId: CHAIN_CONFIG.id,
+    ...baseReq,
   };
 }
 

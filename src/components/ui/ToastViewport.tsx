@@ -128,9 +128,11 @@ function ToastItem({ toast, onDismiss, onPause, onResume }: ToastItemProps) {
               {toast.title}
             </p>
           )}
-          <p className="text-xs font-medium text-[#0A0B0D] leading-relaxed break-words">
-            {toast.message}
-          </p>
+          {(!toast.title || toast.title.trim().toLowerCase() !== toast.message.trim().toLowerCase()) && Boolean(toast.message?.trim()) && (
+            <p className="text-xs font-medium text-[#0A0B0D] leading-relaxed break-words">
+              {toast.message}
+            </p>
+          )}
 
           {toast.action && (
             <div className="mt-2">
