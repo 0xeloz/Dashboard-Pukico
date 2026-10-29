@@ -212,6 +212,8 @@ export const en = {
       genericError: 'Something went wrong on our side. Try again in a moment.',
       demoNotice: 'DEMO DATA',
       friendsLabel: 'Friends',
+      recentLabel: 'Recent',
+      notFoundShort: 'Not found',
       enablePasskeyTitle: 'Enable passkey to send',
       enablePasskeyDesc: 'Biometric passkey authentication is required for live testnet transfers.',
       enablePasskeyBtn: 'Enable passkey',

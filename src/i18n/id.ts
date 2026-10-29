@@ -221,6 +221,8 @@ export const id: Translations = {
       genericError: 'Ada masalah di sisi kami. Coba lagi sebentar ya.',
       demoNotice: 'DATA CONTOH',
       friendsLabel: 'Teman',
+      recentLabel: 'Terakhir dikirim',
+      notFoundShort: 'Tidak ditemukan',
       enablePasskeyTitle: 'Aktifkan passkey untuk kirim',
       enablePasskeyDesc: 'Autentikasi passkey biometrik wajib aktif untuk pengiriman di live testnet.',
       enablePasskeyBtn: 'Aktifkan passkey',

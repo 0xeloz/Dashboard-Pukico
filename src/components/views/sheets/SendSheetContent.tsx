@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   ArrowLeft,
   Check,
@@ -27,6 +27,7 @@ import {
   formatEthBalance,
   formatUsdcUnits,
   formatUsdcString,
+  formatRelativeTime,
 } from '../../../lib/formatters';
 import {
   resolvePukicoId,
@@ -324,6 +325,7 @@ export function SendSheetContent({
     id: string;
     address: string;
   } | null>(null);
+  const [failedLookupIds, setFailedLookupIds] = useState<Set<string>>(new Set());
 
   const resolveDebounceRef = useRef<number | null>(null);
   const resolveControllerRef = useRef<AbortController | null>(null);
@@ -711,6 +713,65 @@ export function SendSheetContent({
     largeTransferInput.trim().toLowerCase().replace(/^@/, '') ===
       (resolvedRecipient?.id || '').toLowerCase().replace(/^@/, '');
 
+  // Recent recipients derived from confirmed outgoing transactions in txs (max 5, deduplicated, newest first)
+  const recentRecipients = useMemo(() => {
+    if (!txs || txs.length === 0) return [];
+    const myId = (profile?.pukico_id || '').replace(/^@+/, '').trim().toLowerCase();
+
+    const recipientMap = new Map<string, { timestamp: string; timeMs: number }>();
+
+    for (const tx of txs) {
+      const rawStatus = (tx.status || '').toLowerCase();
+      if (rawStatus !== 'confirmed') continue;
+
+      const isOutgoing =
+        tx.direction === 'out' ||
+        tx.direction === 'outgoing' ||
+        ('type' in tx && (tx as any).type === 'outgoing');
+
+      if (!isOutgoing) continue;
+
+      const rawRecipient = (tx.to_pukico_id || tx.counterparty || '').replace(/^@+/, '').trim().toLowerCase();
+      if (!rawRecipient || rawRecipient === myId) continue;
+
+      const timeVal = tx.confirmed_at || tx.created_at || (tx as any).timestamp || '';
+      let timeMs = 0;
+      if (timeVal) {
+        const num = Number(timeVal);
+        if (!isNaN(num) && num > 0) {
+          timeMs = num;
+        } else {
+          const parsed = Date.parse(timeVal);
+          timeMs = isNaN(parsed) ? 0 : parsed;
+        }
+      }
+
+      const existing = recipientMap.get(rawRecipient);
+      if (!existing || timeMs > existing.timeMs) {
+        recipientMap.set(rawRecipient, { timestamp: timeVal, timeMs });
+      }
+    }
+
+    const list = Array.from(recipientMap.entries()).map(([id, data]) => ({
+      id,
+      timestamp: data.timestamp,
+      timeMs: data.timeMs,
+    }));
+
+    list.sort((a, b) => b.timeMs - a.timeMs);
+    return list.slice(0, 5);
+  }, [txs, profile?.pukico_id]);
+
+  const recentRecipientIds = useMemo(() => {
+    return new Set(recentRecipients.map((r) => r.id.toLowerCase()));
+  }, [recentRecipients]);
+
+  const availableFriends = useMemo(() => {
+    return friends.filter(
+      (f) => !recentRecipientIds.has(f.pukico_id.toLowerCase().replace(/^@+/, '').trim())
+    );
+  }, [friends, recentRecipientIds]);
+
   // Known recipient check (friend list or prior txs)
   const isKnownRecipient = Boolean(
     resolvedRecipient &&
@@ -778,18 +839,26 @@ export function SendSheetContent({
               id: result.pukico_id || sanitized,
               address: result.wallet_address,
             });
+            setFailedLookupIds((prev) => {
+              if (!prev.has(sanitized)) return prev;
+              const next = new Set(prev);
+              next.delete(sanitized);
+              return next;
+            });
           } else if (result.reason === 'format') {
             setRecipientStatus('format_error');
             setResolvedRecipient(null);
           } else {
             setRecipientStatus('not_found');
             setResolvedRecipient(null);
+            setFailedLookupIds((prev) => new Set(prev).add(sanitized));
           }
         }
       } catch (err: unknown) {
         if (reqId === latestResolveReqIdRef.current && (err as Error)?.name !== 'AbortError') {
           setRecipientStatus('not_found');
           setResolvedRecipient(null);
+          setFailedLookupIds((prev) => new Set(prev).add(sanitized));
         }
       }
     }, 400);
@@ -811,13 +880,21 @@ export function SendSheetContent({
               id: result.pukico_id || clean,
               address: result.wallet_address,
             });
+            setFailedLookupIds((prev) => {
+              if (!prev.has(clean)) return prev;
+              const next = new Set(prev);
+              next.delete(clean);
+              return next;
+            });
           } else {
             setRecipientStatus('not_found');
             setResolvedRecipient(null);
+            setFailedLookupIds((prev) => new Set(prev).add(clean));
           }
         } catch {
           setRecipientStatus('not_found');
           setResolvedRecipient(null);
+          setFailedLookupIds((prev) => new Set(prev).add(clean));
         }
       })();
     }
@@ -837,13 +914,21 @@ export function SendSheetContent({
             id: result.pukico_id || clean,
             address: result.wallet_address,
           });
+          setFailedLookupIds((prev) => {
+            if (!prev.has(clean)) return prev;
+            const next = new Set(prev);
+            next.delete(clean);
+            return next;
+          });
         } else {
           setRecipientStatus('not_found');
           setResolvedRecipient(null);
+          setFailedLookupIds((prev) => new Set(prev).add(clean));
         }
       } catch {
         setRecipientStatus('not_found');
         setResolvedRecipient(null);
+        setFailedLookupIds((prev) => new Set(prev).add(clean));
       }
     })();
   };
@@ -2070,14 +2155,83 @@ export function SendSheetContent({
               )}
             </div>
 
+            {/* Terakhir dikirim (Recent recipients) */}
+            {recentRecipients.length > 0 && (
+              <div className="pt-2">
+                <div className="text-xs font-semibold text-[#5B6577] mb-2">
+                  {t.sheets.send.recentLabel}
+                </div>
+                <div className="space-y-1.5">
+                  {recentRecipients.map((item) => {
+                    const initial = (item.id.charAt(0) || '?').toUpperCase();
+                    const isSelected = recipientInput.toLowerCase().trim() === item.id.toLowerCase();
+                    const isLooking = isSelected && recipientStatus === 'looking';
+                    const isFound = isSelected && recipientStatus === 'found';
+                    const isFailed =
+                      (isSelected && recipientStatus === 'not_found') || failedLookupIds.has(item.id);
+
+                    let relativeTime = '';
+                    if (item.timestamp) {
+                      relativeTime = formatRelativeTime(item.timestamp, lang);
+                    }
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectFriendChip(item.id)}
+                        aria-label={t.friends.sendTo.replace('{id}', item.id)}
+                        className={`w-full min-h-[48px] py-2 px-3 rounded-2xl flex items-center justify-between gap-3 text-left transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0052FF] ${
+                          isSelected
+                            ? 'border-2 border-[#0052FF] bg-[#F5F8FF]'
+                            : 'border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] hover:border-[#D1D5DB]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-10 h-10 rounded-full bg-[#EEF4FF] text-[#0052FF] font-bold text-sm flex items-center justify-center shrink-0">
+                            {initial}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-mono text-sm font-bold text-[#0A0B0D] truncate">
+                              @{item.id}
+                            </div>
+                            {relativeTime && (
+                              <div className="text-[11px] text-[#5B6577] truncate">
+                                {relativeTime}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Status / Selection indicators */}
+                        {isLooking && (
+                          <Loader2 className="w-4 h-4 text-[#0052FF] animate-spin shrink-0" />
+                        )}
+                        {isFound && (
+                          <div className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center shrink-0">
+                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                          </div>
+                        )}
+                        {isFailed && !isLooking && (
+                          <span className="text-xs text-[#DC2626] font-medium shrink-0">
+                            {t.sheets.send.notFoundShort}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Friends chips */}
-            {friends.length > 0 && (
+            {availableFriends.length > 0 && (
               <div className="pt-2">
                 <div className="text-xs font-semibold text-[#5B6577] mb-2">
                   {t.sheets.send.friendsLabel || 'Friends'}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {friends.slice(0, 5).map((f) => (
+                  {availableFriends.slice(0, 5).map((f) => (
                     <button
                       key={f.pukico_id}
                       type="button"
