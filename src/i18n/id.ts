@@ -114,6 +114,15 @@ export const id: Translations = {
     loadMore: 'Muat lebih banyak',
     showingCount: 'Menampilkan {shown} dari {total}',
     noFilteredResults: 'Belum ada transaksi di sini.',
+    shareReceipt: 'Bagikan bukti',
+    receiptReady: 'Bukti tersedia setelah transaksi terkonfirmasi.',
+    receiptTitle: 'Bukti transaksi',
+    receiptCopied: 'Bukti disalin',
+    network: 'Jaringan',
+    networkValue: 'Base Sepolia · Testnet',
+    totalFromYou: 'Total dari kamu',
+    receiptFooter: 'pukico.xyz · Testnet, tanpa nilai uang',
+    receiptStatusConfirmed: 'Terkonfirmasi',
   },
 
 

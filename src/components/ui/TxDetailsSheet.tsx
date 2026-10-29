@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ExternalLink, Copy, Check, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { ExternalLink, Copy, Check, Clock, CheckCircle2, XCircle, Loader2, Share2 } from 'lucide-react';
+import { parseUnits } from 'viem';
 import { BottomSheet } from './BottomSheet';
 import { useT } from '../../i18n';
 import { useToast } from '../../context/ToastContext';
@@ -8,6 +9,20 @@ import { useTx } from '../../context/TxContext';
 import { formatFullDateTime } from '../../lib/formatters';
 import { shortenAddress, getExplorerUrl, type TxRecord } from '../../lib/txApi';
 import { retryFeePayment } from '../../lib/feeRetry';
+import { renderReceiptPng } from '../../lib/receiptImage';
+
+function safeParseUnits(val: string | null | undefined, decimals: number): bigint {
+  if (!val) return 0n;
+  const clean = String(val).replace(/,/g, '').replace(/[^0-9.]/g, '').trim();
+  if (!clean) return 0n;
+  const parts = clean.split('.');
+  const sanitized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : clean;
+  try {
+    return parseUnits(sanitized, decimals);
+  } catch {
+    return 0n;
+  }
+}
 
 interface TxDetailsSheetProps {
   open: boolean;
@@ -23,6 +38,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
 
   const [copied, setCopied] = useState(false);
   const [isPayingFee, setIsPayingFee] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   if (!tx) return null;
 
@@ -170,6 +186,160 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
       : `${fmt.ethBalance(currentTx.service_fee)} ETH`
     : null;
 
+  const hasServiceFee =
+    isOutgoing &&
+    currentTx.fee_status !== 'none' &&
+    currentTx.fee_status !== 'legacy' &&
+    Boolean(currentTx.service_fee);
+
+  const totalFromYouFormatted = (() => {
+    if (!hasServiceFee || !currentTx.service_fee) return null;
+    const decimals = currentTx.asset === 'USDC' ? 6 : 18;
+    const amtUnits = safeParseUnits(currentTx.amount, decimals);
+    const feeUnits = safeParseUnits(currentTx.service_fee, decimals);
+    const totUnits = amtUnits + feeUnits;
+    if (totUnits <= 0n) return null;
+    if (currentTx.asset === 'USDC') {
+      return `${fmt.usdcUnits(totUnits)} USDC`;
+    }
+    return `${fmt.ethBalance(totUnits)} ETH`;
+  })();
+
+  const myPukicoId = (profile?.pukico_id || '').replace(/^@+/, '').trim();
+  const rawCounterparty = (
+    currentTx.counterparty ||
+    (isIncoming ? currentTx.from_pukico_id : currentTx.to_pukico_id) ||
+    ''
+  ).replace(/^@+/, '').trim();
+
+  const senderId = isIncoming ? (rawCounterparty || '—') : (myPukicoId || 'you');
+  const recipientId = isIncoming ? (myPukicoId || 'you') : (rawCounterparty || '—');
+  const cleanNominal = `${formattedAmount} ${currentTx.asset}`;
+  const formattedTime = currentTx.created_at ? formatFullDateTime(currentTx.created_at, lang) : '';
+  const networkName = t.history.networkValue || 'Base Sepolia · Testnet';
+
+  const teksRingkas =
+    lang === 'id'
+      ? `Pukico — ${t.history.receiptTitle}\n${cleanNominal} dari @${senderId} ke @${recipientId}\n${formattedTime}\nStatus: ${t.history.receiptStatusConfirmed}\n${networkName}${explorerUrl ? `\n${explorerUrl}` : ''}`
+      : `Pukico — ${t.history.receiptTitle}\n${cleanNominal} from @${senderId} to @${recipientId}\n${formattedTime}\nStatus: ${t.history.receiptStatusConfirmed}\n${networkName}${explorerUrl ? `\n${explorerUrl}` : ''}`;
+
+  const handleShareReceipt = async () => {
+    if (isSharing || !isConfirmed) return;
+    setIsSharing(true);
+
+    try {
+      const networkFeeFormatted = currentTx.network_fee_wei
+        ? `${fmt.ethFee(currentTx.network_fee_wei)} ETH`
+        : null;
+
+      const blob = await renderReceiptPng({
+        lang,
+        nominal: cleanNominal,
+        senderId,
+        recipientId,
+        timeStr: formattedTime,
+        networkName,
+        statusLabel: t.history.receiptStatusConfirmed,
+        txHashShort: currentTx.tx_hash ? shortenAddress(currentTx.tx_hash) : '',
+        isOutgoing,
+        amountFormatted: `${formattedAmount} ${currentTx.asset}`,
+        serviceFeeFormatted: formattedServiceFee,
+        totalFromYouFormatted,
+        networkFeeFormatted,
+        labels: {
+          receiptTitle: t.history.receiptTitle,
+          from: t.history.from,
+          to: t.history.to,
+          time: t.history.time,
+          network: t.history.network,
+          amount: t.history.amount,
+          serviceFee: t.history.serviceFee,
+          totalFromYou: t.history.totalFromYou,
+          networkFee: t.sheets.send.networkFee,
+          hash: t.history.hash,
+          footer: t.history.receiptFooter,
+        },
+      });
+
+      const fileName = `pukico-receipt-${(currentTx.tx_hash || 'tx').slice(2, 10)}.png`;
+      let file: File | null = null;
+      try {
+        file = new File([blob], fileName, { type: 'image/png' });
+      } catch {
+        file = null;
+      }
+
+      // 5b. If navigator.canShare({ files: [file] }) is true
+      if (
+        file &&
+        typeof navigator !== 'undefined' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [file] }) &&
+        typeof navigator.share === 'function'
+      ) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'Pukico',
+            text: teksRingkas,
+          });
+          return;
+        } catch (shareErr: unknown) {
+          if ((shareErr as Error)?.name === 'AbortError') {
+            return;
+          }
+        }
+      }
+
+      // 5c. If files not supported but navigator.share exists
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        try {
+          const shareTextWithUrl = explorerUrl ? `${teksRingkas}\n${explorerUrl}` : teksRingkas;
+          await navigator.share({
+            title: 'Pukico',
+            text: shareTextWithUrl,
+            url: explorerUrl || undefined,
+          });
+          return;
+        } catch (shareErr: unknown) {
+          if ((shareErr as Error)?.name === 'AbortError') {
+            return;
+          }
+        }
+      }
+
+      // 5d. Fallback: Copy to clipboard or download file
+      let copiedToClipboard = false;
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(teksRingkas);
+          copiedToClipboard = true;
+          toast.info(t.history.receiptCopied, { silent: true });
+        } catch {
+          copiedToClipboard = false;
+        }
+      }
+
+      if (!copiedToClipboard) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.info(t.history.receiptCopied, { silent: true });
+      }
+    } catch (err: unknown) {
+      if ((err as Error)?.name !== 'AbortError') {
+        console.error('[share-receipt]', err);
+      }
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   return (
     <BottomSheet open={open} onClose={onClose} title={t.history.details}>
       <div className="space-y-4 pt-1 pb-4 text-left select-none">
@@ -242,7 +412,15 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
             </div>
           )}
 
-          {/* 5. Hash */}
+          {/* 5. Network */}
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-[#5B6577] font-medium">{t.history.network}</span>
+            <span className="text-sm font-semibold text-[#0A0B0D]">
+              {networkName}
+            </span>
+          </div>
+
+          {/* 6. Hash */}
           {currentTx.tx_hash && (
             <div className="flex items-center justify-between py-3">
               <span className="text-sm text-[#5B6577] font-medium">{t.history.hash}</span>
@@ -269,7 +447,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
             </div>
           )}
 
-          {/* 6. Network Fee */}
+          {/* 7. Network Fee */}
           {currentTx.network_fee_wei && (
             <div className="flex items-center justify-between py-3">
               <span className="text-sm text-[#5B6577] font-medium">{t.sheets.send.networkFee}</span>
@@ -279,7 +457,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
             </div>
           )}
 
-          {/* 7. Service Fee (HANYA UNTUK TRANSAKSI KELUAR) */}
+          {/* 8. Service Fee (HANYA UNTUK TRANSAKSI KELUAR) */}
           {!isFeeHidden && (
             <div className="py-3 space-y-1.5">
               <div className="flex items-center justify-between">
@@ -339,9 +517,21 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
               )}
             </div>
           )}
+
+          {/* 9. Total dari kamu (HANYA UNTUK TRANSAKSI KELUAR DENGAN SERVICE FEE) */}
+          {totalFromYouFormatted && (
+            <div className="flex items-center justify-between py-3">
+              <span className="text-sm text-[#5B6577] font-medium">
+                {t.history.totalFromYou}
+              </span>
+              <span className="font-mono text-sm font-bold text-[#0052FF] tabular-nums">
+                {totalFromYouFormatted}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* 8. Explorer link */}
+        {/* 10. Explorer link */}
         {explorerUrl && (
           <div className="pt-2">
             <a
@@ -355,6 +545,38 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
             </a>
           </div>
         )}
+
+        {/* 11. Share Receipt Button */}
+        <div className="pt-1">
+          <button
+            type="button"
+            disabled={!isConfirmed || isSharing}
+            onClick={handleShareReceipt}
+            aria-label={t.history.shareReceipt}
+            className={`w-full min-h-[44px] py-2.5 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+              isConfirmed && !isSharing
+                ? 'border border-[#0052FF] text-[#0052FF] hover:bg-[#EEF4FF] active:scale-[0.98] cursor-pointer bg-white'
+                : 'border border-[#E5E7EB] text-[#9CA3AF] bg-[#F9FAFB] cursor-not-allowed'
+            }`}
+          >
+            {isSharing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-[#0052FF]" />
+                <span className="text-[#0052FF]">{t.history.shareReceipt}</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-4 h-4" />
+                <span>{t.history.shareReceipt}</span>
+              </>
+            )}
+          </button>
+          {!isConfirmed && (
+            <p className="text-xs text-[#9CA3AF] text-center mt-1.5 leading-relaxed">
+              {t.history.receiptReady}
+            </p>
+          )}
+        </div>
       </div>
     </BottomSheet>
   );

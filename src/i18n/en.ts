@@ -105,6 +105,15 @@ export const en = {
     loadMore: 'Load more',
     showingCount: 'Showing {shown} of {total}',
     noFilteredResults: 'No transactions here.',
+    shareReceipt: 'Share receipt',
+    receiptReady: 'Receipt is available after the transaction is confirmed.',
+    receiptTitle: 'Transaction receipt',
+    receiptCopied: 'Receipt copied',
+    network: 'Network',
+    networkValue: 'Base Sepolia · Testnet',
+    totalFromYou: 'Total from you',
+    receiptFooter: 'pukico.xyz · Testnet, no monetary value',
+    receiptStatusConfirmed: 'Confirmed',
   },
 
 
