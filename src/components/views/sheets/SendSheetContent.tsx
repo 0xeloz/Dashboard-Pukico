@@ -2359,6 +2359,101 @@ export function SendSheetContent({
                 )}
               </div>
             </div>
+
+            {/* Clear Fee Breakdown */}
+            {amountUnits > 0n && amountValidation.valid && (
+              <div className="p-3.5 rounded-2xl bg-white border border-[#E5E7EB] space-y-2.5 text-xs animate-fade-up">
+                <div className="flex items-center justify-between font-semibold text-[#0A0B0D] pb-1.5 border-b border-[#F3F4F6]">
+                  <span>{t.sheets.send.feeBreakdownTitle}</span>
+                  <span className="text-[11px] font-normal text-[#5B6577]">
+                    {selectedAsset === 'USDC' ? 'USDC · Base Sepolia' : 'ETH · Base Sepolia'}
+                  </span>
+                </div>
+
+                {/* 1. Transfer amount */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[#5B6577]">{t.sheets.send.transferAmountLabel}</span>
+                  <span className="font-mono font-semibold text-[#0A0B0D]">
+                    {selectedAsset === 'USDC'
+                      ? `${fmt.usdcUnits(amountUnits)} USDC`
+                      : `${fmt.units(amountUnits, ASSET_DECIMALS[selectedAsset])} ${selectedAsset}`}
+                  </span>
+                </div>
+
+                {/* 2. Pukico service fee */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[#5B6577] flex items-center gap-1.5">
+                    <span>{t.sheets.send.serviceFee}</span>
+                    {feeActive && feeUnits > 0n ? (
+                      <span className="text-[10px] text-[#0052FF] font-semibold bg-[#EEF4FF] px-1.5 py-0.5 rounded">
+                        {(feeBps / 100).toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[#047857] font-semibold bg-[#ECFDF5] px-1.5 py-0.5 rounded">
+                        {t.sheets.send.serviceFeeFreeBadge}
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-mono font-medium text-[#0A0B0D]">
+                    {feeActive && feeUnits > 0n
+                      ? `+${selectedAsset === 'USDC' ? fmt.usdcUnits(feeUnits) : fmt.units(feeUnits, ASSET_DECIMALS[selectedAsset])} ${selectedAsset}`
+                      : `${selectedAsset === 'USDC' ? '0.00' : '0'} ${selectedAsset}`}
+                  </span>
+                </div>
+
+                {/* 3. Total deduction from token balance */}
+                <div className="flex items-center justify-between font-semibold pt-1 border-t border-[#F3F4F6]">
+                  <span className="text-[#0A0B0D]">
+                    {selectedAsset === 'USDC'
+                      ? t.sheets.send.totalDeductionUsdc
+                      : t.sheets.send.totalDeductionAsset.replace('{asset}', selectedAsset)}
+                  </span>
+                  <span className="font-mono font-bold text-[#0052FF]">
+                    {selectedAsset === 'USDC'
+                      ? `${fmt.usdcUnits(amountUnits + (feeActive ? feeUnits : 0n))} USDC`
+                      : `${fmt.units(amountUnits + (feeActive ? feeUnits : 0n), ASSET_DECIMALS[selectedAsset])} ${selectedAsset}`}
+                  </span>
+                </div>
+
+                {/* 4. Estimated Network Fee (Gas in ETH) */}
+                <div className="flex items-center justify-between pt-1 border-t border-[#F3F4F6]">
+                  <div className="flex items-center gap-1.5 text-[#5B6577]">
+                    <span>{t.sheets.send.estimatedNetworkFee}</span>
+                    <span className="text-[10px] text-[#5B6577] font-medium bg-[#F3F4F6] px-1.5 py-0.5 rounded">
+                      {t.sheets.send.paidUsingEth}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[#0A0B0D]">
+                    {isEstimatingFee ? (
+                      <span className="inline-flex items-center gap-1 text-[#5B6577]">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>{t.sheets.send.estimating}</span>
+                      </span>
+                    ) : estimatedFeeEth ? (
+                      <span>{t.sheets.send.aboutFeeEth.replace('{fee}', fmt.number(estimatedFeeEth))}</span>
+                    ) : (
+                      <span className="text-[#9CA3AF]">{t.sheets.send.feeUnavailable}</span>
+                    )}
+                  </span>
+                </div>
+
+                {/* 5. Gas info & Footnotes */}
+                <div className="space-y-1 pt-0.5 text-[11px] text-[#5B6577] leading-relaxed">
+                  <p>
+                    {t.sheets.send.gasPaidToNetwork}
+                    {feeActive && feeUnits > 0n ? ` ${t.sheets.send.twoTxsNotice}` : ''}
+                  </p>
+                  {balances !== null && (
+                    <div className="flex items-center justify-between pt-0.5 text-[#5B6577]">
+                      <span>{t.sheets.send.availableEthBalance.replace('{amount}', fmt.ethBalance(balances.eth))}</span>
+                      {isInsufficientEth && (
+                        <span className="text-[#DC2626] font-semibold">{t.sheets.send.insufficientEthForGasWarning}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="pt-2">
@@ -2371,11 +2466,12 @@ export function SendSheetContent({
                 setLockedSummary({
                   asset: selectedAsset,
                   amountUnits,
-                  feeUnits,
-                  totalUnits: amountUnits + feeUnits,
+                  feeUnits: feeActive ? feeUnits : 0n,
+                  totalUnits: amountUnits + (feeActive ? feeUnits : 0n),
                   recipientId: resolvedRecipient?.id || '',
                 });
                 setStep(4);
+                calculateFee(selectedAsset, resolvedRecipient?.address, amountInput);
               }}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center cursor-pointer"
             >
@@ -2435,65 +2531,99 @@ export function SendSheetContent({
             {(() => {
               const reviewAsset = lockedSummary?.asset ?? selectedAsset;
               const reviewAmountUnits = lockedSummary?.amountUnits ?? amountUnits;
-              const reviewFeeUnits = lockedSummary?.feeUnits ?? feeUnits;
-              const reviewTotalUnits = lockedSummary?.totalUnits ?? (amountUnits + feeUnits);
+              const reviewFeeUnits = lockedSummary?.feeUnits ?? (feeActive ? feeUnits : 0n);
+              const reviewTotalUnits = lockedSummary?.totalUnits ?? (amountUnits + (feeActive ? feeUnits : 0n));
 
-              return reviewFeeUnits > 0n ? (
+              return (
                 <>
-                  <div className="py-2 flex items-center justify-between">
-                    <span className="text-[#5B6577]">{t.sheets.send.recipientGets}</span>
+                  <div className="py-2.5 flex items-center justify-between">
+                    <span className="text-[#5B6577]">{t.sheets.send.transferAmountLabel}</span>
                     <span className="font-bold font-mono text-[#0A0B0D]">
                       {reviewAsset === 'USDC'
-                        ? fmt.usdcUnits(reviewAmountUnits)
-                        : fmt.units(reviewAmountUnits, ASSET_DECIMALS[reviewAsset])} {reviewAsset}
+                        ? `${fmt.usdcUnits(reviewAmountUnits)} USDC`
+                        : `${fmt.units(reviewAmountUnits, ASSET_DECIMALS[reviewAsset])} ${reviewAsset}`}
                     </span>
                   </div>
+
+                  {/* Service Fee Row (shows nominal or free) */}
                   <div className="py-2 flex items-center justify-between text-xs">
-                    <span className="text-[#5B6577] flex items-center gap-1">
+                    <span className="text-[#5B6577] flex items-center gap-1.5">
                       <span>{t.sheets.send.serviceFee}</span>
-                      <span className="text-[10px] text-[#0052FF] font-semibold bg-[#EEF4FF] px-1.5 py-0.5 rounded">
-                        {(feeBps / 100).toFixed(1)}%
-                      </span>
+                      {reviewFeeUnits > 0n ? (
+                        <span className="text-[10px] text-[#0052FF] font-semibold bg-[#EEF4FF] px-1.5 py-0.5 rounded">
+                          {(feeBps / 100).toFixed(1)}%
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#047857] font-semibold bg-[#ECFDF5] px-1.5 py-0.5 rounded">
+                          {t.sheets.send.serviceFeeFreeBadge}
+                        </span>
+                      )}
                     </span>
                     <span className="font-mono text-[#0A0B0D] font-medium">
-                      +{reviewAsset === 'USDC'
-                        ? fmt.usdcUnits(reviewFeeUnits)
-                        : fmt.units(reviewFeeUnits, ASSET_DECIMALS[reviewAsset])} {reviewAsset}
+                      {reviewFeeUnits > 0n
+                        ? `+${reviewAsset === 'USDC' ? fmt.usdcUnits(reviewFeeUnits) : fmt.units(reviewFeeUnits, ASSET_DECIMALS[reviewAsset])} ${reviewAsset}`
+                        : `${reviewAsset === 'USDC' ? '0.00' : '0'} ${reviewAsset}`}
                     </span>
                   </div>
+
+                  {/* Total Deduction from token balance */}
                   <div className="py-2.5 flex items-center justify-between font-semibold">
-                    <span className="text-[#0A0B0D]">{t.sheets.send.totalFromYou}</span>
+                    <span className="text-[#0A0B0D]">
+                      {reviewAsset === 'USDC'
+                        ? t.sheets.send.totalDeductionUsdc
+                        : t.sheets.send.totalDeductionAsset.replace('{asset}', reviewAsset)}
+                    </span>
                     <span className="font-bold font-mono text-[#0052FF]">
                       {reviewAsset === 'USDC'
-                        ? fmt.usdcUnits(reviewTotalUnits)
-                        : fmt.units(reviewTotalUnits, ASSET_DECIMALS[reviewAsset])} {reviewAsset}
+                        ? `${fmt.usdcUnits(reviewTotalUnits)} USDC`
+                        : `${fmt.units(reviewTotalUnits, ASSET_DECIMALS[reviewAsset])} ${reviewAsset}`}
                     </span>
                   </div>
                 </>
-              ) : (
-                <div className="py-2.5 flex items-center justify-between">
-                  <span className="text-[#5B6577]">{t.sheets.send.amountLabel}</span>
-                  <span className="font-bold font-mono text-[#0A0B0D]">
-                    {reviewAsset === 'USDC'
-                      ? fmt.usdcUnits(reviewAmountUnits)
-                      : fmt.asset(amountInput, reviewAsset)} {reviewAsset}
-                  </span>
-                </div>
               );
             })()}
 
-            {/* Network Fee */}
-            <div className="py-2.5 flex items-center justify-between">
-              <span className="text-[#5B6577]">{t.sheets.send.networkFee}</span>
-              <span className="font-medium text-[#0A0B0D]">
-                {isEstimatingFee ? (
-                  <span>{t.sheets.send.estimating}</span>
-                ) : estimatedFeeEth ? (
-                  <span>{t.sheets.send.aboutFeeEth.replace('{fee}', fmt.number(estimatedFeeEth))}</span>
-                ) : (
-                  <span>{t.sheets.send.feeUnavailable}</span>
-                )}
-              </span>
+            {/* Network Fee with ETH breakdown */}
+            <div className="py-2.5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[#5B6577]">
+                  <span>{t.sheets.send.estimatedNetworkFee}</span>
+                  <span className="text-[10px] text-[#5B6577] font-medium bg-[#F3F4F6] px-1.5 py-0.5 rounded">
+                    {t.sheets.send.paidUsingEth}
+                  </span>
+                </div>
+                <span className="font-medium font-mono text-[#0A0B0D]">
+                  {isEstimatingFee ? (
+                    <span className="inline-flex items-center gap-1 text-[#5B6577]">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>{t.sheets.send.estimating}</span>
+                    </span>
+                  ) : estimatedFeeEth ? (
+                    <span>{t.sheets.send.aboutFeeEth.replace('{fee}', fmt.number(estimatedFeeEth))}</span>
+                  ) : (
+                    <span className="text-[#9CA3AF]">{t.sheets.send.feeUnavailable}</span>
+                  )}
+                </span>
+              </div>
+
+              <p className="text-[11px] text-[#5B6577] leading-relaxed">
+                {t.sheets.send.gasPaidToNetwork}
+              </p>
+
+              {balances !== null && (
+                <div className="flex items-center justify-between text-[11px] text-[#5B6577] pt-0.5">
+                  <span>{t.sheets.send.availableEthBalance.replace('{amount}', fmt.ethBalance(balances.eth))}</span>
+                  {isInsufficientEth && (
+                    <span className="text-[#DC2626] font-semibold">
+                      {t.sheets.send.insufficientEthForGasWarning}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[10px] text-[#9CA3AF] leading-relaxed italic">
+                {t.sheets.send.gasEstimateDisclaimer}
+              </p>
             </div>
 
             {/* Network */}
