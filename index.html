@@ -11,7 +11,26 @@
     <meta property="og:title" content="Pukico Dashboard" />
     <meta property="og:description" content="Pukico mobile-first web dashboard on Base Sepolia testnet with Privy authentication, profile management, and testnet balance tracker." />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://pukico.xyz/pukico-x-card.png" />
+    <meta property="og:image:secure_url" content="https://pukico.xyz/pukico-x-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://pukico.xyz/pukico-x-card.png" />
+    <script>
+      (function () {
+        try {
+          var code = null;
+          var m = location.pathname.match(/^\/p\/([A-Za-z0-9]{6,16})\/?$/);
+          if (m) { code = m[1]; }
+          else {
+            var h = location.hash.match(/^#pay=([A-Za-z0-9]{6,16})$/);
+            if (h) { code = h[1]; }
+          }
+          if (code) { location.replace('https://app.pukico.xyz/#pay=' + code); }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <script>
