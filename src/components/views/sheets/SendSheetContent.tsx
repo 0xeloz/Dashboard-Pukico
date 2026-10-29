@@ -319,7 +319,7 @@ export function SendSheetContent({
   // Step 2: Recipient
   const [recipientInput, setRecipientInput] = useState<string>('');
   const [recipientStatus, setRecipientStatus] = useState<
-    'idle' | 'looking' | 'found' | 'not_found' | 'own_id' | 'format_error'
+    'idle' | 'looking' | 'found' | 'not_found' | 'own_id' | 'format_error' | 'lookup_error'
   >('idle');
   const [resolvedRecipient, setResolvedRecipient] = useState<{
     id: string;
@@ -330,6 +330,17 @@ export function SendSheetContent({
   const resolveDebounceRef = useRef<number | null>(null);
   const resolveControllerRef = useRef<AbortController | null>(null);
   const latestResolveReqIdRef = useRef<number>(0);
+
+  useEffect(() => {
+    return () => {
+      if (resolveDebounceRef.current) {
+        window.clearTimeout(resolveDebounceRef.current);
+      }
+      if (resolveControllerRef.current) {
+        resolveControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Step 3: Amount & Fees
   const [amountInput, setAmountInput] = useState<string>('');
@@ -787,49 +798,67 @@ export function SendSheetContent({
         ))
   );
 
-  // Handle Recipient Input & 400ms Debounced Lookup
-  const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawVal = e.target.value.replace(/^@+/, '').toLowerCase();
-    const sanitized = rawVal.replace(/[^a-z0-9_]/g, '').slice(0, 20);
-    setRecipientInput(sanitized);
+  // Unified Recipient Lookup Routine (handles debounce, token cancellation, and error differentiation)
+  const performLookup = useCallback(
+    (rawTargetId: string, debounceMs: number = 0) => {
+      if (resolveDebounceRef.current) {
+        window.clearTimeout(resolveDebounceRef.current);
+        resolveDebounceRef.current = null;
+      }
+      if (resolveControllerRef.current) {
+        resolveControllerRef.current.abort();
+        resolveControllerRef.current = null;
+      }
 
-    if (resolveDebounceRef.current) {
-      window.clearTimeout(resolveDebounceRef.current);
-    }
-    if (resolveControllerRef.current) {
-      resolveControllerRef.current.abort();
-    }
+      const sanitized = rawTargetId.replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+      setRecipientInput(sanitized);
 
-    if (sanitized.length === 0) {
-      setRecipientStatus('idle');
-      setResolvedRecipient(null);
-      return;
-    }
+      if (sanitized.length === 0) {
+        setRecipientStatus('idle');
+        setResolvedRecipient(null);
+        return;
+      }
 
-    if (sanitized.length < 3) {
-      setRecipientStatus('format_error');
-      setResolvedRecipient(null);
-      return;
-    }
+      if (sanitized.length < 3) {
+        setRecipientStatus('format_error');
+        setResolvedRecipient(null);
+        return;
+      }
 
-    // Check if own ID
-    if (profile?.pukico_id && sanitized === profile.pukico_id.toLowerCase().replace(/^@/, '')) {
-      setRecipientStatus('own_id');
-      setResolvedRecipient(null);
-      return;
-    }
+      // Check if own ID
+      if (profile?.pukico_id && sanitized === profile.pukico_id.toLowerCase().replace(/^@/, '')) {
+        setRecipientStatus('own_id');
+        setResolvedRecipient(null);
+        return;
+      }
 
-    setRecipientStatus('looking');
-    const controller = new AbortController();
-    resolveControllerRef.current = controller;
-    const reqId = ++latestResolveReqIdRef.current;
+      setRecipientStatus('looking');
+      const controller = new AbortController();
+      resolveControllerRef.current = controller;
+      const reqId = ++latestResolveReqIdRef.current;
 
-    resolveDebounceRef.current = window.setTimeout(async () => {
-      try {
-        const token = getAccessToken ? await getAccessToken() : null;
-        const result = await resolvePukicoId(sanitized, { privyToken: token, isDemoMode }, controller.signal);
+      const execute = async () => {
+        try {
+          const token = getAccessToken ? await getAccessToken() : null;
+          if (reqId !== latestResolveReqIdRef.current || controller.signal.aborted) {
+            return;
+          }
+          const result = await resolvePukicoId(
+            sanitized,
+            { privyToken: token, isDemoMode },
+            controller.signal
+          );
 
-        if (reqId === latestResolveReqIdRef.current) {
+          if (reqId !== latestResolveReqIdRef.current) {
+            return;
+          }
+
+          if (result.error === 'network' || result.error === 'server') {
+            setRecipientStatus('lookup_error');
+            setResolvedRecipient(null);
+            return;
+          }
+
           if (result.is_self) {
             setRecipientStatus('own_id');
             setResolvedRecipient(null);
@@ -853,84 +882,40 @@ export function SendSheetContent({
             setResolvedRecipient(null);
             setFailedLookupIds((prev) => new Set(prev).add(sanitized));
           }
+        } catch (err: unknown) {
+          if (reqId === latestResolveReqIdRef.current) {
+            if ((err as Error)?.name === 'AbortError') {
+              return;
+            }
+            setRecipientStatus('lookup_error');
+            setResolvedRecipient(null);
+          }
         }
-      } catch (err: unknown) {
-        if (reqId === latestResolveReqIdRef.current && (err as Error)?.name !== 'AbortError') {
-          setRecipientStatus('not_found');
-          setResolvedRecipient(null);
-          setFailedLookupIds((prev) => new Set(prev).add(sanitized));
-        }
+      };
+
+      if (debounceMs > 0) {
+        resolveDebounceRef.current = window.setTimeout(execute, debounceMs);
+      } else {
+        execute();
       }
-    }, 400);
+    },
+    [profile?.pukico_id, getAccessToken, isDemoMode]
+  );
+
+  // Handle Recipient Input & 400ms Debounced Lookup
+  const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    performLookup(e.target.value, 400);
   };
 
   // Prefill resolver when opened with recipientId from friends tab
   useEffect(() => {
     if (prefilledRecipientId) {
-      const clean = prefilledRecipientId.replace(/^@/, '').toLowerCase().trim();
-      setRecipientInput(clean);
-      setRecipientStatus('looking');
-      (async () => {
-        try {
-          const token = getAccessToken ? await getAccessToken() : null;
-          const result = await resolvePukicoId(clean, { privyToken: token, isDemoMode });
-          if (result.found && result.wallet_address) {
-            setRecipientStatus('found');
-            setResolvedRecipient({
-              id: result.pukico_id || clean,
-              address: result.wallet_address,
-            });
-            setFailedLookupIds((prev) => {
-              if (!prev.has(clean)) return prev;
-              const next = new Set(prev);
-              next.delete(clean);
-              return next;
-            });
-          } else {
-            setRecipientStatus('not_found');
-            setResolvedRecipient(null);
-            setFailedLookupIds((prev) => new Set(prev).add(clean));
-          }
-        } catch {
-          setRecipientStatus('not_found');
-          setResolvedRecipient(null);
-          setFailedLookupIds((prev) => new Set(prev).add(clean));
-        }
-      })();
+      performLookup(prefilledRecipientId, 0);
     }
-  }, [prefilledRecipientId, getAccessToken, isDemoMode]);
+  }, [prefilledRecipientId, performLookup]);
 
   const handleSelectFriendChip = (id: string) => {
-    const clean = id.replace(/^@/, '').toLowerCase().trim();
-    setRecipientInput(clean);
-    setRecipientStatus('looking');
-    (async () => {
-      try {
-        const token = getAccessToken ? await getAccessToken() : null;
-        const result = await resolvePukicoId(clean, { privyToken: token, isDemoMode });
-        if (result.found && result.wallet_address) {
-          setRecipientStatus('found');
-          setResolvedRecipient({
-            id: result.pukico_id || clean,
-            address: result.wallet_address,
-          });
-          setFailedLookupIds((prev) => {
-            if (!prev.has(clean)) return prev;
-            const next = new Set(prev);
-            next.delete(clean);
-            return next;
-          });
-        } else {
-          setRecipientStatus('not_found');
-          setResolvedRecipient(null);
-          setFailedLookupIds((prev) => new Set(prev).add(clean));
-        }
-      } catch {
-        setRecipientStatus('not_found');
-        setResolvedRecipient(null);
-        setFailedLookupIds((prev) => new Set(prev).add(clean));
-      }
-    })();
+    performLookup(id, 0);
   };
 
   // Fee Estimation for a SINGLE transaction:
@@ -2145,6 +2130,11 @@ export function SendSheetContent({
               {recipientStatus === 'not_found' && (
                 <span className="text-[#DC2626]">
                   {t.sheets.send.noOneHasId.replace('{id}', recipientInput)}
+                </span>
+              )}
+              {recipientStatus === 'lookup_error' && (
+                <span className="text-[#B45309] font-medium">
+                  {t.sheets.send.lookupError}
                 </span>
               )}
               {recipientStatus === 'own_id' && (

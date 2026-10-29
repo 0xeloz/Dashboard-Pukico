@@ -232,6 +232,7 @@ export const en = {
       feePendingWarning: 'Service fee not paid yet',
       feePendingRetry: 'Try again',
       networkFeeTransfer: 'Network fee (transfer)',
+      lookupError: "Couldn't check. Try again.",
     },
     receive: {
       title: 'Receive',

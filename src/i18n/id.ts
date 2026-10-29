@@ -241,6 +241,7 @@ export const id: Translations = {
       feePendingWarning: 'Biaya layanan belum terbayar',
       feePendingRetry: 'Coba lagi',
       networkFeeTransfer: 'Biaya jaringan (transfer)',
+      lookupError: 'Gagal memeriksa. Coba lagi.',
     },
     receive: {
       title: 'Terima',
