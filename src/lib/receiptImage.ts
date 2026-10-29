@@ -159,28 +159,27 @@ export async function renderReceiptPng(data: ReceiptData): Promise<Blob> {
   const HEADER_GAP = 40;
   const AMOUNT_SECTION_HEIGHT = 136;
   const SECTION_GAP = 32;
-  const DIVIDER_HEIGHT = 2;
   const ROWS_START_GAP = 28;
   const ROW_HEIGHT = 58;
   const ROWS_END_GAP = 24;
   const FOOTER_GAP = 28;
-  const FOOTER_HEIGHT = 32;
-  const PADDING_BOTTOM = 64;
+  const FOOTER_HEIGHT = 22; // 22px font height
+  const PADDING_BOTTOM = 56; // Fixed 56px padding from footer to bottom edge
 
-  const totalHeight =
+  // Position of last element (footer)
+  const footerTopY =
     PADDING_TOP +
     HEADER_HEIGHT +
     HEADER_GAP +
     AMOUNT_SECTION_HEIGHT +
     SECTION_GAP +
-    DIVIDER_HEIGHT +
     ROWS_START_GAP +
     rows.length * ROW_HEIGHT +
     ROWS_END_GAP +
-    DIVIDER_HEIGHT +
-    FOOTER_GAP +
-    FOOTER_HEIGHT +
-    PADDING_BOTTOM;
+    FOOTER_GAP;
+
+  const footerBottomY = footerTopY + FOOTER_HEIGHT;
+  const totalHeight = footerBottomY + PADDING_BOTTOM;
 
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
