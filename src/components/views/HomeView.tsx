@@ -8,9 +8,12 @@ import {
   RefreshCw,
   AlertTriangle,
   AlertCircle,
+  Fingerprint,
+  X,
 } from 'lucide-react';
 import { useBalance } from '../../context/BalanceContext';
 import { useTx } from '../../context/TxContext';
+import { useAuth } from '../../context/AuthContext';
 import { UsdcTokenIcon, EthTokenIcon } from '../ui/PukicoBrand';
 import { ActivityRow, type ActivityItem } from '../ui/ActivityRow';
 import { BottomSheet } from '../ui/BottomSheet';
@@ -72,7 +75,32 @@ export function HomeView({
   const { usdc, eth, usdcRaw, refreshing, refresh } = useBalance();
   const { txs, refresh: refreshTx } = useTx();
   const [selectedDetailTx, setSelectedDetailTx] = useState<TxRecord | null>(null);
+  const { hasPasskeyMfa, enrollMfa } = useAuth();
 
+  // Security nudge state (dismissible for 7 days, safe localStorage)
+  const [isNudgeDismissed, setIsNudgeDismissed] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem('pukico_dismiss_passkey_nudge');
+      if (!raw) return false;
+      const dismissedAt = parseInt(raw, 10);
+      if (isNaN(dismissedAt)) return false;
+      const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+      return Date.now() - dismissedAt < SEVEN_DAYS_MS;
+    } catch {
+      return false;
+    }
+  });
+
+  const handleDismissNudge = () => {
+    setIsNudgeDismissed(true);
+    try {
+      localStorage.setItem('pukico_dismiss_passkey_nudge', Date.now().toString());
+    } catch {
+      // safe fallback if storage is restricted
+    }
+  };
+
+  const showSecurityNudge = !hasPasskeyMfa && !isNudgeDismissed;
 
   // Balance visibility state saved in localStorage
   const [isBalanceHidden, setIsBalanceHidden] = useState<boolean>(() => {
@@ -381,6 +409,43 @@ export function HomeView({
           <span className="text-[#DCE8FF] text-xs font-medium shrink-0 ml-auto">{t.common.noMonetaryValue}</span>
         </div>
       </section>
+
+      {/* Nudge Keamanan: Amankan wallet kamu */}
+      {showSecurityNudge && (
+        <div
+          role="region"
+          aria-label={t.home.securityNudgeTitle}
+          className="relative p-3.5 rounded-2xl bg-white border border-[#0052FF]/20 shadow-xs flex items-start gap-3 animate-fade-up"
+        >
+          <div className="w-9 h-9 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0 mt-0.5">
+            <Fingerprint className="w-5 h-5 text-[#0052FF]" />
+          </div>
+          <div className="flex-1 min-w-0 pr-6 space-y-1.5">
+            <div className="font-semibold text-xs text-[#0A0B0D]">
+              {t.home.securityNudgeTitle}
+            </div>
+            <p className="text-xs text-[#5B6577] leading-relaxed">
+              {t.home.securityNudgeDesc}
+            </p>
+            <button
+              type="button"
+              onClick={() => enrollMfa()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0052FF] hover:bg-[#0042D6] text-white text-xs font-semibold transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97]"
+            >
+              <Fingerprint className="w-3.5 h-3.5" />
+              <span>{t.home.securityNudgeAction}</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={handleDismissNudge}
+            className="absolute top-3 right-3 p-1 rounded-lg text-[#5B6577] hover:text-[#0A0B0D] hover:bg-black/5 transition-colors cursor-pointer"
+            aria-label={t.common.close}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* 2. AKSI CEPAT */}
       <section aria-label={t.home.quickActionsAria} className="space-y-3">

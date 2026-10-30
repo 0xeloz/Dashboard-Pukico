@@ -34,7 +34,7 @@ export function RecipientVerification({
   lookalikeId = null,
   onCopyAddress,
 }: RecipientVerificationProps) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [copied, setCopied] = useState<boolean>(false);
 
   const checksumAddress = formatChecksum(rawAddress);
@@ -97,7 +97,7 @@ export function RecipientVerification({
                 <p className="text-[11px] text-[#DC2626] font-medium">
                   {t.sheets.send.addressChangedLastSent.replace(
                     '{date}',
-                    formatRelativeTime(lastSentAt)
+                    formatRelativeTime(lastSentAt, lang)
                   )}
                 </p>
               )}

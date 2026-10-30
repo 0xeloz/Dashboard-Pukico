@@ -29,6 +29,7 @@ export interface AuthContextType {
   enrollMfa: () => Promise<void>;
   mfaMethods?: ('sms' | 'totp' | 'passkey')[];
   hasPasskeyMfa?: boolean;
+  exportWallet?: (options?: { address: string }) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -118,6 +119,9 @@ function DemoAuthProvider({ children }: { children: React.ReactNode }) {
     enrollMfa: async () => {},
     mfaMethods: [],
     hasPasskeyMfa: false,
+    exportWallet: async () => {
+      throw new Error('EXPORT_UNAVAILABLE_DEMO');
+    },
   };
 
 

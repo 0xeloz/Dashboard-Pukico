@@ -36,6 +36,7 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     login: privyLogin,
     logout: privyLogout,
     getAccessToken,
+    exportWallet,
   } = usePrivy();
 
   const { sendTransaction } = useSendTransaction();
@@ -217,6 +218,7 @@ function PrivyConnectedAuthConsumer({ children }: { children: React.ReactNode })
     getAccessToken,
     sendTransaction,
     enrollMfa,
+    exportWallet,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

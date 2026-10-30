@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Shield, Mail, Wallet, Network, UserCheck, Fingerprint } from 'lucide-react';
+import { Copy, Check, LogOut, Shield, Mail, Wallet, Network, UserCheck, Fingerprint, KeyRound, AlertTriangle, X } from 'lucide-react';
 import { LanguagePopover } from '../ui/LanguagePopover';
 import { useT } from '../../i18n';
 import { CHAIN_CONFIG } from '../../lib/config';
@@ -28,11 +28,13 @@ export function SettingsView({
 }: SettingsViewProps) {
   const { t } = useT();
   const { toast } = useToast();
-  const { enrollMfa, hasPasskeyMfa: authHasPasskey } = useAuth();
+  const { enrollMfa, hasPasskeyMfa: authHasPasskey, exportWallet } = useAuth();
   const handleEnrollMfa = onEnrollMfa || enrollMfa;
   const isPasskeyActive = hasPasskeyMfa ?? authHasPasskey ?? false;
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Success toast when passkey changes from inactive to active after explicit enrollment click
   const enrollRequestedRef = React.useRef(false);
@@ -85,6 +87,37 @@ export function SettingsView({
       await onLogout();
     } finally {
       setIsLoggingOut(false);
+    }
+  };
+
+  const handleOpenExport = () => {
+    setShowExportModal(true);
+  };
+
+  const handleConfirmExport = async () => {
+    if (isDemoMode) {
+      toast.info(t.settings.exportUnavailableDemo);
+      setShowExportModal(false);
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      setShowExportModal(false);
+      await exportWallet?.({ address: profile.wallet_address });
+    } catch (err: unknown) {
+      const errorMsg = String((err as any)?.message || err);
+      if (
+        errorMsg.toLowerCase().includes('not enabled') ||
+        errorMsg.toLowerCase().includes('disabled') ||
+        errorMsg.toLowerCase().includes('user export')
+      ) {
+        toast.error(t.settings.exportDisabledError);
+      } else {
+        toast.error(t.settings.exportFailedError);
+      }
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -228,6 +261,34 @@ export function SettingsView({
           </div>
         )}
 
+        {/* Backup & Pemulihan (Ekspor kunci wallet) */}
+        <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
+              <KeyRound className="w-5 h-5 text-[#0052FF]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs text-[#5B6577] font-medium">{t.settings.backupRecovery}</div>
+              <div className="font-semibold text-sm text-[#0A0B0D]">
+                {t.settings.exportWallet}
+              </div>
+              <p className="text-xs text-[#5B6577] mt-0.5 leading-relaxed">
+                {t.settings.backupRecoveryDesc}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleOpenExport}
+            disabled={isExporting}
+            className="px-3.5 py-2 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#EEF4FF] text-xs font-semibold text-[#0A0B0D] flex items-center justify-center gap-1.5 transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.97] shrink-0 self-start sm:self-auto disabled:opacity-50"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-[#5B6577]" />
+            <span>{t.settings.exportWallet}</span>
+          </button>
+        </div>
+
         {/* Network */}
         <div className="py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -309,6 +370,82 @@ export function SettingsView({
           <span>{isLoggingOut ? t.settings.loggingOut : t.settings.logOut}</span>
         </button>
       </div>
+
+      {/* Confirmation Modal for Wallet Key Export */}
+      {showExportModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="export-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
+        >
+          <div className="relative w-full max-w-md bg-white rounded-2xl p-6 shadow-xl border border-[#E5E7EB] space-y-4 animate-scale-up">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 text-amber-600">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 id="export-modal-title" className="font-bold text-base text-[#0A0B0D]">
+                  {t.settings.exportModalTitle}
+                </h3>
+                <p className="text-xs text-[#5B6577] mt-0.5">
+                  Ethereum ({profile.wallet_address.slice(0, 6)}...{profile.wallet_address.slice(-4)})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="p-1 rounded-lg text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
+                aria-label={t.common.close}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs text-[#3B4455] bg-[#F7F8FA] p-3.5 rounded-xl border border-[#E5E7EB]/80 leading-relaxed">
+              <div className="flex items-start gap-2">
+                <span className="text-red-500 font-bold">•</span>
+                <span className="font-semibold text-red-700">
+                  {t.settings.exportWarnControl}
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-amber-600 font-bold">•</span>
+                <span>{t.settings.exportWarnNoScreenshot}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-amber-600 font-bold">•</span>
+                <span>{t.settings.exportWarnNoShare}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-600 font-bold">•</span>
+                <span>{t.settings.exportWarnOffline}</span>
+              </div>
+              <div className="flex items-start gap-2 pt-1 border-t border-[#E5E7EB] text-[11px] text-[#5B6577]">
+                <span className="font-bold text-[#0052FF]">ℹ</span>
+                <span>{t.settings.exportWarnTestnet}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="w-full sm:w-1/2 py-2.5 px-3 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] text-xs font-semibold text-[#0A0B0D] transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.98]"
+              >
+                {t.settings.exportCancelBtn}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExport}
+                className="w-full sm:w-1/2 py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition-transform duration-[var(--dur-tap)] cursor-pointer active:scale-[0.98] shadow-xs"
+              >
+                {t.settings.exportConfirmBtn}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

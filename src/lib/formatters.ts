@@ -145,7 +145,7 @@ export function formatEthBalance(
  */
 export function formatRelativeTime(
   dateStringOrTimestamp: string | number | undefined | null,
-  lang: 'en' | 'id' = 'en'
+  lang: 'en' | 'id' = 'id'
 ): string {
   if (!dateStringOrTimestamp) return '';
   const date =
