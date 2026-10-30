@@ -7,6 +7,9 @@ export interface ResolveIdResult {
   is_self?: boolean;
   reason?: string;
   error?: 'onboarding_required' | 'unauthorized' | 'server' | 'network';
+  address_changed?: boolean;
+  previous_address?: string;
+  last_sent_at?: string;
 }
 
 export type FeeStatus = 'pending' | 'paid' | 'unpaid' | 'invalid' | 'none' | 'legacy' | null;
@@ -160,6 +163,19 @@ export async function resolvePukicoId(
         pukico_id: 'rina',
         wallet_address: '0x2222222222222222222222222222222222222222',
         is_self: false,
+        address_changed: false,
+      };
+    }
+    // Demo mode: alex simulates an address-changed recipient
+    if (normalized === 'alex' || normalized.endsWith('_changed')) {
+      return {
+        found: true,
+        pukico_id: normalized,
+        wallet_address: '0x4444444444444444444444444444444444444444',
+        is_self: false,
+        address_changed: true,
+        previous_address: '0x4444333344443333444433334444333344443333',
+        last_sent_at: new Date(Date.now() - 7 * 86400000).toISOString(),
       };
     }
     if (normalized === 'andika') {
@@ -168,6 +184,7 @@ export async function resolvePukicoId(
         pukico_id: 'andika',
         wallet_address: '0x1111111111111111111111111111111111111111',
         is_self: true,
+        address_changed: false,
       };
     }
     return {
@@ -206,6 +223,9 @@ export async function resolvePukicoId(
         pukico_id: data.pukico_id,
         wallet_address: data.wallet_address,
         is_self: Boolean(data.is_self),
+        address_changed: Boolean(data.address_changed),
+        previous_address: data.previous_address,
+        last_sent_at: data.last_sent_at,
       };
     }
 

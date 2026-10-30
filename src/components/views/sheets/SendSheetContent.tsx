@@ -7,9 +7,6 @@ import {
   ExternalLink,
   Loader2,
   ShieldCheck,
-  Copy,
-  ChevronDown,
-  ChevronUp,
   Fingerprint,
 } from 'lucide-react';
 import { parseUnits, formatUnits, isAddress, encodeFunctionData, erc20Abi } from 'viem';
@@ -74,6 +71,8 @@ import {
   type FeeLogEntry,
 } from '../../../lib/fees';
 import { UsdcTokenIcon, EthTokenIcon } from '../../ui/PukicoBrand';
+import { RecipientVerification } from '../../ui/RecipientVerification';
+import { findLookalike } from '../../../lib/addressSafety';
 
 interface SendSheetContentProps {
   onClose: () => void;
@@ -325,6 +324,10 @@ export function SendSheetContent({
     id: string;
     address: string;
   } | null>(null);
+  const [recipientAddressChanged, setRecipientAddressChanged] = useState<boolean>(false);
+  const [previousRecipientAddress, setPreviousRecipientAddress] = useState<string | null>(null);
+  const [lastSentAt, setLastSentAt] = useState<string | null>(null);
+  const [isAddressChangeAcknowledged, setIsAddressChangeAcknowledged] = useState<boolean>(false);
   const [failedLookupIds, setFailedLookupIds] = useState<Set<string>>(new Set());
 
   const resolveDebounceRef = useRef<number | null>(null);
@@ -359,8 +362,6 @@ export function SendSheetContent({
 
   // Step 4: Large transfer confirmation & security states
   const [largeTransferInput, setLargeTransferInput] = useState<string>('');
-  const [showDetails, setShowDetails] = useState<boolean>(false);
-  const [copiedDetailField, setCopiedDetailField] = useState<string | null>(null);
   const [recipientVerificationError, setRecipientVerificationError] = useState<boolean>(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
 
@@ -798,6 +799,25 @@ export function SendSheetContent({
         ))
   );
 
+  const knownRecipientIds = useMemo(() => {
+    const ids = new Set<string>();
+    friends.forEach((f) => {
+      if (f.pukico_id) ids.add(f.pukico_id.toLowerCase().trim().replace(/^@/, ''));
+    });
+    txs.forEach((tx) => {
+      if (tx.direction === 'out' || tx.to_pukico_id) {
+        const targetId = tx.to_pukico_id || tx.counterparty;
+        if (targetId) ids.add(targetId.toLowerCase().trim().replace(/^@/, ''));
+      }
+    });
+    return Array.from(ids);
+  }, [friends, txs]);
+
+  const lookalikeRecipientId = useMemo(() => {
+    if (!resolvedRecipient?.id || isKnownRecipient) return null;
+    return findLookalike(resolvedRecipient.id, knownRecipientIds);
+  }, [resolvedRecipient?.id, isKnownRecipient, knownRecipientIds]);
+
   // Unified Recipient Lookup Routine (handles debounce, token cancellation, and error differentiation)
   const performLookup = useCallback(
     (rawTargetId: string, debounceMs: number = 0) => {
@@ -816,12 +836,20 @@ export function SendSheetContent({
       if (sanitized.length === 0) {
         setRecipientStatus('idle');
         setResolvedRecipient(null);
+        setRecipientAddressChanged(false);
+        setPreviousRecipientAddress(null);
+        setLastSentAt(null);
+        setIsAddressChangeAcknowledged(false);
         return;
       }
 
       if (sanitized.length < 3) {
         setRecipientStatus('format_error');
         setResolvedRecipient(null);
+        setRecipientAddressChanged(false);
+        setPreviousRecipientAddress(null);
+        setLastSentAt(null);
+        setIsAddressChangeAcknowledged(false);
         return;
       }
 
@@ -829,6 +857,10 @@ export function SendSheetContent({
       if (profile?.pukico_id && sanitized === profile.pukico_id.toLowerCase().replace(/^@/, '')) {
         setRecipientStatus('own_id');
         setResolvedRecipient(null);
+        setRecipientAddressChanged(false);
+        setPreviousRecipientAddress(null);
+        setLastSentAt(null);
+        setIsAddressChangeAcknowledged(false);
         return;
       }
 
@@ -856,18 +888,30 @@ export function SendSheetContent({
           if (result.error === 'network' || result.error === 'server') {
             setRecipientStatus('lookup_error');
             setResolvedRecipient(null);
+            setRecipientAddressChanged(false);
+            setPreviousRecipientAddress(null);
+            setLastSentAt(null);
+            setIsAddressChangeAcknowledged(false);
             return;
           }
 
           if (result.is_self) {
             setRecipientStatus('own_id');
             setResolvedRecipient(null);
+            setRecipientAddressChanged(false);
+            setPreviousRecipientAddress(null);
+            setLastSentAt(null);
+            setIsAddressChangeAcknowledged(false);
           } else if (result.found && result.wallet_address) {
             setRecipientStatus('found');
             setResolvedRecipient({
               id: result.pukico_id || sanitized,
               address: result.wallet_address,
             });
+            setRecipientAddressChanged(Boolean(result.address_changed));
+            setPreviousRecipientAddress(result.previous_address || null);
+            setLastSentAt(result.last_sent_at || null);
+            setIsAddressChangeAcknowledged(false);
             setFailedLookupIds((prev) => {
               if (!prev.has(sanitized)) return prev;
               const next = new Set(prev);
@@ -877,9 +921,17 @@ export function SendSheetContent({
           } else if (result.reason === 'format') {
             setRecipientStatus('format_error');
             setResolvedRecipient(null);
+            setRecipientAddressChanged(false);
+            setPreviousRecipientAddress(null);
+            setLastSentAt(null);
+            setIsAddressChangeAcknowledged(false);
           } else {
             setRecipientStatus('not_found');
             setResolvedRecipient(null);
+            setRecipientAddressChanged(false);
+            setPreviousRecipientAddress(null);
+            setLastSentAt(null);
+            setIsAddressChangeAcknowledged(false);
             setFailedLookupIds((prev) => new Set(prev).add(sanitized));
           }
         } catch (err: unknown) {
@@ -889,6 +941,10 @@ export function SendSheetContent({
             }
             setRecipientStatus('lookup_error');
             setResolvedRecipient(null);
+            setRecipientAddressChanged(false);
+            setPreviousRecipientAddress(null);
+            setLastSentAt(null);
+            setIsAddressChangeAcknowledged(false);
           }
         }
       };
@@ -1216,20 +1272,6 @@ export function SendSheetContent({
     setAmountInput(val);
   };
 
-  const handleCopyDetail = async (text: string, fieldId: string) => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedDetailField(fieldId);
-      toast.info(t.toast.copied, { silent: true });
-      setTimeout(() => {
-        setCopiedDetailField((prev) => (prev === fieldId ? null : prev));
-      }, 1500);
-    } catch {
-      // Fallback
-    }
-  };
-
   // Step 5: Execute Transaction (11-step sequential security sequence)
   const handleExecuteSend = async () => {
     // 1. Anti-double-send lock with useRef
@@ -1318,6 +1360,26 @@ export function SendSheetContent({
         setProgressState(null);
         sendInProgressRef.current = false;
         return;
+      }
+
+      // Read address_changed during re-resolve and block send if not acknowledged
+      if (latestResolve.address_changed) {
+        setRecipientAddressChanged(true);
+        if (latestResolve.previous_address) {
+          setPreviousRecipientAddress(latestResolve.previous_address);
+        }
+        if (latestResolve.last_sent_at) {
+          setLastSentAt(latestResolve.last_sent_at);
+        }
+        if (!isAddressChangeAcknowledged) {
+          setSecurityError(t.sheets.send.addressChangeBlocked);
+          toast.error(t.sheets.send.addressChangeBlocked);
+          setStep(4);
+          setIsSubmitting(false);
+          setProgressState(null);
+          sendInProgressRef.current = false;
+          return;
+        }
       }
     } catch {
       setRecipientVerificationError(true);
@@ -2504,8 +2566,8 @@ export function SendSheetContent({
             </h3>
           </div>
 
-          {/* New Recipient Amber Warning */}
-          {!isKnownRecipient && resolvedRecipient && (
+          {/* New Recipient Amber Warning (only if no specific lookalike detected) */}
+          {!isKnownRecipient && resolvedRecipient && !lookalikeRecipientId && (
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
               <span className="leading-relaxed font-medium">
@@ -2633,6 +2695,23 @@ export function SendSheetContent({
             </div>
           </div>
 
+          {/* Full Checksum Recipient Address & Security Verifications (Always Visible) */}
+          {resolvedRecipient && (
+            <RecipientVerification
+              recipientId={resolvedRecipient.id}
+              rawAddress={resolvedRecipient.address}
+              addressChanged={recipientAddressChanged}
+              previousAddress={previousRecipientAddress}
+              lastSentAt={lastSentAt}
+              isAddressChangeAcknowledged={isAddressChangeAcknowledged}
+              onAcknowledgeChange={setIsAddressChangeAcknowledged}
+              lookalikeId={lookalikeRecipientId}
+              onCopyAddress={() => {
+                toast.success(t.toast.copiedAddress);
+              }}
+            />
+          )}
+
           {/* Large Transfer Retype Confirmation */}
           {isLargeTransfer && resolvedRecipient && (
             <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs space-y-2">
@@ -2655,122 +2734,6 @@ export function SendSheetContent({
               />
             </div>
           )}
-
-          {/* Collapsible Details */}
-          <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowDetails((prev) => !prev)}
-              className="flex items-center justify-between w-full px-3.5 py-2.5 text-xs font-semibold text-[#5B6577] hover:text-[#0A0B0D] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
-            >
-              <span>{t.sheets.send.details}</span>
-              {showDetails ? (
-                <ChevronUp className="w-4 h-4 text-[#5B6577]" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-[#5B6577]" />
-              )}
-            </button>
-
-            {showDetails && (
-              <div className="px-3.5 pb-3 pt-1 space-y-2.5 border-t border-[#E5E7EB] text-xs">
-                {/* 1. Recipient Address */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[#5B6577] text-[11px]">
-                    <span>{t.sheets.send.recipientAddress}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyDetail(resolvedRecipient?.address || '', 'recipient')}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0052FF] hover:underline cursor-pointer"
-                    >
-                      {copiedDetailField === 'recipient' ? (
-                        <>
-                          <Check className="w-3 h-3 text-[#047857]" />
-                          <span className="text-[#047857]">{t.common.copied}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          <span>{t.common.copy}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <div
-                    onClick={() => handleCopyDetail(resolvedRecipient?.address || '', 'recipient')}
-                    className="font-mono text-[11px] text-[#0A0B0D] break-all bg-white p-2 rounded-lg border border-[#E5E7EB] cursor-pointer hover:border-[#BFDBFE] transition-colors select-all"
-                  >
-                    {resolvedRecipient?.address || '—'}
-                  </div>
-                </div>
-
-                {/* 2. Token contract address (for USDC) */}
-                {selectedAsset === 'USDC' && (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[#5B6577] text-[11px]">
-                      <span>{t.sheets.send.tokenContract}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyDetail(BASE_SEPOLIA_USDC_ADDRESS, 'token_contract')}
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0052FF] hover:underline cursor-pointer"
-                      >
-                        {copiedDetailField === 'token_contract' ? (
-                          <>
-                            <Check className="w-3 h-3 text-[#047857]" />
-                            <span className="text-[#047857]">{t.common.copied}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>{t.common.copy}</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <div
-                      onClick={() => handleCopyDetail(BASE_SEPOLIA_USDC_ADDRESS, 'token_contract')}
-                      className="font-mono text-[11px] text-[#0A0B0D] break-all bg-white p-2 rounded-lg border border-[#E5E7EB] cursor-pointer hover:border-[#BFDBFE] transition-colors select-all"
-                    >
-                      {BASE_SEPOLIA_USDC_ADDRESS}
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. Network ID */}
-                <div className="flex items-center justify-between py-1 border-t border-[#E5E7EB]/60">
-                  <span className="text-[#5B6577] text-[11px]">{t.sheets.send.networkId}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyDetail(String(CHAIN_CONFIG.id), 'network_id')}
-                    className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#0A0B0D] hover:text-[#0052FF] cursor-pointer"
-                  >
-                    <span>{CHAIN_CONFIG.id}</span>
-                    {copiedDetailField === 'network_id' ? (
-                      <Check className="w-3 h-3 text-[#047857]" />
-                    ) : (
-                      <Copy className="w-3 h-3 text-[#9CA3AF]" />
-                    )}
-                  </button>
-                </div>
-
-                {/* 4. Asset */}
-                <div className="flex items-center justify-between py-1 border-t border-[#E5E7EB]/60">
-                  <span className="text-[#5B6577] text-[11px]">{t.sheets.send.assetLabel}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyDetail(selectedAsset, 'asset')}
-                    className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#0A0B0D] hover:text-[#0052FF] cursor-pointer"
-                  >
-                    <span>{selectedAsset}</span>
-                    {copiedDetailField === 'asset' ? (
-                      <Check className="w-3 h-3 text-[#047857]" />
-                    ) : (
-                      <Copy className="w-3 h-3 text-[#9CA3AF]" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
 
           <p className="text-xs text-[#5B6577] leading-relaxed">
             {t.sheets.send.testnetNotice}
@@ -2837,7 +2800,8 @@ export function SendSheetContent({
                 !amountValidation.valid ||
                 isInsufficientEth ||
                 balances === null ||
-                (isLargeTransfer && !isLargeConfirmed)
+                (isLargeTransfer && !isLargeConfirmed) ||
+                (recipientAddressChanged && !isAddressChangeAcknowledged)
               }
               onClick={handleExecuteSend}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
