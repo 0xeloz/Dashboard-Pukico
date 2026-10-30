@@ -771,7 +771,7 @@ export function SendSheetContent({
     }));
 
     list.sort((a, b) => b.timeMs - a.timeMs);
-    return list.slice(0, 5);
+    return list.slice(0, 3);
   }, [txs, profile?.pukico_id]);
 
   const recentRecipientIds = useMemo(() => {
@@ -2213,7 +2213,7 @@ export function SendSheetContent({
                 <div className="text-xs font-semibold text-[#5B6577] mb-2">
                   {t.sheets.send.recentLabel}
                 </div>
-                <div className="space-y-1.5">
+                <div className="flex flex-row gap-2">
                   {recentRecipients.map((item) => {
                     const initial = (item.id.charAt(0) || '?').toUpperCase();
                     const isSelected = recipientInput.toLowerCase().trim() === item.id.toLowerCase();
@@ -2233,41 +2233,45 @@ export function SendSheetContent({
                         type="button"
                         onClick={() => handleSelectFriendChip(item.id)}
                         aria-label={t.friends.sendTo.replace('{id}', item.id)}
-                        className={`w-full min-h-[48px] py-2 px-3 rounded-2xl flex items-center justify-between gap-3 text-left transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0052FF] ${
+                        className={`w-[calc((100%-16px)/3)] max-w-[calc((100%-16px)/3)] shrink-0 min-w-0 min-h-[44px] py-2.5 px-1.5 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0052FF] ${
                           isSelected
                             ? 'border-2 border-[#0052FF] bg-[#F5F8FF]'
                             : 'border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] hover:border-[#D1D5DB]'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-10 h-10 rounded-full bg-[#EEF4FF] text-[#0052FF] font-bold text-sm flex items-center justify-center shrink-0">
+                        <div className="relative mb-1.5">
+                          <div className="w-9 h-9 rounded-full bg-[#EEF4FF] text-[#0052FF] font-bold text-xs flex items-center justify-center shrink-0">
                             {initial}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-mono text-sm font-bold text-[#0A0B0D] truncate">
-                              @{item.id}
+                          {isLooking && (
+                            <div className="absolute inset-0 rounded-full bg-white/75 flex items-center justify-center">
+                              <Loader2 className="w-4 h-4 text-[#0052FF] animate-spin" />
                             </div>
-                            {relativeTime && (
-                              <div className="text-[11px] text-[#5B6577] truncate">
-                                {relativeTime}
-                              </div>
-                            )}
-                          </div>
+                          )}
+                          {isFound && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#0052FF] text-white flex items-center justify-center shadow-xs">
+                              <Check className="w-2.5 h-2.5 stroke-[3]" />
+                            </div>
+                          )}
+                          {isFailed && !isLooking && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#DC2626] text-white flex items-center justify-center text-[9px] font-bold shadow-xs">
+                              !
+                            </div>
+                          )}
                         </div>
 
-                        {/* Status / Selection indicators */}
-                        {isLooking && (
-                          <Loader2 className="w-4 h-4 text-[#0052FF] animate-spin shrink-0" />
-                        )}
-                        {isFound && (
-                          <div className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center shrink-0">
-                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <div className="w-full font-mono text-xs font-bold text-[#0A0B0D] truncate">
+                          @{item.id}
+                        </div>
+
+                        {relativeTime ? (
+                          <div className="w-full text-[10px] text-[#5B6577] truncate mt-0.5">
+                            {relativeTime}
                           </div>
-                        )}
-                        {isFailed && !isLooking && (
-                          <span className="text-xs text-[#DC2626] font-medium shrink-0">
-                            {t.sheets.send.notFoundShort}
-                          </span>
+                        ) : (
+                          <div className="w-full text-[10px] text-transparent select-none mt-0.5" aria-hidden="true">
+                            -
+                          </div>
                         )}
                       </button>
                     );
