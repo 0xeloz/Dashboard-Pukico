@@ -35,6 +35,11 @@ Recent Recipients dan tampilan Transaction Receipt sudah ada di dashboard beta. 
 
 Dashboard yang diperiksa menggunakan React, TypeScript, dan Vite. Integrasi wallet menggunakan Privy dan viem. Supabase digunakan untuk layanan backend dan fungsi server. Detail implementasi dapat berubah; dokumentasi ini menjelaskan prinsip dan batas tanggung jawab, bukan kontrak API yang dijamin stabil.
 
+### Catatan Pengembangan & Dependensi Build
+
+Paket `@solana-program/memo`, `@solana-program/system`, `@solana-program/token`, dan `@solana/kit` di `package.json` tidak dipakai secara langsung oleh kode Pukico (aplikasi beroperasi murni pada EVM Base Sepolia). Namun, paket-paket ini wajib dipertahankan karena dibutuhkan saat proses bundling build (`vite build`) akibat import peer dependency opsional pada modul `@privy-io/react-auth`. Menghapus paket-paket ini akan menyebabkan error `MISSING_EXPORT` saat build produksi, jadi jangan dihapus.
+
+
 ## Lingkungan dan jaringan
 
 Jaringan testnet seperti Base Sepolia digunakan untuk pengujian. Aset di testnet tidak memiliki nilai uang nyata. Periksa jaringan yang dipilih di aplikasi sebelum melakukan tindakan apa pun.
