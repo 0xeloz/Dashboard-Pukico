@@ -16,8 +16,13 @@ const rawPrivyAppId = (import.meta.env.VITE_PRIVY_APP_ID || '').toString().trim(
 const isValidAppId = isValidPrivyAppId(rawPrivyAppId);
 const demoEnvVar = (import.meta.env.VITE_DEMO_MODE || '').toString().toLowerCase();
 
-// Automatic fallback to Demo Mode when Privy App ID is missing or invalid, unless explicitly disabled with VITE_DEMO_MODE="false"
-const isDemoModeActive = demoEnvVar === 'true' || (!isValidAppId && demoEnvVar !== 'false');
+// In production (import.meta.env.PROD), Demo Mode is strictly active ONLY if VITE_DEMO_MODE === 'true'.
+// No automatic fallback to Demo Mode in production when Privy App ID is missing or invalid (shows IS_CONFIG_MISSING screen).
+// In dev mode (AI Studio preview), automatic fallback to Demo Mode remains active for testing.
+const isProd = Boolean(import.meta.env.PROD);
+const isDemoModeActive = isProd
+  ? demoEnvVar === 'true'
+  : demoEnvVar === 'true' || (!isValidAppId && demoEnvVar !== 'false');
 
 const rawRequirePasskey = (import.meta.env.VITE_REQUIRE_PASSKEY || '').toString().toLowerCase();
 const isRequirePasskeyActive = rawRequirePasskey !== 'false';
