@@ -361,6 +361,7 @@ export function SendSheetContent({
   const resolveDebounceRef = useRef<number | null>(null);
   const resolveControllerRef = useRef<AbortController | null>(null);
   const latestResolveReqIdRef = useRef<number>(0);
+  const lastContractCheckRef = useRef<string | null>(null);
   const sheetContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1058,6 +1059,7 @@ export function SendSheetContent({
       setIsAddressChangeAcknowledged(false);
 
       if (parsed.sanitized.length < 42) {
+        lastContractCheckRef.current = null;
         setRecipientStatus('format_error');
         setExternalAddressError(t.sheets.send.addressIncomplete);
         setResolvedRecipient(null);
@@ -1072,6 +1074,7 @@ export function SendSheetContent({
 
       const validation = validateExternalAddress(parsed.sanitized, profile?.wallet_address);
       if (!validation.valid) {
+        lastContractCheckRef.current = null;
         setRecipientStatus('format_error');
         setResolvedRecipient(null);
         setExternalChecksumWarning(false);
@@ -1117,9 +1120,13 @@ export function SendSheetContent({
       setIsNewAddress(isNew);
 
       // Contract check
+      const checkingAddress = validation.address.toLowerCase();
+      lastContractCheckRef.current = checkingAddress;
       setContractStatus('checking');
       checkIsContract(validation.address, publicClient, { isDemoMode }).then((res) => {
-        setContractStatus(res.status);
+        if (lastContractCheckRef.current === checkingAddress) {
+          setContractStatus(res.status);
+        }
       });
     },
     [t, profile?.wallet_address, knownUsedAddresses, knownOutgoingAddresses, isDemoMode]
@@ -1131,6 +1138,7 @@ export function SendSheetContent({
     if (isLikelyAddressInput(val)) {
       handleExternalAddressInput(val);
     } else {
+      lastContractCheckRef.current = null;
       const usernameVal = val.slice(0, 20);
       setRecipientInput(usernameVal);
       performLookup(usernameVal, 400);
