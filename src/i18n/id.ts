@@ -381,6 +381,9 @@ export const id: Translations = {
     empty: 'Kosong',
     logOut: 'Keluar',
     loggingOut: 'Keluar...',
+    legalGroup: 'Legal',
+    termsOfUse: 'Syarat Penggunaan',
+    privacyPolicy: 'Kebijakan Privasi',
   },
   login: {
     signIn: 'Masuk ke Pukico',
@@ -391,6 +394,11 @@ export const id: Translations = {
     demoPreviewActive: 'Pratinjau demo aktif · Masuk satu klik',
     securityBadge: 'Hanya testnet Base Sepolia · Tanpa perlu dana asli',
     footer: 'Pukico Dashboard © 2026 · Autentikasi & Profil',
+    termsPrefix: 'Dengan masuk, kamu menyetujui ',
+    termsOfUse: 'Syarat Penggunaan',
+    and: ' dan ',
+    privacyPolicy: 'Kebijakan Privasi',
+    testnetNotice: 'Beta uji coba di jaringan testnet Base Sepolia. Token tidak bernilai uang.',
   },
   errors: {
     serverTitle: 'Ada yang salah',

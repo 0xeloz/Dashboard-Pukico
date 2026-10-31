@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Shield, Mail, Wallet, Network, UserCheck, Fingerprint, KeyRound, AlertTriangle, X } from 'lucide-react';
+import { Copy, Check, LogOut, Shield, Mail, Wallet, Network, UserCheck, Fingerprint, KeyRound, AlertTriangle, X, FileText, ExternalLink } from 'lucide-react';
 import { LanguagePopover } from '../ui/LanguagePopover';
 import { useT } from '../../i18n';
 import { CHAIN_CONFIG } from '../../lib/config';
@@ -26,7 +26,9 @@ export function SettingsView({
   onEnrollMfa,
   hasPasskeyMfa,
 }: SettingsViewProps) {
-  const { t } = useT();
+  const { t, lang } = useT();
+  const termsUrl = lang === 'id' ? 'https://pukico.xyz/id/terms' : 'https://pukico.xyz/terms';
+  const privacyUrl = lang === 'id' ? 'https://pukico.xyz/id/privacy' : 'https://pukico.xyz/privacy';
   const { toast } = useToast();
   const { enrollMfa, hasPasskeyMfa: authHasPasskey, exportWallet } = useAuth();
   const handleEnrollMfa = onEnrollMfa || enrollMfa;
@@ -357,6 +359,50 @@ export function SettingsView({
           </div>
         </div>
       )}
+
+      {/* Legal Group */}
+      <div className="py-4 border-b border-[#E5E7EB]">
+        <div className="text-[13px] font-semibold text-[#5B6577] mb-1">
+          {t.settings.legalGroup}
+        </div>
+        <div className="divide-y divide-[#E5E7EB]">
+          {/* Terms of Use */}
+          <a
+            href={termsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="py-3.5 flex items-center justify-between gap-3 group cursor-pointer transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0 group-hover:bg-[#E0EBFF] transition-colors">
+                <FileText className="w-5 h-5 text-[#0052FF]" />
+              </div>
+              <span className="font-semibold text-sm text-[#0A0B0D] group-hover:text-[#0052FF] transition-colors">
+                {t.settings.termsOfUse}
+              </span>
+            </div>
+            <ExternalLink className="w-4 h-4 text-[#5B6577] group-hover:text-[#0052FF] transition-colors" />
+          </a>
+
+          {/* Privacy Policy */}
+          <a
+            href={privacyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="py-3.5 flex items-center justify-between gap-3 group cursor-pointer transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#EEF4FF] flex items-center justify-center shrink-0 group-hover:bg-[#E0EBFF] transition-colors">
+                <FileText className="w-5 h-5 text-[#0052FF]" />
+              </div>
+              <span className="font-semibold text-sm text-[#0A0B0D] group-hover:text-[#0052FF] transition-colors">
+                {t.settings.privacyPolicy}
+              </span>
+            </div>
+            <ExternalLink className="w-4 h-4 text-[#5B6577] group-hover:text-[#0052FF] transition-colors" />
+          </a>
+        </div>
+      </div>
 
       {/* Logout Action */}
       <div className="pt-2">

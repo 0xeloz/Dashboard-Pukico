@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n';
 
 export function LoginView() {
-  const { t } = useT();
+  const { t, lang } = useT();
   const {
     login,
     logout,
@@ -15,6 +15,9 @@ export function LoginView() {
   } = useAuth();
 
   const [logoFailed, setLogoFailed] = useState(false);
+
+  const termsUrl = lang === 'id' ? 'https://pukico.xyz/id/terms' : 'https://pukico.xyz/terms';
+  const privacyUrl = lang === 'id' ? 'https://pukico.xyz/id/privacy' : 'https://pukico.xyz/privacy';
 
   // Map session error codes to human-friendly translated messages
   let errorTitle = t.errors.serverTitle;
@@ -126,6 +129,33 @@ export function LoginView() {
                 {t.login.demoPreviewActive}
               </p>
             )}
+
+            <div className="pt-1 space-y-1.5 text-center">
+              <p className="text-xs text-[#5B6577] leading-relaxed text-center">
+                {t.login.termsPrefix}
+                <a
+                  href={termsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0052FF] underline hover:text-[#0042D6]"
+                >
+                  {t.login.termsOfUse}
+                </a>
+                {t.login.and}
+                <a
+                  href={privacyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0052FF] underline hover:text-[#0042D6]"
+                >
+                  {t.login.privacyPolicy}
+                </a>
+                .
+              </p>
+              <p className="text-xs text-[#5B6577] leading-relaxed text-center">
+                {t.login.testnetNotice}
+              </p>
+            </div>
           </div>
         )}
 

@@ -372,6 +372,9 @@ export const en = {
     empty: 'Empty',
     logOut: 'Log out',
     loggingOut: 'Logging out...',
+    legalGroup: 'Legal',
+    termsOfUse: 'Terms of Use',
+    privacyPolicy: 'Privacy Policy',
   },
   login: {
     signIn: 'Sign in to Pukico',
@@ -382,6 +385,11 @@ export const en = {
     demoPreviewActive: 'Demo preview active · One-click sign in',
     securityBadge: 'Base Sepolia testnet only · Zero real funds required',
     footer: 'Pukico Dashboard © 2026 · Authentication & Profile',
+    termsPrefix: 'By signing in, you agree to the ',
+    termsOfUse: 'Terms of Use',
+    and: ' and ',
+    privacyPolicy: 'Privacy Policy',
+    testnetNotice: 'Beta testing on the Base Sepolia testnet. Tokens have no monetary value.',
   },
   errors: {
     serverTitle: 'Something went wrong',
