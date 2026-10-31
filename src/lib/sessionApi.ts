@@ -72,7 +72,7 @@ export async function syncSessionWithSupabase({
       if (response.status === 401 || errCode.includes('unauthorized') || errCode.includes('auth')) {
         throw new SessionSyncError(
           'unauthorized',
-          errMsg || 'Unauthorized session. Access to this beta is invite-only.',
+          errMsg || 'Unauthorized session.',
           response.status
         );
       }

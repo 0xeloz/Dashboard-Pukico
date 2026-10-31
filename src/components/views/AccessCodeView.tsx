@@ -4,7 +4,11 @@ import { useT } from '../../i18n';
 import { useAuth } from '../../context/AuthContext';
 import { initClaim, redeemAccessCode, type RedeemAccessCodeReason } from '../../lib/claimApi';
 
-export function AccessCodeView() {
+interface AccessCodeViewProps {
+  gate?: 'closed' | 'full' | 'revoked' | string | null;
+}
+
+export function AccessCodeView({ gate: propGate }: AccessCodeViewProps = {}) {
   const { t } = useT();
   const { isDemoMode, getAccessToken, grantBetaAccess, logout } = useAuth();
 
@@ -17,6 +21,7 @@ export function AccessCodeView() {
   const [isLoadingInit, setIsLoadingInit] = useState<boolean>(true);
   const [onWaitlist, setOnWaitlist] = useState<boolean>(false);
   const [heldId, setHeldId] = useState<string | null>(null);
+  const [gate, setGate] = useState<'closed' | 'full' | 'revoked' | string | null>(propGate ?? null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -39,6 +44,9 @@ export function AccessCodeView() {
 
         setOnWaitlist(Boolean(res.on_waitlist));
         setHeldId(res.held_id ?? null);
+        if ((res as any)?.gate !== undefined) {
+          setGate((res as any).gate);
+        }
       } catch (_err) {
         // If init fails, treat as on_waitlist = false and do not display error
         if (!isCancelled) {
@@ -161,10 +169,10 @@ export function AccessCodeView() {
               id="access-code-title"
               className="text-2xl sm:text-3xl font-extrabold text-[#0A0B0D] tracking-tight"
             >
-              {t.accessCode.title}
+              {gate === 'full' ? t.accessCode.fullTitle : t.accessCode.title}
             </h1>
             <p className="text-sm sm:text-base text-[#5B6577] mt-2 leading-relaxed">
-              {t.accessCode.subtitle}
+              {gate === 'full' ? t.accessCode.fullSubtitle : t.accessCode.subtitle}
             </p>
           </div>
 
@@ -185,7 +193,9 @@ export function AccessCodeView() {
           ) : (
             <div className="p-3.5 rounded-2xl bg-[#F0F2F5] border border-[#E5E7EB] text-left">
               <p className="text-xs sm:text-sm text-[#5B6577] font-medium leading-relaxed">
-                {t.accessCode.notOnWaitlistNotice}
+                {gate === 'full'
+                  ? t.accessCode.fullNotOnWaitlistNotice
+                  : t.accessCode.notOnWaitlistNotice}
               </p>
             </div>
           )}

@@ -54,6 +54,5 @@ export const CHAIN_CONFIG = {
 export const APP_METADATA = {
   name: 'Pukico',
   version: '0.1.0-beta',
-  tagline: 'Invite-only beta · Base Sepolia testnet · No real money',
   baseRpc: 'https://sepolia.base.org',
 };

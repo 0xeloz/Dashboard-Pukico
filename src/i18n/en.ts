@@ -1,7 +1,6 @@
 export const en = {
   common: {
     appName: 'Pukico',
-    tagline: 'Invite-only beta · Base Sepolia testnet · No real money',
     testnet: 'Testnet',
     testnetBaseSepolia: 'Testnet · Base Sepolia',
     baseSepolia: 'Base Sepolia',
@@ -393,8 +392,8 @@ export const en = {
   errors: {
     serverTitle: 'Something went wrong',
     serverMessage: "We couldn't load your account. Try again in a moment.",
-    unauthorizedTitle: 'Unauthorized Access',
-    unauthorizedMessage: 'This beta is invite-only.',
+    unauthorizedTitle: 'Invalid Session',
+    unauthorizedMessage: "Your session isn't valid. Please sign in again.",
     walletInUseTitle: 'Wallet Already Linked',
     walletInUseMessage: 'This wallet is already linked to another account.',
     generic: 'Something went wrong on our side. Try again in a moment.',
@@ -447,6 +446,8 @@ export const en = {
   accessCode: {
     title: 'Pukico is in closed beta',
     subtitle: 'Enter your access code to start creating your Pukico ID.',
+    fullTitle: 'The open beta is full right now',
+    fullSubtitle: 'All slots in this wave are taken. New slots open in batches. If you have an access code, enter it below.',
     placeholder: 'PUKI-XXXXX-XXXXX',
     submitBtn: 'Enter',
     emailHint: 'Sign in with the same email from your waitlist to keep your reserved Pukico ID.',
@@ -455,6 +456,7 @@ export const en = {
     onWaitlistNotice: "You're already on the waitlist ✓ Invites are rolling out in batches. If you've received your code, enter it below.",
     heldIdNotice: 'ID @{id} is reserved for you.',
     notOnWaitlistNotice: 'Not on the waitlist yet? Join first, invites are rolling out in batches.',
+    fullNotOnWaitlistNotice: 'Join the waitlist to get notified when slots open.',
     errors: {
       invalid_code: 'Code not found. Please double-check your spelling.',
       expired: 'This code has expired. Request a new code on Discord.',

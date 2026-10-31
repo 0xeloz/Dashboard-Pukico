@@ -10,7 +10,6 @@ type AssertEqual<T, U> = (<G>() => G extends T ? 1 : 2) extends (<G>() => G exte
 export const id: Translations = {
   common: {
     appName: 'Pukico',
-    tagline: 'Beta khusus undangan · Testnet Base Sepolia · Tanpa uang asli',
     testnet: 'Testnet',
     testnetBaseSepolia: 'Testnet · Base Sepolia',
     baseSepolia: 'Base Sepolia',
@@ -402,8 +401,8 @@ export const id: Translations = {
   errors: {
     serverTitle: 'Ada yang salah',
     serverMessage: 'Akunmu belum bisa dimuat. Coba lagi sebentar.',
-    unauthorizedTitle: 'Akses Khusus Undangan',
-    unauthorizedMessage: 'Beta ini khusus undangan.',
+    unauthorizedTitle: 'Sesi Tidak Valid',
+    unauthorizedMessage: 'Sesi tidak valid. Coba masuk lagi.',
     walletInUseTitle: 'Wallet Sudah Terhubung',
     walletInUseMessage: 'Wallet ini sudah terhubung ke akun lain.',
     generic: 'Ada masalah di sisi kami. Coba lagi sebentar ya.',
@@ -456,6 +455,8 @@ export const id: Translations = {
   accessCode: {
     title: 'Pukico sedang closed beta',
     subtitle: 'Masukkan kode akses kamu untuk mulai membuat Pukico ID.',
+    fullTitle: 'Kuota beta terbuka sedang penuh',
+    fullSubtitle: 'Semua slot gelombang ini sudah terisi. Slot baru dibuka bertahap. Kalau kamu punya kode akses, masukkan di bawah.',
     placeholder: 'PUKI-XXXXX-XXXXX',
     submitBtn: 'Masuk',
     emailHint: 'Login memakai email yang sama dengan email waitlist kamu agar Pukico ID pilihanmu tetap terjaga.',
@@ -464,6 +465,7 @@ export const id: Translations = {
     onWaitlistNotice: 'Kamu sudah ada di waitlist ✓ Undangan dikirim bertahap. Kalau kamu sudah menerima kode, masukkan di bawah.',
     heldIdNotice: 'ID @{id} sedang kami simpan untukmu.',
     notOnWaitlistNotice: 'Belum di waitlist? Gabung dulu, undangan dikirim bertahap.',
+    fullNotOnWaitlistNotice: 'Daftar waitlist untuk dikabari saat slot dibuka.',
     errors: {
       invalid_code: 'Kode tidak ditemukan. Periksa lagi penulisannya.',
       expired: 'Kode ini sudah kedaluwarsa. Minta kode baru di Discord.',
