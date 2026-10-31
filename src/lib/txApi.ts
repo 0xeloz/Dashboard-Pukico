@@ -248,6 +248,104 @@ export async function resolvePukicoId(
 }
 
 /**
+ * 1b. Resolve a wallet address to Pukico ID (reverse lookup)
+ */
+export async function resolvePukicoByAddress(
+  address: string,
+  options: ApiOptions = {},
+  signal?: AbortSignal
+): Promise<ResolveIdResult> {
+  const normalized = address.toLowerCase().trim();
+
+  if (!isAddress(normalized)) {
+    return { found: false, reason: 'format' };
+  }
+
+  if (options.isDemoMode) {
+    // Demo Mode: static local data matching resolvePukicoId
+    if (normalized === '0x2222222222222222222222222222222222222222') {
+      return {
+        found: true,
+        pukico_id: 'rina',
+        wallet_address: '0x2222222222222222222222222222222222222222',
+        is_self: false,
+        address_changed: false,
+      };
+    }
+    if (normalized === '0x4444444444444444444444444444444444444444') {
+      return {
+        found: true,
+        pukico_id: 'alex',
+        wallet_address: '0x4444444444444444444444444444444444444444',
+        is_self: false,
+        address_changed: true,
+        previous_address: '0x4444333344443333444433334444333344443333',
+        last_sent_at: new Date(Date.now() - 7 * 86400000).toISOString(),
+      };
+    }
+    if (normalized === '0x1111111111111111111111111111111111111111') {
+      return {
+        found: true,
+        pukico_id: 'andika',
+        wallet_address: '0x1111111111111111111111111111111111111111',
+        is_self: true,
+        address_changed: false,
+      };
+    }
+    return {
+      found: false,
+    };
+  }
+
+  if (!ENV.SUPABASE_URL) {
+    return { found: false, error: 'server' };
+  }
+
+  const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/resolve-id`;
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: buildHeaders(options.privyToken),
+      body: JSON.stringify({ address: normalized }),
+      signal,
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      if (res.status === 401) return { found: false, error: 'unauthorized' };
+      if (res.status === 403 && data.error === 'onboarding_required') {
+        return { found: false, error: 'onboarding_required' };
+      }
+      return { found: false, error: 'server' };
+    }
+
+    if (data.found) {
+      return {
+        found: true,
+        pukico_id: data.pukico_id,
+        wallet_address: data.wallet_address,
+        is_self: Boolean(data.is_self),
+        address_changed: Boolean(data.address_changed),
+        previous_address: data.previous_address,
+        last_sent_at: data.last_sent_at,
+      };
+    }
+
+    return {
+      found: false,
+      reason: data.reason,
+    };
+  } catch (err: unknown) {
+    if ((err as Error)?.name === 'AbortError') {
+      throw err;
+    }
+    return { found: false, error: 'network' };
+  }
+}
+
+/**
  * 2. Submit a broadcasted transaction to the backend
  */
 export async function submitTx(

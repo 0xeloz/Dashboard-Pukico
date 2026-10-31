@@ -28,6 +28,7 @@ import {
 } from '../../../lib/formatters';
 import {
   resolvePukicoId,
+  resolvePukicoByAddress,
   submitTx,
   submitTxWithRetry,
   syncTx,
@@ -35,6 +36,7 @@ import {
   shortenAddress,
   getExplorerUrl,
   type TxRecord,
+  type ResolveIdResult,
 } from '../../../lib/txApi';
 import {
   type AssetType,
@@ -357,11 +359,14 @@ export function SendSheetContent({
   const [isNewAddress, setIsNewAddress] = useState<boolean>(false);
   const [isExtAddressChecked, setIsExtAddressChecked] = useState<boolean>(false);
   const [isExtRiskChecked, setIsExtRiskChecked] = useState<boolean>(false);
+  const [addressBelongsToPukicoId, setAddressBelongsToPukicoId] = useState<string | null>(null);
 
   const resolveDebounceRef = useRef<number | null>(null);
   const resolveControllerRef = useRef<AbortController | null>(null);
   const latestResolveReqIdRef = useRef<number>(0);
   const lastContractCheckRef = useRef<string | null>(null);
+  const lastAddressLookupRef = useRef<string | null>(null);
+  const addressResolutionCacheRef = useRef<Map<string, ResolveIdResult>>(new Map());
   const sheetContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -902,6 +907,8 @@ export function SendSheetContent({
         resolveControllerRef.current = null;
       }
 
+      setAddressBelongsToPukicoId(null);
+      lastAddressLookupRef.current = null;
       setExternalAddressError(null);
       setExternalChecksumWarning(false);
       setContractStatus(null);
@@ -1050,6 +1057,7 @@ export function SendSheetContent({
         resolveControllerRef.current = null;
       }
 
+      setAddressBelongsToPukicoId(null);
       const parsed = parseRecipientInput(rawInput);
       setRecipientInput(parsed.sanitized);
 
@@ -1060,6 +1068,7 @@ export function SendSheetContent({
 
       if (parsed.sanitized.length < 42) {
         lastContractCheckRef.current = null;
+        lastAddressLookupRef.current = null;
         setRecipientStatus('format_error');
         setExternalAddressError(t.sheets.send.addressIncomplete);
         setResolvedRecipient(null);
@@ -1075,6 +1084,7 @@ export function SendSheetContent({
       const validation = validateExternalAddress(parsed.sanitized, profile?.wallet_address);
       if (!validation.valid) {
         lastContractCheckRef.current = null;
+        lastAddressLookupRef.current = null;
         setRecipientStatus('format_error');
         setResolvedRecipient(null);
         setExternalChecksumWarning(false);
@@ -1100,7 +1110,7 @@ export function SendSheetContent({
         return;
       }
 
-      // Valid external address
+      // Valid external address: set external state as default/fallback
       setExternalAddressError(null);
       setRecipientStatus('found');
       setExternalChecksumWarning(!validation.hasChecksum);
@@ -1122,23 +1132,77 @@ export function SendSheetContent({
       // Contract check
       const checkingAddress = validation.address.toLowerCase();
       lastContractCheckRef.current = checkingAddress;
+      lastAddressLookupRef.current = checkingAddress;
+
       setContractStatus('checking');
       checkIsContract(validation.address, publicClient, { isDemoMode }).then((res) => {
         if (lastContractCheckRef.current === checkingAddress) {
           setContractStatus(res.status);
         }
       });
+
+      // Reverse lookup: check if address belongs to a verified Pukico wallet
+      (async () => {
+        try {
+          let res: ResolveIdResult;
+          const cached = addressResolutionCacheRef.current.get(checkingAddress);
+          if (cached) {
+            res = cached;
+          } else {
+            const token = getAccessToken ? await getAccessToken().catch(() => null) : null;
+            if (lastAddressLookupRef.current !== checkingAddress) return;
+            res = await resolvePukicoByAddress(
+              validation.address,
+              { privyToken: token, isDemoMode }
+            );
+            addressResolutionCacheRef.current.set(checkingAddress, res);
+          }
+
+          if (lastAddressLookupRef.current !== checkingAddress) return;
+
+          if (res.found && !res.is_self && res.pukico_id) {
+            // Cancel/ignore contract check & external warnings
+            lastContractCheckRef.current = null;
+            setContractStatus(null);
+            setExternalChecksumWarning(false);
+            setLookalikeExternalAddress(null);
+            setIsNewAddress(false);
+            setIsExtAddressChecked(false);
+            setIsExtRiskChecked(false);
+            setExternalAddressError(null);
+
+            // Switch to internal recipient
+            setRecipientInput(`@${res.pukico_id}`);
+            setAddressBelongsToPukicoId(res.pukico_id);
+            setRecipientStatus('found');
+            setResolvedRecipient({
+              id: res.pukico_id,
+              address: res.wallet_address || validation.address,
+              isExternal: false,
+              hasChecksum: true,
+            });
+            setRecipientAddressChanged(Boolean(res.address_changed));
+            setPreviousRecipientAddress(res.previous_address || null);
+            setLastSentAt(res.last_sent_at || null);
+            setIsAddressChangeAcknowledged(false);
+          }
+        } catch {
+          // Network or server error: gracefully fallback to external flow without blocking user
+        }
+      })();
     },
-    [t, profile?.wallet_address, knownUsedAddresses, knownOutgoingAddresses, isDemoMode]
+    [t, profile?.wallet_address, knownUsedAddresses, knownOutgoingAddresses, isDemoMode, getAccessToken, publicClient]
   );
 
   // Handle Recipient Input & Routing between external 0x address vs @username
   const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
+    setAddressBelongsToPukicoId(null);
     if (isLikelyAddressInput(val)) {
       handleExternalAddressInput(val);
     } else {
       lastContractCheckRef.current = null;
+      lastAddressLookupRef.current = null;
       const usernameVal = val.slice(0, 20);
       setRecipientInput(usernameVal);
       performLookup(usernameVal, 400);
@@ -2401,7 +2465,7 @@ export function SendSheetContent({
 
           <div className="space-y-2 pt-1">
             <div className="relative flex items-center h-13 bg-white border border-[#E5E7EB] focus-within:border-[#0052FF] focus-within:ring-2 focus-within:ring-[#0052FF]/20 rounded-2xl px-4 transition-all">
-              {!isLikelyAddressInput(recipientInput) && (
+              {!isLikelyAddressInput(recipientInput) && !recipientInput.startsWith('@') && (
                 <span className="text-lg font-bold text-[#5B6577] mr-1.5" aria-hidden="true">
                   @
                 </span>
@@ -2468,11 +2532,18 @@ export function SendSheetContent({
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1.5 text-[#047857] font-medium">
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" />
-                    <span>
-                      {t.sheets.send.found} · @{resolvedRecipient.id} ({shortenAddress(resolvedRecipient.address)})
-                    </span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-[#047857] font-medium">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" />
+                      <span>
+                        {t.sheets.send.found} · @{resolvedRecipient.id} ({shortenAddress(resolvedRecipient.address)})
+                      </span>
+                    </div>
+                    {addressBelongsToPukicoId && (
+                      <p className="text-[11px] text-[#5B6577] pl-5 leading-tight">
+                        {t.sheets.send.addressBelongsToPukico.replace('{id}', `@${resolvedRecipient.id}`)}
+                      </p>
+                    )}
                   </div>
                 )
               )}
