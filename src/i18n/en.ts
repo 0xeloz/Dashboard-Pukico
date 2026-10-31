@@ -275,6 +275,7 @@ export const en = {
       lookalikeAddressWarning: "This address is similar to one you've used before, but different.",
       contractWarning: 'This address is a contract, not a regular wallet. Funds sent to an incompatible contract may be permanently lost.',
       contractCheckFailed: 'Unable to verify address type.',
+      contractChecking: 'Checking address…',
       externalWalletNoticeBanner: 'Wallet outside Pukico. Pukico cannot cancel or trace this transfer. Make sure the recipient wallet is on Base Sepolia (testnet).',
       checkboxVerifyAddress: 'I have verified the full address and network.',
       checkboxUnderstandRisk: 'I understand the risks.',
@@ -284,6 +285,7 @@ export const en = {
       sentSuccessExternal: 'Successfully sent {amount} {asset} to {address}',
       addressPoisoningCurrentLabel: 'Current target address',
       addressPoisoningSimilarLabel: 'Previously used address',
+      typeToConfirm: 'Type {address} to confirm',
     },
     receive: {
       title: 'Receive',

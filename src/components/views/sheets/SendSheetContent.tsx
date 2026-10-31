@@ -1463,7 +1463,7 @@ export function SendSheetContent({
     if (isLargeTransfer && !isLargeConfirmed) {
       setSecurityError(
         resolvedRecipient.isExternal
-          ? `Ketik ${shortenAddress(resolvedRecipient.address)} untuk konfirmasi`
+          ? t.sheets.send.typeToConfirm.replace('{address}', shortenAddress(resolvedRecipient.address))
           : t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id)
       );
       setIsSubmitting(false);
@@ -1477,6 +1477,13 @@ export function SendSheetContent({
       lookalikeExternalAddress || contractStatus === 'contract' || contractStatus === 'error'
     );
     if (resolvedRecipient.isExternal) {
+      if (contractStatus === 'checking') {
+        setSecurityError(t.sheets.send.contractChecking);
+        setIsSubmitting(false);
+        setProgressState(null);
+        sendInProgressRef.current = false;
+        return;
+      }
       if (!isExtAddressChecked) {
         setSecurityError(t.sheets.send.mustCheckAddress);
         setIsSubmitting(false);
@@ -2412,6 +2419,12 @@ export function SendSheetContent({
                         ({shortenAddress(resolvedRecipient.address)})
                       </span>
                     </div>
+                    {contractStatus === 'checking' && (
+                      <div className="flex items-center gap-1.5 text-xs text-[#5B6577]">
+                        <Loader2 className="w-3.5 h-3.5 text-[#0052FF] animate-spin shrink-0" />
+                        <span>{t.sheets.send.contractChecking}</span>
+                      </div>
+                    )}
                     {externalChecksumWarning && (
                       <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2">
                         <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
@@ -2905,6 +2918,14 @@ export function SendSheetContent({
             );
           })()}
 
+          {/* External Recipient: Contract Checking Notice */}
+          {resolvedRecipient?.isExternal && contractStatus === 'checking' && (
+            <div className="flex items-center gap-1.5 text-xs text-[#5B6577] animate-fade-up">
+              <Loader2 className="w-3.5 h-3.5 text-[#0052FF] animate-spin shrink-0" />
+              <span>{t.sheets.send.contractChecking}</span>
+            </div>
+          )}
+
           {/* External Recipient: Contract Warning Banner (Red) */}
           {resolvedRecipient?.isExternal && contractStatus === 'contract' && (
             <div
@@ -3089,7 +3110,7 @@ export function SendSheetContent({
               </div>
               <p className="text-[#B45309] leading-relaxed">
                 {resolvedRecipient.isExternal
-                  ? `Ketik ${shortenAddress(resolvedRecipient.address)} untuk konfirmasi`
+                  ? t.sheets.send.typeToConfirm.replace('{address}', shortenAddress(resolvedRecipient.address))
                   : t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id)}
               </p>
               <input
@@ -3222,6 +3243,7 @@ export function SendSheetContent({
                 isInsufficientEth ||
                 balances === null ||
                 (isLargeTransfer && !isLargeConfirmed) ||
+                Boolean(resolvedRecipient?.isExternal && contractStatus === 'checking') ||
                 (!resolvedRecipient?.isExternal && recipientAddressChanged && !isAddressChangeAcknowledged) ||
                 Boolean(
                   resolvedRecipient?.isExternal &&

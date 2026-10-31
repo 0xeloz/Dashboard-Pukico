@@ -284,6 +284,7 @@ export const id: Translations = {
       lookalikeAddressWarning: 'Alamat ini mirip dengan alamat yang pernah kamu pakai tetapi berbeda.',
       contractWarning: 'Alamat ini adalah kontrak, bukan wallet biasa. Dana yang dikirim ke kontrak yang tidak mendukungnya bisa hilang permanen.',
       contractCheckFailed: 'Tidak bisa memeriksa jenis alamat.',
+      contractChecking: 'Memeriksa alamat…',
       externalWalletNoticeBanner: 'Wallet di luar Pukico. Pukico tidak bisa membatalkan atau menelusuri transfer ini. Pastikan wallet penerima memakai jaringan Base Sepolia (testnet).',
       checkboxVerifyAddress: 'Saya sudah memeriksa alamat lengkap dan jaringannya.',
       checkboxUnderstandRisk: 'Saya paham risikonya.',
@@ -293,6 +294,7 @@ export const id: Translations = {
       sentSuccessExternal: 'Berhasil kirim {amount} {asset} ke {address}',
       addressPoisoningCurrentLabel: 'Alamat tujuan saat ini',
       addressPoisoningSimilarLabel: 'Alamat yang pernah kamu pakai',
+      typeToConfirm: 'Ketik {address} untuk konfirmasi',
     },
     receive: {
       title: 'Terima',
