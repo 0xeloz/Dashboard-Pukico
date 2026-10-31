@@ -204,6 +204,7 @@ export interface LockedTransfer {
   treasuryAddress: `0x${string}` | null;
   senderAddress: `0x${string}`;
   timestamp: number;
+  isExternal?: boolean;
 }
 
 /**

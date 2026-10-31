@@ -72,7 +72,15 @@ import {
 } from '../../../lib/fees';
 import { UsdcTokenIcon, EthTokenIcon } from '../../ui/PukicoBrand';
 import { RecipientVerification } from '../../ui/RecipientVerification';
-import { findLookalike } from '../../../lib/addressSafety';
+import { findLookalike, diffChunks } from '../../../lib/addressSafety';
+import {
+  parseRecipientInput,
+  isLikelyAddressInput,
+  validateExternalAddress,
+  findLookalikeAddress,
+  isNewExternalAddress,
+  checkIsContract,
+} from '../../../lib/externalRecipient';
 
 interface SendSheetContentProps {
   onClose: () => void;
@@ -90,6 +98,8 @@ interface LockedSummary {
   feeUnits: bigint;
   totalUnits: bigint;
   recipientId: string;
+  isExternal?: boolean;
+  recipientAddress?: string;
 }
 
 function identifyPreHashFailureReason(err: unknown): PreHashFailureReason {
@@ -323,12 +333,23 @@ export function SendSheetContent({
   const [resolvedRecipient, setResolvedRecipient] = useState<{
     id: string;
     address: string;
+    isExternal?: boolean;
+    hasChecksum?: boolean;
   } | null>(null);
   const [recipientAddressChanged, setRecipientAddressChanged] = useState<boolean>(false);
   const [previousRecipientAddress, setPreviousRecipientAddress] = useState<string | null>(null);
   const [lastSentAt, setLastSentAt] = useState<string | null>(null);
   const [isAddressChangeAcknowledged, setIsAddressChangeAcknowledged] = useState<boolean>(false);
   const [failedLookupIds, setFailedLookupIds] = useState<Set<string>>(new Set());
+
+  // External recipient states
+  const [externalChecksumWarning, setExternalChecksumWarning] = useState<boolean>(false);
+  const [externalAddressError, setExternalAddressError] = useState<string | null>(null);
+  const [contractStatus, setContractStatus] = useState<'checking' | 'contract' | 'eoa' | 'error' | null>(null);
+  const [lookalikeExternalAddress, setLookalikeExternalAddress] = useState<string | null>(null);
+  const [isNewAddress, setIsNewAddress] = useState<boolean>(false);
+  const [isExtAddressChecked, setIsExtAddressChecked] = useState<boolean>(false);
+  const [isExtRiskChecked, setIsExtRiskChecked] = useState<boolean>(false);
 
   const resolveDebounceRef = useRef<number | null>(null);
   const resolveControllerRef = useRef<AbortController | null>(null);
@@ -722,10 +743,13 @@ export function SendSheetContent({
   const isLargeTransfer = amountUnits >= LARGE_TRANSFER_THRESHOLD[selectedAsset];
   const isLargeConfirmed =
     !isLargeTransfer ||
-    largeTransferInput.trim().toLowerCase().replace(/^@/, '') ===
-      (resolvedRecipient?.id || '').toLowerCase().replace(/^@/, '');
+    (resolvedRecipient?.isExternal
+      ? largeTransferInput.trim().toLowerCase() === (resolvedRecipient.address || '').toLowerCase() ||
+        largeTransferInput.trim().toLowerCase() === shortenAddress(resolvedRecipient.address || '').toLowerCase()
+      : largeTransferInput.trim().toLowerCase().replace(/^@/, '') ===
+        (resolvedRecipient?.id || '').toLowerCase().replace(/^@/, ''));
 
-  // Recent recipients derived from confirmed outgoing transactions in txs (max 5, deduplicated, newest first)
+  // Recent recipients derived from confirmed outgoing transactions in txs (max 3, deduplicated, newest first)
   const recentRecipients = useMemo(() => {
     if (!txs || txs.length === 0) return [];
     const myId = (profile?.pukico_id || '').replace(/^@+/, '').trim().toLowerCase();
@@ -742,6 +766,9 @@ export function SendSheetContent({
         ('type' in tx && (tx as any).type === 'outgoing');
 
       if (!isOutgoing) continue;
+
+      // External recipients must NEVER enter Recent list
+      if (tx.is_external || !tx.counterparty || tx.counterparty.startsWith('0x')) continue;
 
       const rawRecipient = (tx.to_pukico_id || tx.counterparty || '').replace(/^@+/, '').trim().toLowerCase();
       if (!rawRecipient || rawRecipient === myId) continue;
@@ -813,10 +840,40 @@ export function SendSheetContent({
     return Array.from(ids);
   }, [friends, txs]);
 
+  // Known used addresses from outgoing and general txs for address poisoning detection
+  const knownUsedAddresses = useMemo(() => {
+    const addrs = new Set<string>();
+    if (!txs) return [];
+    for (const tx of txs) {
+      if (tx.counterparty_address) addrs.add(tx.counterparty_address);
+      if (tx.to_address) addrs.add(tx.to_address);
+      if (tx.counterparty && tx.counterparty.startsWith('0x')) addrs.add(tx.counterparty);
+    }
+    return Array.from(addrs);
+  }, [txs]);
+
+  // Outgoing counterparty addresses for isNewExternalAddress check
+  const knownOutgoingAddresses = useMemo(() => {
+    const addrs = new Set<string>();
+    if (!txs) return [];
+    for (const tx of txs) {
+      const isOutgoing =
+        tx.direction === 'out' ||
+        tx.direction === 'outgoing' ||
+        ('type' in tx && (tx as any).type === 'outgoing');
+      if (isOutgoing) {
+        if (tx.counterparty_address) addrs.add(tx.counterparty_address);
+        if (tx.to_address) addrs.add(tx.to_address);
+        if (tx.counterparty && tx.counterparty.startsWith('0x')) addrs.add(tx.counterparty);
+      }
+    }
+    return Array.from(addrs);
+  }, [txs]);
+
   const lookalikeRecipientId = useMemo(() => {
-    if (!resolvedRecipient?.id || isKnownRecipient) return null;
+    if (!resolvedRecipient?.id || isKnownRecipient || resolvedRecipient.isExternal) return null;
     return findLookalike(resolvedRecipient.id, knownRecipientIds);
-  }, [resolvedRecipient?.id, isKnownRecipient, knownRecipientIds]);
+  }, [resolvedRecipient?.id, isKnownRecipient, resolvedRecipient?.isExternal, knownRecipientIds]);
 
   // Unified Recipient Lookup Routine (handles debounce, token cancellation, and error differentiation)
   const performLookup = useCallback(
@@ -829,6 +886,14 @@ export function SendSheetContent({
         resolveControllerRef.current.abort();
         resolveControllerRef.current = null;
       }
+
+      setExternalAddressError(null);
+      setExternalChecksumWarning(false);
+      setContractStatus(null);
+      setLookalikeExternalAddress(null);
+      setIsNewAddress(false);
+      setIsExtAddressChecked(false);
+      setIsExtRiskChecked(false);
 
       const sanitized = rawTargetId.replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
       setRecipientInput(sanitized);
@@ -958,17 +1023,114 @@ export function SendSheetContent({
     [profile?.pukico_id, getAccessToken, isDemoMode]
   );
 
-  // Handle Recipient Input & 400ms Debounced Lookup
+  // Handle external 0x address validation and security checks
+  const handleExternalAddressInput = useCallback(
+    (rawInput: string) => {
+      if (resolveDebounceRef.current) {
+        window.clearTimeout(resolveDebounceRef.current);
+        resolveDebounceRef.current = null;
+      }
+      if (resolveControllerRef.current) {
+        resolveControllerRef.current.abort();
+        resolveControllerRef.current = null;
+      }
+
+      const parsed = parseRecipientInput(rawInput);
+      setRecipientInput(parsed.sanitized);
+
+      setRecipientAddressChanged(false);
+      setPreviousRecipientAddress(null);
+      setLastSentAt(null);
+      setIsAddressChangeAcknowledged(false);
+
+      if (parsed.sanitized.length < 42) {
+        setRecipientStatus('format_error');
+        setExternalAddressError(t.sheets.send.addressIncomplete);
+        setResolvedRecipient(null);
+        setExternalChecksumWarning(false);
+        setContractStatus(null);
+        setLookalikeExternalAddress(null);
+        setIsNewAddress(false);
+        setIsExtAddressChecked(false);
+        setIsExtRiskChecked(false);
+        return;
+      }
+
+      const validation = validateExternalAddress(parsed.sanitized, profile?.wallet_address);
+      if (!validation.valid) {
+        setRecipientStatus('format_error');
+        setResolvedRecipient(null);
+        setExternalChecksumWarning(false);
+        setContractStatus(null);
+        setLookalikeExternalAddress(null);
+        setIsNewAddress(false);
+        setIsExtAddressChecked(false);
+        setIsExtRiskChecked(false);
+
+        if (validation.reason === 'invalid_checksum') {
+          setExternalAddressError(t.sheets.send.invalidChecksum);
+        } else if (validation.reason === 'zero') {
+          setExternalAddressError(t.sheets.send.zeroAddressError);
+        } else if (validation.reason === 'dead') {
+          setExternalAddressError(t.sheets.send.deadAddressError);
+        } else if (validation.reason === 'self') {
+          setExternalAddressError(t.sheets.send.selfAddressError);
+        } else if (validation.reason === 'usdc_contract') {
+          setExternalAddressError(t.sheets.send.usdcContractError);
+        } else {
+          setExternalAddressError(t.sheets.send.formatError);
+        }
+        return;
+      }
+
+      // Valid external address
+      setExternalAddressError(null);
+      setRecipientStatus('found');
+      setExternalChecksumWarning(!validation.hasChecksum);
+      setResolvedRecipient({
+        id: '',
+        address: validation.address,
+        isExternal: true,
+        hasChecksum: validation.hasChecksum,
+      });
+
+      // Address poisoning check: 4 hex prefix and 4 hex suffix match known used address but full address differs
+      const lookalike = findLookalikeAddress(validation.address, knownUsedAddresses);
+      setLookalikeExternalAddress(lookalike);
+
+      // New external address check: never appeared in outgoing txs
+      const isNew = isNewExternalAddress(validation.address, knownOutgoingAddresses);
+      setIsNewAddress(isNew);
+
+      // Contract check
+      setContractStatus('checking');
+      checkIsContract(validation.address, publicClient, { isDemoMode }).then((res) => {
+        setContractStatus(res.status);
+      });
+    },
+    [t, profile?.wallet_address, knownUsedAddresses, knownOutgoingAddresses, isDemoMode]
+  );
+
+  // Handle Recipient Input & Routing between external 0x address vs @username
   const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    performLookup(e.target.value, 400);
+    const val = e.target.value;
+    if (isLikelyAddressInput(val)) {
+      handleExternalAddressInput(val);
+    } else {
+      performLookup(val, 400);
+    }
   };
 
   // Prefill resolver when opened with recipientId from friends tab
   useEffect(() => {
     if (prefilledRecipientId) {
-      performLookup(prefilledRecipientId, 0);
+      if (isLikelyAddressInput(prefilledRecipientId)) {
+        handleExternalAddressInput(prefilledRecipientId);
+      } else {
+        performLookup(prefilledRecipientId, 0);
+      }
     }
-  }, [prefilledRecipientId, performLookup]);
+  }, [prefilledRecipientId, performLookup, handleExternalAddressInput]);
 
   const handleSelectFriendChip = (id: string) => {
     performLookup(id, 0);
@@ -1299,11 +1461,36 @@ export function SendSheetContent({
 
     // 3. Large transfer check
     if (isLargeTransfer && !isLargeConfirmed) {
-      setSecurityError(t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id));
+      setSecurityError(
+        resolvedRecipient.isExternal
+          ? `Ketik ${shortenAddress(resolvedRecipient.address)} untuk konfirmasi`
+          : t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id)
+      );
       setIsSubmitting(false);
       setProgressState(null);
       sendInProgressRef.current = false;
       return;
+    }
+
+    // 3b. External recipient checkboxes gating
+    const hasRedExternalWarning = Boolean(
+      lookalikeExternalAddress || contractStatus === 'contract' || contractStatus === 'error'
+    );
+    if (resolvedRecipient.isExternal) {
+      if (!isExtAddressChecked) {
+        setSecurityError(t.sheets.send.mustCheckAddress);
+        setIsSubmitting(false);
+        setProgressState(null);
+        sendInProgressRef.current = false;
+        return;
+      }
+      if (hasRedExternalWarning && !isExtRiskChecked) {
+        setSecurityError(t.sheets.send.mustCheckRisk);
+        setIsSubmitting(false);
+        setProgressState(null);
+        sendInProgressRef.current = false;
+        return;
+      }
     }
 
     // 4. Freeze snapshot LockedTransfer (execution only reads this snapshot)
@@ -1313,6 +1500,8 @@ export function SendSheetContent({
       feeUnits,
       totalUnits: amountUnits + feeUnits,
       recipientId: resolvedRecipient.id,
+      isExternal: resolvedRecipient.isExternal,
+      recipientAddress: resolvedRecipient.address,
     };
     if (!lockedSummary) {
       setLockedSummary(currentSummary);
@@ -1323,10 +1512,11 @@ export function SendSheetContent({
       amountUnits: currentSummary.amountUnits,
       feeUnits: currentSummary.feeUnits,
       recipientId: currentSummary.recipientId,
-      recipientAddress: resolvedRecipient.address as `0x${string}`,
+      recipientAddress: (currentSummary.recipientAddress || resolvedRecipient.address) as `0x${string}`,
       treasuryAddress: getTreasuryAddress(isDemoMode),
       senderAddress: profile.wallet_address as `0x${string}`,
       timestamp: Date.now(),
+      isExternal: Boolean(currentSummary.isExternal ?? resolvedRecipient.isExternal),
     };
 
     // 5. Ensure embeddedWalletAddress matches profile.wallet_address
@@ -1339,20 +1529,10 @@ export function SendSheetContent({
       return;
     }
 
-    // 6. Re-resolve recipient Pukico ID with fresh token. Address must match snapshot.
-    try {
-      const freshToken = getAccessToken ? await getAccessToken().catch(() => null) : null;
-      const latestResolve = await resolvePukicoId(snapshot.recipientId, {
-        privyToken: freshToken,
-        isDemoMode,
-      });
-
-      if (
-        !latestResolve ||
-        !latestResolve.found ||
-        !latestResolve.wallet_address ||
-        !sameAddress(latestResolve.wallet_address, snapshot.recipientAddress)
-      ) {
+    // 6. Re-resolve recipient if Pukico ID, OR validate directly if external address
+    if (snapshot.isExternal) {
+      const extValidation = validateExternalAddress(snapshot.recipientAddress, snapshot.senderAddress);
+      if (!extValidation.valid) {
         setRecipientVerificationError(true);
         toast.error(t.toast.recipientUnverified);
         setStep(4);
@@ -1361,34 +1541,57 @@ export function SendSheetContent({
         sendInProgressRef.current = false;
         return;
       }
+    } else {
+      try {
+        const freshToken = getAccessToken ? await getAccessToken().catch(() => null) : null;
+        const latestResolve = await resolvePukicoId(snapshot.recipientId, {
+          privyToken: freshToken,
+          isDemoMode,
+        });
 
-      // Read address_changed during re-resolve and block send if not acknowledged
-      if (latestResolve.address_changed) {
-        setRecipientAddressChanged(true);
-        if (latestResolve.previous_address) {
-          setPreviousRecipientAddress(latestResolve.previous_address);
-        }
-        if (latestResolve.last_sent_at) {
-          setLastSentAt(latestResolve.last_sent_at);
-        }
-        if (!isAddressChangeAcknowledged) {
-          setSecurityError(t.sheets.send.addressChangeBlocked);
-          toast.error(t.sheets.send.addressChangeBlocked);
+        if (
+          !latestResolve ||
+          !latestResolve.found ||
+          !latestResolve.wallet_address ||
+          !sameAddress(latestResolve.wallet_address, snapshot.recipientAddress)
+        ) {
+          setRecipientVerificationError(true);
+          toast.error(t.toast.recipientUnverified);
           setStep(4);
           setIsSubmitting(false);
           setProgressState(null);
           sendInProgressRef.current = false;
           return;
         }
+
+        // Read address_changed during re-resolve and block send if not acknowledged
+        if (latestResolve.address_changed) {
+          setRecipientAddressChanged(true);
+          if (latestResolve.previous_address) {
+            setPreviousRecipientAddress(latestResolve.previous_address);
+          }
+          if (latestResolve.last_sent_at) {
+            setLastSentAt(latestResolve.last_sent_at);
+          }
+          if (!isAddressChangeAcknowledged) {
+            setSecurityError(t.sheets.send.addressChangeBlocked);
+            toast.error(t.sheets.send.addressChangeBlocked);
+            setStep(4);
+            setIsSubmitting(false);
+            setProgressState(null);
+            sendInProgressRef.current = false;
+            return;
+          }
+        }
+      } catch {
+        setRecipientVerificationError(true);
+        toast.error(t.toast.recipientUnverified);
+        setStep(4);
+        setIsSubmitting(false);
+        setProgressState(null);
+        sendInProgressRef.current = false;
+        return;
       }
-    } catch {
-      setRecipientVerificationError(true);
-      toast.error(t.toast.recipientUnverified);
-      setStep(4);
-      setIsSubmitting(false);
-      setProgressState(null);
-      sendInProgressRef.current = false;
-      return;
     }
 
     // 7. checkRecipientAddress (block zero, dead, self, USDC contract)
@@ -1529,7 +1732,17 @@ export function SendSheetContent({
         tx_hash: '0xdemo1111111111111111111111111111111111111111111111111111111111111111',
         asset: snapshot.asset,
         amount: canonicalAmount,
-        to_pukico_id: snapshot.recipientId,
+        ...(snapshot.isExternal
+          ? {
+              to_address: snapshot.recipientAddress,
+              counterparty: null,
+              counterparty_address: snapshot.recipientAddress,
+              is_external: true,
+            }
+          : {
+              to_pukico_id: snapshot.recipientId,
+              counterparty: snapshot.recipientId,
+            }),
         status: 'confirmed',
         explorer_url: 'https://sepolia.basescan.org',
       });
@@ -1602,7 +1815,9 @@ export function SendSheetContent({
     savePendingTx({
       tx_hash: broadcastHash,
       asset: snapshot.asset,
-      to_pukico_id: snapshot.recipientId,
+      ...(snapshot.isExternal
+        ? { to_address: snapshot.recipientAddress }
+        : { to_pukico_id: snapshot.recipientId }),
       amount: canonicalAmount,
     });
 
@@ -1615,7 +1830,9 @@ export function SendSheetContent({
         {
           tx_hash: broadcastHash,
           asset: snapshot.asset,
-          to_pukico_id: snapshot.recipientId,
+          ...(snapshot.isExternal
+            ? { to_address: snapshot.recipientAddress }
+            : { to_pukico_id: snapshot.recipientId }),
           amount: canonicalAmount,
         },
         { privyToken: token }
@@ -1699,7 +1916,7 @@ export function SendSheetContent({
           feeUnits: snapshot.feeUnits.toString(),
           treasuryAddress: snapshot.treasuryAddress!,
           createdAt: Date.now(),
-          recipientId: snapshot.recipientId,
+          recipientId: snapshot.isExternal ? '' : snapshot.recipientId,
           amount: canonicalAmount,
           reason: failureReason,
         });
@@ -1791,7 +2008,9 @@ export function SendSheetContent({
               {
                 tx_hash: broadcastHash,
                 asset: snapshot.asset,
-                to_pukico_id: snapshot.recipientId,
+                ...(snapshot.isExternal
+                  ? { to_address: snapshot.recipientAddress }
+                  : { to_pukico_id: snapshot.recipientId }),
                 amount: canonicalAmount,
                 fee_tx_hash: feeTxHash,
               },
@@ -2151,20 +2370,22 @@ export function SendSheetContent({
 
           <div className="space-y-2 pt-1">
             <div className="relative flex items-center h-13 bg-white border border-[#E5E7EB] focus-within:border-[#0052FF] focus-within:ring-2 focus-within:ring-[#0052FF]/20 rounded-2xl px-4 transition-all">
-              <span className="text-lg font-bold text-[#5B6577] mr-1.5" aria-hidden="true">
-                @
-              </span>
+              {!isLikelyAddressInput(recipientInput) && (
+                <span className="text-lg font-bold text-[#5B6577] mr-1.5" aria-hidden="true">
+                  @
+                </span>
+              )}
               <input
                 type="text"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
-                maxLength={20}
+                maxLength={isLikelyAddressInput(recipientInput) ? 42 : 20}
                 value={recipientInput}
                 onChange={handleRecipientChange}
-                placeholder="username"
-                className="w-full h-full bg-transparent text-base font-bold text-[#0A0B0D] placeholder:text-[#9CA3AF] placeholder:font-normal focus:outline-none"
+                placeholder={isLikelyAddressInput(recipientInput) ? '0x...' : 'username'}
+                className={`w-full h-full bg-transparent ${isLikelyAddressInput(recipientInput) ? 'font-mono text-sm' : 'text-base font-bold'} text-[#0A0B0D] placeholder:text-[#9CA3AF] placeholder:font-normal focus:outline-none`}
                 autoFocus
               />
               {recipientStatus === 'looking' && (
@@ -2182,12 +2403,30 @@ export function SendSheetContent({
                 <span className="text-[#5B6577]">{t.sheets.send.lookingUp}</span>
               )}
               {recipientStatus === 'found' && resolvedRecipient && (
-                <div className="flex items-center gap-1.5 text-[#047857] font-medium">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" />
-                  <span>
-                    {t.sheets.send.found} · @{resolvedRecipient.id} ({shortenAddress(resolvedRecipient.address)})
-                  </span>
-                </div>
+                resolvedRecipient.isExternal ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[#0052FF] font-medium">
+                      <ExternalLink className="w-3.5 h-3.5 text-[#0052FF] shrink-0" />
+                      <span>{t.sheets.send.externalWalletStatus}</span>
+                      <span className="font-mono text-xs text-[#5B6577]">
+                        ({shortenAddress(resolvedRecipient.address)})
+                      </span>
+                    </div>
+                    {externalChecksumWarning && (
+                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+                        <span className="leading-relaxed">{t.sheets.send.noChecksumNote}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-[#047857] font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" />
+                    <span>
+                      {t.sheets.send.found} · @{resolvedRecipient.id} ({shortenAddress(resolvedRecipient.address)})
+                    </span>
+                  </div>
+                )
               )}
               {recipientStatus === 'not_found' && (
                 <span className="text-[#DC2626]">
@@ -2203,7 +2442,9 @@ export function SendSheetContent({
                 <span className="text-[#DC2626]">{t.sheets.send.ownIdError}</span>
               )}
               {recipientStatus === 'format_error' && (
-                <span className="text-[#DC2626]">{t.sheets.send.formatError}</span>
+                <span className="text-[#DC2626]">
+                  {externalAddressError || t.sheets.send.formatError}
+                </span>
               )}
             </div>
 
@@ -2570,12 +2811,122 @@ export function SendSheetContent({
             </h3>
           </div>
 
-          {/* New Recipient Amber Warning (only if no specific lookalike detected) */}
-          {!isKnownRecipient && resolvedRecipient && !lookalikeRecipientId && (
+          {/* Internal Pukico ID: New Recipient Amber Warning (only if no specific lookalike detected) */}
+          {!isKnownRecipient && resolvedRecipient && !resolvedRecipient.isExternal && !lookalikeRecipientId && (
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
               <span className="leading-relaxed font-medium">
                 {t.sheets.send.newRecipientWarning}
+              </span>
+            </div>
+          )}
+
+          {/* External Recipient: New Address Warning (if no lookalike detected) */}
+          {resolvedRecipient?.isExternal && isNewAddress && !lookalikeExternalAddress && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2 animate-fade-up">
+              <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+              <span className="leading-relaxed font-medium">
+                {t.sheets.send.newExternalAddressWarning}
+              </span>
+            </div>
+          )}
+
+          {/* External Recipient: Address Poisoning Lookalike Red Banner with Side-by-Side Diff */}
+          {resolvedRecipient?.isExternal && lookalikeExternalAddress && (() => {
+            const diff = diffChunks(lookalikeExternalAddress, resolvedRecipient.address);
+            return (
+              <div
+                role="alert"
+                className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#991B1B] space-y-3 animate-fade-up"
+              >
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <h4 className="font-bold text-sm text-[#991B1B]">
+                      {t.sheets.send.lookalikeAddressWarning}
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  {/* Previously used address */}
+                  <div className="p-2.5 rounded-xl bg-white/90 border border-red-200/80 space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#991B1B]">
+                      {t.sheets.send.addressPoisoningSimilarLabel}
+                    </span>
+                    <div className="font-mono text-[11px] text-[#0A0B0D] break-all leading-relaxed select-all">
+                      <span className="text-[#6B7280]">0x</span>
+                      {diff.oldChunks.map((chunk, cIdx) => (
+                        <span key={cIdx} className="inline-block mr-1">
+                          {chunk.chars.map((charObj, chIdx) => (
+                            <span
+                              key={chIdx}
+                              className={
+                                charObj.isDiff
+                                  ? 'bg-red-200 text-red-950 font-bold px-0.5 rounded'
+                                  : 'text-[#4B5563]'
+                              }
+                            >
+                              {charObj.char}
+                            </span>
+                          ))}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Current target address */}
+                  <div className="p-2.5 rounded-xl bg-white/90 border border-red-300 space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#047857]">
+                      {t.sheets.send.addressPoisoningCurrentLabel}
+                    </span>
+                    <div className="font-mono text-[11px] text-[#0A0B0D] break-all leading-relaxed select-all">
+                      <span className="text-[#6B7280]">0x</span>
+                      {diff.newChunks.map((chunk, cIdx) => (
+                        <span key={cIdx} className="inline-block mr-1">
+                          {chunk.chars.map((charObj, chIdx) => (
+                            <span
+                              key={chIdx}
+                              className={
+                                charObj.isDiff
+                                  ? 'bg-emerald-200 text-emerald-950 font-bold px-0.5 rounded'
+                                  : 'text-[#4B5563]'
+                              }
+                            >
+                              {charObj.char}
+                            </span>
+                          ))}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* External Recipient: Contract Warning Banner (Red) */}
+          {resolvedRecipient?.isExternal && contractStatus === 'contract' && (
+            <div
+              role="alert"
+              className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#991B1B] flex items-start gap-2.5 animate-fade-up"
+            >
+              <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
+              <span className="leading-relaxed font-medium">
+                {t.sheets.send.contractWarning}
+              </span>
+            </div>
+          )}
+
+          {/* External Recipient: Contract Check Error Banner (Amber) */}
+          {resolvedRecipient?.isExternal && contractStatus === 'error' && (
+            <div
+              role="alert"
+              className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2.5 animate-fade-up"
+            >
+              <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+              <span className="leading-relaxed font-medium">
+                {t.sheets.send.contractCheckFailed}
               </span>
             </div>
           )}
@@ -2586,10 +2937,23 @@ export function SendSheetContent({
             <div className="py-2.5 flex items-center justify-between">
               <span className="text-[#5B6577]">{t.sheets.send.toLabel}</span>
               <div className="text-right">
-                <span className="font-semibold text-[#0A0B0D]">@{resolvedRecipient?.id}</span>
-                <span className="text-xs text-[#5B6577] ml-1.5 font-mono">
-                  ({shortenAddress(resolvedRecipient?.address || '')})
-                </span>
+                {resolvedRecipient?.isExternal ? (
+                  <div className="flex items-center gap-2 justify-end">
+                    <span className="font-semibold font-mono text-[#0A0B0D]">
+                      {shortenAddress(resolvedRecipient.address)}
+                    </span>
+                    <span className="text-[11px] font-medium bg-[#EEF4FF] text-[#0052FF] px-2 py-0.5 rounded-full">
+                      {t.sheets.send.externalWalletLabel}
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <span className="font-semibold text-[#0A0B0D]">@{resolvedRecipient?.id}</span>
+                    <span className="text-xs text-[#5B6577] ml-1.5 font-mono">
+                      ({shortenAddress(resolvedRecipient?.address || '')})
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2702,14 +3066,14 @@ export function SendSheetContent({
           {/* Full Checksum Recipient Address & Security Verifications (Always Visible) */}
           {resolvedRecipient && (
             <RecipientVerification
-              recipientId={resolvedRecipient.id}
+              recipientId={resolvedRecipient.isExternal ? undefined : resolvedRecipient.id}
               rawAddress={resolvedRecipient.address}
               addressChanged={recipientAddressChanged}
               previousAddress={previousRecipientAddress}
               lastSentAt={lastSentAt}
               isAddressChangeAcknowledged={isAddressChangeAcknowledged}
               onAcknowledgeChange={setIsAddressChangeAcknowledged}
-              lookalikeId={lookalikeRecipientId}
+              lookalikeId={resolvedRecipient.isExternal ? null : lookalikeRecipientId}
               onCopyAddress={() => {
                 toast.success(t.toast.copiedAddress);
               }}
@@ -2724,7 +3088,9 @@ export function SendSheetContent({
                 <span>{t.sheets.send.largeTransferTitle}</span>
               </div>
               <p className="text-[#B45309] leading-relaxed">
-                {t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id)}
+                {resolvedRecipient.isExternal
+                  ? `Ketik ${shortenAddress(resolvedRecipient.address)} untuk konfirmasi`
+                  : t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id)}
               </p>
               <input
                 type="text"
@@ -2733,7 +3099,11 @@ export function SendSheetContent({
                 spellCheck={false}
                 value={largeTransferInput}
                 onChange={(e) => setLargeTransferInput(e.target.value)}
-                placeholder={t.sheets.send.largeTransferInputPlaceholder}
+                placeholder={
+                  resolvedRecipient.isExternal
+                    ? shortenAddress(resolvedRecipient.address)
+                    : t.sheets.send.largeTransferInputPlaceholder
+                }
                 className="w-full h-10 px-3 bg-white border border-amber-300 rounded-xl font-mono text-xs text-[#0A0B0D] placeholder:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
@@ -2742,6 +3112,53 @@ export function SendSheetContent({
           <p className="text-xs text-[#5B6577] leading-relaxed">
             {t.sheets.send.testnetNotice}
           </p>
+
+          {/* External Recipient Security Banner and Checkboxes */}
+          {resolvedRecipient?.isExternal && (
+            <div className="space-y-3 pt-1">
+              {/* Fixed Red Notice Banner */}
+              <div
+                role="alert"
+                className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#991B1B] flex items-start gap-2.5"
+              >
+                <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
+                <span className="leading-relaxed font-medium">
+                  {t.sheets.send.externalWalletNoticeBanner}
+                </span>
+              </div>
+
+              {/* Confirmation Checkboxes */}
+              <div className="p-3.5 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] space-y-3">
+                {/* Checkbox A: Always mandatory for external */}
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#0A0B0D]">
+                  <input
+                    type="checkbox"
+                    checked={isExtAddressChecked}
+                    onChange={(e) => setIsExtAddressChecked(e.target.checked)}
+                    className="w-4 h-4 rounded border-[#D1D5DB] text-[#0052FF] focus:ring-[#0052FF] mt-0.5 cursor-pointer shrink-0"
+                  />
+                  <span className="leading-tight font-medium select-none">
+                    {t.sheets.send.checkboxVerifyAddress}
+                  </span>
+                </label>
+
+                {/* Checkbox B: Mandatory if lookalike address poisoning, contract, or check error */}
+                {Boolean(lookalikeExternalAddress || contractStatus === 'contract' || contractStatus === 'error') && (
+                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#991B1B]">
+                    <input
+                      type="checkbox"
+                      checked={isExtRiskChecked}
+                      onChange={(e) => setIsExtRiskChecked(e.target.checked)}
+                      className="w-4 h-4 rounded border-red-300 text-[#DC2626] focus:ring-[#DC2626] mt-0.5 cursor-pointer shrink-0"
+                    />
+                    <span className="leading-tight font-medium select-none">
+                      {t.sheets.send.checkboxUnderstandRisk}
+                    </span>
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Inline Security Gate Error */}
           {securityError && (
@@ -2805,7 +3222,15 @@ export function SendSheetContent({
                 isInsufficientEth ||
                 balances === null ||
                 (isLargeTransfer && !isLargeConfirmed) ||
-                (recipientAddressChanged && !isAddressChangeAcknowledged)
+                (!resolvedRecipient?.isExternal && recipientAddressChanged && !isAddressChangeAcknowledged) ||
+                Boolean(
+                  resolvedRecipient?.isExternal &&
+                    (!isExtAddressChecked ||
+                      ((lookalikeExternalAddress ||
+                        contractStatus === 'contract' ||
+                        contractStatus === 'error') &&
+                        !isExtRiskChecked))
+                )
               }
               onClick={handleExecuteSend}
               className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
@@ -2841,7 +3266,10 @@ export function SendSheetContent({
                 {lockedSummary.asset === 'USDC'
                   ? fmt.usdcUnits(lockedSummary.amountUnits)
                   : fmt.units(lockedSummary.amountUnits, ASSET_DECIMALS[lockedSummary.asset], 8)}{' '}
-                {lockedSummary.asset} → @{lockedSummary.recipientId}
+                {lockedSummary.asset} →{' '}
+                {lockedSummary.isExternal
+                  ? shortenAddress(lockedSummary.recipientAddress || '')
+                  : `@${lockedSummary.recipientId}`}
               </p>
             )}
             {txHash && (
@@ -2892,10 +3320,18 @@ export function SendSheetContent({
 
                 <div className="space-y-1">
                   <h4 className="text-base font-bold text-[#0A0B0D]">
-                    {t.sheets.send.sentSuccess
-                      .replace('{amount}', displayAmount)
-                      .replace('{asset}', displayAsset)
-                      .replace('{id}', displayRecipient)}
+                    {lockedSummary?.isExternal
+                      ? t.sheets.send.sentSuccessExternal
+                          .replace('{amount}', displayAmount)
+                          .replace('{asset}', displayAsset)
+                          .replace(
+                            '{address}',
+                            shortenAddress(lockedSummary.recipientAddress || displayRecipient)
+                          )
+                      : t.sheets.send.sentSuccess
+                          .replace('{amount}', displayAmount)
+                          .replace('{asset}', displayAsset)
+                          .replace('{id}', displayRecipient)}
                   </h4>
                   <p className="text-xs text-[#5B6577]">
                     {t.sheets.send.confirmedOnBase}

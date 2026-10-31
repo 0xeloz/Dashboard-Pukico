@@ -134,18 +134,30 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
 
       let message = '';
       const formattedAmount = fmt.asset(item.data.amount, item.data.asset);
+      const rawCp = (item.data.counterparty || '').replace(/^@+/, '').trim();
+      const isExt = !rawCp || rawCp.startsWith('0x');
+      const cpLabel = isExt
+        ? (rawCp
+            ? `${rawCp.length >= 10 ? `${rawCp.slice(0, 6)}…${rawCp.slice(-4)}` : rawCp} (${t.history.externalWallet})`
+            : t.history.externalWallet)
+        : `@${rawCp}`;
+
       if (item.kind === 'tx_received') {
         message = t.notifications.kinds.tx_received
           .replace('{amount}', formattedAmount)
           .replace('{asset}', item.data.asset)
-          .replace('{counterparty}', item.data.counterparty);
+          .replace('@{counterparty}', cpLabel)
+          .replace('{counterparty}', cpLabel);
       } else if (item.kind === 'tx_sent') {
         message = t.notifications.kinds.tx_sent
           .replace('{amount}', formattedAmount)
           .replace('{asset}', item.data.asset)
-          .replace('{counterparty}', item.data.counterparty);
+          .replace('@{counterparty}', cpLabel)
+          .replace('{counterparty}', cpLabel);
       } else if (item.kind === 'tx_failed') {
-        message = t.notifications.kinds.tx_failed.replace('{counterparty}', item.data.counterparty);
+        message = t.notifications.kinds.tx_failed
+          .replace('@{counterparty}', cpLabel)
+          .replace('{counterparty}', cpLabel);
       } else {
         message = `${formattedAmount} ${item.data.asset}`;
       }

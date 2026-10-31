@@ -263,7 +263,15 @@ export async function renderReceiptPng(data: ReceiptData): Promise<Blob> {
   ctx.fillText(data.nominal, PADDING_X, curY);
 
   // Counterparty: Dari @a → Ke @b
-  const counterpartyText = `${data.labels.from} @${data.senderId}  →  ${data.labels.to} @${data.recipientId}`;
+  const formatPartyForReceipt = (text: string) => {
+    if (!text || text === '—') return '—';
+    const clean = text.trim();
+    if (clean.startsWith('@') || clean.startsWith('0x') || clean.includes('(') || clean.includes('…')) {
+      return clean;
+    }
+    return `@${clean}`;
+  };
+  const counterpartyText = `${data.labels.from} ${formatPartyForReceipt(data.senderId)}  →  ${data.labels.to} ${formatPartyForReceipt(data.recipientId)}`;
   ctx.fillStyle = '#5B6577';
   ctx.font = '500 26px system-ui, -apple-system, sans-serif';
   ctx.fillText(counterpartyText, PADDING_X, curY + 76);

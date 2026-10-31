@@ -12,7 +12,7 @@ import { formatChecksum, chunkAddress, diffChunks } from '../../lib/addressSafet
 import { formatRelativeTime } from '../../lib/formatters';
 
 export interface RecipientVerificationProps {
-  recipientId: string;
+  recipientId?: string | null;
   rawAddress: string;
   addressChanged?: boolean;
   previousAddress?: string | null;
@@ -24,7 +24,7 @@ export interface RecipientVerificationProps {
 }
 
 export function RecipientVerification({
-  recipientId,
+  recipientId = null,
   rawAddress,
   addressChanged = false,
   previousAddress = null,
@@ -91,7 +91,7 @@ export function RecipientVerification({
                 {t.sheets.send.addressChangedTitle}
               </h4>
               <p className="text-[#B91C1C] leading-relaxed">
-                {t.sheets.send.addressChangedDesc.replace('{id}', recipientId)}
+                {t.sheets.send.addressChangedDesc.replace('{id}', recipientId || '')}
               </p>
               {lastSentAt && (
                 <p className="text-[11px] text-[#DC2626] font-medium">
@@ -245,7 +245,11 @@ export function RecipientVerification({
 
         {/* Link to BaseScan */}
         <div className="flex items-center justify-between pt-0.5 text-[11px]">
-          <span className="text-[#5B6577] font-mono">@{recipientId}</span>
+          {recipientId ? (
+            <span className="text-[#5B6577] font-mono">@{recipientId.replace(/^@+/, '')}</span>
+          ) : (
+            <span className="text-[#5B6577]">Base Sepolia</span>
+          )}
           <a
             href={basescanUrl}
             target="_blank"

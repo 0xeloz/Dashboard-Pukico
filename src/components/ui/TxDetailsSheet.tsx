@@ -54,12 +54,31 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
   const isFailed = rawStatus === 'failed';
   const isConfirmed = !isPending && !isFailed;
 
-  const counterparty = (
+  const rawTargetAddress = currentTx.counterparty_address || currentTx.to_address;
+  const rawCp = (
     currentTx.counterparty ||
-    currentTx.to_pukico_id ||
-    currentTx.from_pukico_id ||
+    (isIncoming ? currentTx.from_pukico_id : currentTx.to_pukico_id) ||
     ''
-  ).replace(/^@/, '');
+  ).replace(/^@+/, '').trim();
+
+  const isExternal =
+    Boolean(currentTx.is_external) ||
+    (!rawCp && Boolean(rawTargetAddress)) ||
+    rawCp.startsWith('0x');
+
+  const formatParty = (username: string, addr?: string | null) => {
+    if (username && !username.startsWith('0x')) {
+      return `@${username}`;
+    }
+    const targetAddr = addr || (username.startsWith('0x') ? username : '');
+    const short = targetAddr ? shortenAddress(targetAddr) : '';
+    const label = t.history.externalWallet || 'Wallet luar';
+    return short ? `${short} (${label})` : label;
+  };
+
+  const counterpartyDisplay = isExternal
+    ? formatParty(rawCp, rawTargetAddress)
+    : (rawCp ? `@${rawCp}` : '—');
 
   const formattedAmount = fmt.asset(currentTx.amount, currentTx.asset);
   const explorerUrl =
@@ -206,22 +225,23 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
   })();
 
   const myPukicoId = (profile?.pukico_id || '').replace(/^@+/, '').trim();
-  const rawCounterparty = (
-    currentTx.counterparty ||
-    (isIncoming ? currentTx.from_pukico_id : currentTx.to_pukico_id) ||
-    ''
-  ).replace(/^@+/, '').trim();
 
-  const senderId = isIncoming ? (rawCounterparty || '—') : (myPukicoId || 'you');
-  const recipientId = isIncoming ? (myPukicoId || 'you') : (rawCounterparty || '—');
+  const senderDisplay = isIncoming
+    ? (isExternal ? formatParty(rawCp, rawTargetAddress) : (rawCp ? `@${rawCp}` : '—'))
+    : `@${myPukicoId || 'you'}`;
+
+  const recipientDisplay = isIncoming
+    ? `@${myPukicoId || 'you'}`
+    : (isExternal ? formatParty(rawCp, rawTargetAddress) : (rawCp ? `@${rawCp}` : '—'));
+
   const cleanNominal = `${formattedAmount} ${currentTx.asset}`;
   const formattedTime = currentTx.created_at ? formatFullDateTime(currentTx.created_at, lang) : '';
   const networkName = t.history.networkValue || 'Base Sepolia · Testnet';
 
   const teksRingkas =
     lang === 'id'
-      ? `Pukico — ${t.history.receiptTitle}\n${cleanNominal} dari @${senderId} ke @${recipientId}\n${formattedTime}\nStatus: ${t.history.receiptStatusConfirmed}\n${networkName}${explorerUrl ? `\n${explorerUrl}` : ''}`
-      : `Pukico — ${t.history.receiptTitle}\n${cleanNominal} from @${senderId} to @${recipientId}\n${formattedTime}\nStatus: ${t.history.receiptStatusConfirmed}\n${networkName}${explorerUrl ? `\n${explorerUrl}` : ''}`;
+      ? `Pukico — ${t.history.receiptTitle}\n${cleanNominal} dari ${senderDisplay} ke ${recipientDisplay}\n${formattedTime}\nStatus: ${t.history.receiptStatusConfirmed}\n${networkName}${explorerUrl ? `\n${explorerUrl}` : ''}`
+      : `Pukico — ${t.history.receiptTitle}\n${cleanNominal} from ${senderDisplay} to ${recipientDisplay}\n${formattedTime}\nStatus: ${t.history.receiptStatusConfirmed}\n${networkName}${explorerUrl ? `\n${explorerUrl}` : ''}`;
 
   const handleShareReceipt = async () => {
     if (isSharing || !isConfirmed) return;
@@ -235,8 +255,8 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
       const blob = await renderReceiptPng({
         lang,
         nominal: cleanNominal,
-        senderId,
-        recipientId,
+        senderId: senderDisplay,
+        recipientId: recipientDisplay,
         timeStr: formattedTime,
         networkName,
         statusLabel: t.history.receiptStatusConfirmed,
@@ -353,7 +373,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
             {isIncoming ? `+${formattedAmount}` : `-${formattedAmount}`} {currentTx.asset}
           </div>
           <div className="text-xs text-[#5B6577] mt-1">
-            {isIncoming ? t.history.from : t.history.to} @{counterparty || '—'}
+            {isIncoming ? t.history.from : t.history.to} {counterpartyDisplay}
           </div>
         </div>
 
@@ -398,7 +418,7 @@ export function TxDetailsSheet({ open, onClose, tx }: TxDetailsSheetProps) {
               {isIncoming ? t.history.from : t.history.to}
             </span>
             <span className="font-mono text-sm font-semibold text-[#0A0B0D]">
-              @{counterparty || '—'}
+              {counterpartyDisplay}
             </span>
           </div>
 

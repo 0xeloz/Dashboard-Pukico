@@ -19,7 +19,10 @@ export interface TxRecord {
   direction?: 'in' | 'out' | 'incoming' | 'outgoing';
   asset: 'USDC' | 'ETH';
   amount: string;
-  counterparty?: string;
+  counterparty?: string | null;
+  counterparty_address?: string | null;
+  to_address?: string;
+  is_external?: boolean;
   to_pukico_id?: string;
   from_pukico_id?: string;
   status: 'pending' | 'confirmed' | 'failed';
@@ -63,7 +66,8 @@ export interface FeeReportResponse {
 export interface PendingTxEntry {
   tx_hash: string;
   asset: 'USDC' | 'ETH';
-  to_pukico_id: string;
+  to_pukico_id?: string;
+  to_address?: string;
   amount: string;
   timestamp: number;
 }
@@ -249,12 +253,15 @@ export async function submitTx(
   params: {
     tx_hash: string;
     asset: 'USDC' | 'ETH';
-    to_pukico_id: string;
+    to_pukico_id?: string;
+    to_address?: string;
     amount: string;
     fee_tx_hash?: string;
   },
   options: ApiOptions = {}
 ): Promise<{ ok: boolean; status: number; tx?: TxRecord; error?: string }> {
+  const isExt = Boolean(params.to_address && !params.to_pukico_id);
+
   if (options.isDemoMode) {
     const feeBps = 50;
     let serviceFee: string | null = null;
@@ -282,6 +289,10 @@ export async function submitTx(
         direction: 'outgoing',
         asset: params.asset,
         amount: params.amount,
+        counterparty: isExt ? null : (params.to_pukico_id || null),
+        counterparty_address: isExt ? params.to_address : undefined,
+        to_address: params.to_address,
+        is_external: isExt,
         to_pukico_id: params.to_pukico_id,
         fee_tx_hash: feeTxHash,
         service_fee: serviceFee,
@@ -302,17 +313,24 @@ export async function submitTx(
   const endpoint = `${ENV.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/tx`;
 
   try {
+    const payload: Record<string, any> = {
+      action: 'submit',
+      tx_hash: params.tx_hash,
+      asset: params.asset,
+      amount: params.amount,
+      fee_tx_hash: params.fee_tx_hash,
+    };
+
+    if (params.to_address) {
+      payload.to_address = params.to_address;
+    } else if (params.to_pukico_id) {
+      payload.to_pukico_id = params.to_pukico_id;
+    }
+
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: buildHeaders(options.privyToken),
-      body: JSON.stringify({
-        action: 'submit',
-        tx_hash: params.tx_hash,
-        asset: params.asset,
-        to_pukico_id: params.to_pukico_id,
-        amount: params.amount,
-        fee_tx_hash: params.fee_tx_hash,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -338,7 +356,8 @@ export async function submitTxWithRetry(
   params: {
     tx_hash: string;
     asset: 'USDC' | 'ETH';
-    to_pukico_id: string;
+    to_pukico_id?: string;
+    to_address?: string;
     amount: string;
     fee_tx_hash?: string;
   },
@@ -466,6 +485,7 @@ export async function resubmitPendingTransactions(options: ApiOptions = {}): Pro
           tx_hash: item.tx_hash,
           asset: item.asset,
           to_pukico_id: item.to_pukico_id,
+          to_address: item.to_address,
           amount: item.amount,
         },
         options
@@ -655,9 +675,17 @@ export async function listTxs(
     const rawList: TxRecord[] = data.txs || data.items || [];
     const normalized: TxRecord[] = rawList.map((item) => {
       const isIncoming = item.direction === 'in' || item.direction === 'incoming';
+      const isExt = Boolean(
+        item.is_external ||
+          (item.counterparty === null && (item.counterparty_address || item.to_address))
+      );
       return {
         ...item,
-        counterparty: item.counterparty || item.to_pukico_id || item.from_pukico_id || '',
+        counterparty: isExt
+          ? null
+          : (item.counterparty ?? item.to_pukico_id ?? item.from_pukico_id ?? null),
+        counterparty_address: item.counterparty_address || item.to_address,
+        is_external: isExt,
         direction: isIncoming ? 'in' : 'out',
         explorer_url: item.explorer_url || (item.tx_hash ? getExplorerUrl(item.tx_hash) : undefined),
         // Receiver must never see service fee info

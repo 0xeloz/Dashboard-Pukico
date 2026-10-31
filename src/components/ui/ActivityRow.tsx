@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { useT } from '../../i18n';
 import { formatRelativeTime, formatAssetAmount } from '../../lib/formatters';
-import type { TxRecord } from '../../lib/txApi';
+import { shortenAddress, type TxRecord } from '../../lib/txApi';
 
 export interface ActivityItem {
   id?: string;
@@ -10,7 +10,10 @@ export interface ActivityItem {
   type?: 'incoming' | 'outgoing';
   direction?: 'in' | 'out' | 'incoming' | 'outgoing';
   targetId?: string;
-  counterparty?: string;
+  counterparty?: string | null;
+  counterparty_address?: string | null;
+  to_address?: string;
+  is_external?: boolean;
   to_pukico_id?: string;
   from_pukico_id?: string;
   timestamp?: string;
@@ -53,13 +56,32 @@ export function ActivityRow({ activity, onClick }: ActivityRowProps) {
     ? t.history.failed
     : t.history.confirmed;
 
-  const counterparty = (
+  const rawTargetAddress =
+    ('counterparty_address' in activity ? activity.counterparty_address : undefined) ||
+    ('to_address' in activity ? activity.to_address : undefined);
+
+  const rawCp = (
     activity.counterparty ||
     ('targetId' in activity ? activity.targetId : '') ||
     activity.to_pukico_id ||
     activity.from_pukico_id ||
     ''
-  ).replace(/^@/, '');
+  ).replace(/^@+/, '').trim();
+
+  const isExternal =
+    ('is_external' in activity && Boolean(activity.is_external)) ||
+    (!rawCp && Boolean(rawTargetAddress)) ||
+    rawCp.startsWith('0x');
+
+  let counterpartyDisplay: string;
+  if (isExternal) {
+    const addr = rawTargetAddress || (rawCp.startsWith('0x') ? rawCp : '');
+    const shortAddr = addr ? shortenAddress(addr) : '';
+    const label = t.history.externalWallet || 'Wallet luar';
+    counterpartyDisplay = shortAddr ? `${shortAddr} (${label})` : label;
+  } else {
+    counterpartyDisplay = rawCp ? `@${rawCp}` : '—';
+  }
 
   const asset = activity.asset || ('currency' in activity ? activity.currency : 'USDC') || 'USDC';
 
@@ -113,7 +135,7 @@ export function ActivityRow({ activity, onClick }: ActivityRowProps) {
         {/* Text information */}
         <div className="min-w-0">
           <div className="font-semibold text-sm text-[#0A0B0D] truncate">
-            {prefix} @{counterparty || '—'}
+            {prefix} {counterpartyDisplay}
           </div>
           <div className="text-xs text-[#5B6577] mt-0.5">
             {relativeTimeStr ? `${relativeTimeStr} · Base Sepolia` : 'Base Sepolia'}
