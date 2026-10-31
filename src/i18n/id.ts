@@ -297,7 +297,7 @@ export const id: Translations = {
       addressPoisoningCurrentLabel: 'Alamat tujuan saat ini',
       addressPoisoningSimilarLabel: 'Alamat yang pernah kamu pakai',
       typeToConfirm: 'Ketik {address} untuk konfirmasi',
-      addressBelongsToPukico: 'Alamat ini milik {id}',
+      addressBelongsToPukico: 'Alamat ini milik {id} ({address})',
     },
     receive: {
       title: 'Terima',

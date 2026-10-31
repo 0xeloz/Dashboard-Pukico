@@ -1172,7 +1172,7 @@ export function SendSheetContent({
             setExternalAddressError(null);
 
             // Switch to internal recipient
-            setRecipientInput(`@${res.pukico_id}`);
+            setRecipientInput(res.pukico_id);
             setAddressBelongsToPukicoId(res.pukico_id);
             setRecipientStatus('found');
             setResolvedRecipient({
@@ -2531,19 +2531,21 @@ export function SendSheetContent({
                       </div>
                     )}
                   </div>
+                ) : addressBelongsToPukicoId ? (
+                  <div className="flex items-center gap-1.5 text-[#047857] font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#047857] shrink-0" />
+                    <span>
+                      {t.sheets.send.addressBelongsToPukico
+                        .replace('{id}', `@${resolvedRecipient.id}`)
+                        .replace('{address}', shortenAddress(resolvedRecipient.address))}
+                    </span>
+                  </div>
                 ) : (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-[#047857] font-medium">
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" />
-                      <span>
-                        {t.sheets.send.found} · @{resolvedRecipient.id} ({shortenAddress(resolvedRecipient.address)})
-                      </span>
-                    </div>
-                    {addressBelongsToPukicoId && (
-                      <p className="text-[11px] text-[#5B6577] pl-5 leading-tight">
-                        {t.sheets.send.addressBelongsToPukico.replace('{id}', `@${resolvedRecipient.id}`)}
-                      </p>
-                    )}
+                  <div className="flex items-center gap-1.5 text-[#047857] font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#047857] shrink-0" />
+                    <span>
+                      {t.sheets.send.found} · @{resolvedRecipient.id} ({shortenAddress(resolvedRecipient.address)})
+                    </span>
                   </div>
                 )
               )}

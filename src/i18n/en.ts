@@ -288,7 +288,7 @@ export const en = {
       addressPoisoningCurrentLabel: 'Current target address',
       addressPoisoningSimilarLabel: 'Previously used address',
       typeToConfirm: 'Type {address} to confirm',
-      addressBelongsToPukico: 'This address belongs to {id}',
+      addressBelongsToPukico: 'This address belongs to {id} ({address})',
     },
     receive: {
       title: 'Receive',

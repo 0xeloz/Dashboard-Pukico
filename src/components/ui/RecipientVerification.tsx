@@ -211,11 +211,15 @@ export function RecipientVerification({
                 </>
               )}
             </button>
-            {isExternal && (
+            {isExternal ? (
               <span className="text-[10px] font-semibold bg-[#EEF4FF] text-[#0052FF] px-2 py-0.5 rounded-full">
                 {t.sheets.send.externalWalletLabel}
               </span>
-            )}
+            ) : recipientId ? (
+              <span className="text-[10px] font-semibold bg-[#EEF4FF] text-[#0052FF] px-2 py-0.5 rounded-full">
+                @{recipientId.replace(/^@+/, '')}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -259,7 +263,7 @@ export function RecipientVerification({
         {/* Link to BaseScan & Network */}
         <div className="flex items-center justify-between pt-0.5 text-[11px]">
           <span className="text-[#5B6577] font-medium">
-            {recipientId ? `@${recipientId.replace(/^@+/, '')} · Base Sepolia · Testnet` : 'Base Sepolia · Testnet'}
+            Base Sepolia · Testnet
           </span>
           <a
             href={basescanUrl}
