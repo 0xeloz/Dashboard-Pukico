@@ -1117,7 +1117,9 @@ export function SendSheetContent({
     if (isLikelyAddressInput(val)) {
       handleExternalAddressInput(val);
     } else {
-      performLookup(val, 400);
+      const usernameVal = val.slice(0, 20);
+      setRecipientInput(usernameVal);
+      performLookup(usernameVal, 400);
     }
   };
 
@@ -2388,7 +2390,7 @@ export function SendSheetContent({
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
-                maxLength={isLikelyAddressInput(recipientInput) ? 42 : 20}
+                maxLength={66}
                 value={recipientInput}
                 onChange={handleRecipientChange}
                 placeholder={isLikelyAddressInput(recipientInput) ? '0x...' : 'username'}
