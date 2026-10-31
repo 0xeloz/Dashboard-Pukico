@@ -276,7 +276,9 @@ export const en = {
       contractWarning: 'This address is a contract, not a regular wallet. Funds sent to an incompatible contract may be permanently lost.',
       contractCheckFailed: 'Unable to verify address type.',
       contractChecking: 'Checking address…',
-      externalWalletNoticeBanner: 'Wallet outside Pukico. Pukico cannot cancel or trace this transfer. Make sure the recipient wallet is on Base Sepolia (testnet).',
+      externalWalletNoticeBanner:
+        "Wallet outside Pukico. If the address is wrong, funds can't be reversed or recovered. Make sure the network is Base Sepolia (testnet).",
+      gasHelperCompact: 'Gas fees are paid in ETH to Base network validators, not Pukico.',
       checkboxVerifyAddress: 'I have verified the full address and network.',
       checkboxUnderstandRisk: 'I understand the risks.',
       mustCheckAddress: 'Please confirm you have verified the full address and network.',

@@ -285,7 +285,9 @@ export const id: Translations = {
       contractWarning: 'Alamat ini adalah kontrak, bukan wallet biasa. Dana yang dikirim ke kontrak yang tidak mendukungnya bisa hilang permanen.',
       contractCheckFailed: 'Tidak bisa memeriksa jenis alamat.',
       contractChecking: 'Memeriksa alamat…',
-      externalWalletNoticeBanner: 'Wallet di luar Pukico. Pukico tidak bisa membatalkan atau menelusuri transfer ini. Pastikan wallet penerima memakai jaringan Base Sepolia (testnet).',
+      externalWalletNoticeBanner:
+        'Wallet di luar Pukico. Kalau alamat salah, dana tidak bisa dibatalkan atau dikembalikan. Pastikan jaringannya Base Sepolia (testnet).',
+      gasHelperCompact: 'Biaya gas dibayarkan dalam ETH ke validator Base, bukan Pukico.',
       checkboxVerifyAddress: 'Saya sudah memeriksa alamat lengkap dan jaringannya.',
       checkboxUnderstandRisk: 'Saya paham risikonya.',
       mustCheckAddress: 'Harap centang konfirmasi pemeriksaan alamat dan jaringan.',

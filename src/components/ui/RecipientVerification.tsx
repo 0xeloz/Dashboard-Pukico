@@ -21,6 +21,8 @@ export interface RecipientVerificationProps {
   onAcknowledgeChange?: (acknowledged: boolean) => void;
   lookalikeId?: string | null;
   onCopyAddress?: (text: string) => void;
+  isExternal?: boolean;
+  hideCheckbox?: boolean;
 }
 
 export function RecipientVerification({
@@ -33,6 +35,8 @@ export function RecipientVerification({
   onAcknowledgeChange,
   lookalikeId = null,
   onCopyAddress,
+  isExternal = false,
+  hideCheckbox = false,
 }: RecipientVerificationProps) {
   const { t, lang } = useT();
   const [copied, setCopied] = useState<boolean>(false);
@@ -161,20 +165,22 @@ export function RecipientVerification({
             </div>
           )}
 
-          {/* Acknowledgment Checkbox */}
-          <div className="pt-1 border-t border-red-200">
-            <label className="flex items-start gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isAddressChangeAcknowledged}
-                onChange={(e) => onAcknowledgeChange?.(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-red-300 text-[#0052FF] focus:ring-[#0052FF] cursor-pointer"
-              />
-              <span className="text-xs font-semibold text-[#0A0B0D] leading-tight">
-                {t.sheets.send.addressChangeAcknowledge}
-              </span>
-            </label>
-          </div>
+          {/* Acknowledgment Checkbox (hidden when rendered in sticky footer) */}
+          {!hideCheckbox && (
+            <div className="pt-1 border-t border-red-200">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAddressChangeAcknowledged}
+                  onChange={(e) => onAcknowledgeChange?.(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-red-300 text-[#0052FF] focus:ring-[#0052FF] cursor-pointer"
+                />
+                <span className="text-xs font-semibold text-[#0A0B0D] leading-tight">
+                  {t.sheets.send.addressChangeAcknowledge}
+                </span>
+              </label>
+            </div>
+          )}
         </div>
       )}
 
@@ -186,24 +192,31 @@ export function RecipientVerification({
             <span>{t.sheets.send.recipientAddress}</span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-[#F3F4F6] text-[#0052FF] font-medium text-[11px] transition-colors cursor-pointer"
-            aria-label={t.common.copyAddress}
-          >
-            {copied ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-[#047857]" />
-                <span className="text-[#047857]">{t.common.copied}</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>{t.common.copy}</span>
-              </>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-[#F3F4F6] text-[#0052FF] font-medium text-[11px] transition-colors cursor-pointer"
+              aria-label={t.common.copyAddress}
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-[#047857]" />
+                  <span className="text-[#047857]">{t.common.copied}</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{t.common.copy}</span>
+                </>
+              )}
+            </button>
+            {isExternal && (
+              <span className="text-[10px] font-semibold bg-[#EEF4FF] text-[#0052FF] px-2 py-0.5 rounded-full">
+                {t.sheets.send.externalWalletLabel}
+              </span>
             )}
-          </button>
+          </div>
         </div>
 
         {/* 4-character chunks display with 6 prefix chars & 4 suffix chars bolded */}
@@ -243,13 +256,11 @@ export function RecipientVerification({
           })}
         </div>
 
-        {/* Link to BaseScan */}
+        {/* Link to BaseScan & Network */}
         <div className="flex items-center justify-between pt-0.5 text-[11px]">
-          {recipientId ? (
-            <span className="text-[#5B6577] font-mono">@{recipientId.replace(/^@+/, '')}</span>
-          ) : (
-            <span className="text-[#5B6577]">Base Sepolia</span>
-          )}
+          <span className="text-[#5B6577] font-medium">
+            {recipientId ? `@${recipientId.replace(/^@+/, '')} · Base Sepolia · Testnet` : 'Base Sepolia · Testnet'}
+          </span>
           <a
             href={basescanUrl}
             target="_blank"

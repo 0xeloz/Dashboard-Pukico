@@ -354,6 +354,13 @@ export function SendSheetContent({
   const resolveDebounceRef = useRef<number | null>(null);
   const resolveControllerRef = useRef<AbortController | null>(null);
   const latestResolveReqIdRef = useRef<number>(0);
+  const sheetContentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (sheetContentRef.current) {
+      sheetContentRef.current.closest('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [step]);
 
   useEffect(() => {
     return () => {
@@ -2165,7 +2172,7 @@ export function SendSheetContent({
   };
 
   return (
-    <div className="space-y-5 text-left select-none">
+    <div ref={sheetContentRef} className="space-y-5 text-left select-none">
       {/* Demo Notice */}
       {isDemoMode && (
         <div className="flex items-center gap-1.5 text-xs text-[#B45309]">
@@ -2805,182 +2812,171 @@ export function SendSheetContent({
 
       {/* ================= STEP 4: REVIEW ================= */}
       {step === 4 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setLockedSummary(null);
-                setSendFailedBeforeHash(false);
-                setRecipientVerificationError(false);
-                setSecurityError(null);
-                setStep(3);
-              }}
-              className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
-              aria-label={t.sheets.send.backBtn}
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <h3 className="text-base font-semibold text-[#0A0B0D]">
-              {t.sheets.send.review}
-            </h3>
-          </div>
-
-          {/* Internal Pukico ID: New Recipient Amber Warning (only if no specific lookalike detected) */}
-          {!isKnownRecipient && resolvedRecipient && !resolvedRecipient.isExternal && !lookalikeRecipientId && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
-              <span className="leading-relaxed font-medium">
-                {t.sheets.send.newRecipientWarning}
-              </span>
+        <div className="flex flex-col min-h-full">
+          {/* (a) Scrollable Content Area */}
+          <div className="space-y-3 pb-4 flex-1">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setLockedSummary(null);
+                  setSendFailedBeforeHash(false);
+                  setRecipientVerificationError(false);
+                  setSecurityError(null);
+                  setStep(3);
+                }}
+                className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
+                aria-label={t.sheets.send.backBtn}
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <h3 className="text-base font-semibold text-[#0A0B0D]">
+                {t.sheets.send.review}
+              </h3>
             </div>
-          )}
 
-          {/* External Recipient: New Address Warning (if no lookalike detected) */}
-          {resolvedRecipient?.isExternal && isNewAddress && !lookalikeExternalAddress && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2 animate-fade-up">
-              <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
-              <span className="leading-relaxed font-medium">
-                {t.sheets.send.newExternalAddressWarning}
-              </span>
-            </div>
-          )}
+            {/* Internal Pukico ID: New Recipient Amber Warning */}
+            {!isKnownRecipient && resolvedRecipient && !resolvedRecipient.isExternal && !lookalikeRecipientId && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+                <span className="leading-relaxed font-medium">
+                  {t.sheets.send.newRecipientWarning}
+                </span>
+              </div>
+            )}
 
-          {/* External Recipient: Address Poisoning Lookalike Red Banner with Side-by-Side Diff */}
-          {resolvedRecipient?.isExternal && lookalikeExternalAddress && (() => {
-            const diff = diffChunks(lookalikeExternalAddress, resolvedRecipient.address);
-            return (
+            {/* External Recipient: New Address Warning (ringkas satu baris, padding kecil, teks 12-13px) */}
+            {resolvedRecipient?.isExternal && isNewAddress && !lookalikeExternalAddress && (
+              <div className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-center gap-2 animate-fade-up">
+                <AlertTriangle className="w-3.5 h-3.5 text-[#B45309] shrink-0" />
+                <span className="font-medium leading-tight truncate">
+                  {t.sheets.send.newExternalAddressWarning}
+                </span>
+              </div>
+            )}
+
+            {/* External Recipient: Address Poisoning Lookalike Red Banner with Side-by-Side Diff */}
+            {resolvedRecipient?.isExternal && lookalikeExternalAddress && (() => {
+              const diff = diffChunks(lookalikeExternalAddress, resolvedRecipient.address);
+              return (
+                <div
+                  role="alert"
+                  className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#991B1B] space-y-3 animate-fade-up"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <h4 className="font-bold text-sm text-[#991B1B]">
+                        {t.sheets.send.lookalikeAddressWarning}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-1">
+                    {/* Previously used address */}
+                    <div className="p-2.5 rounded-xl bg-white/90 border border-red-200/80 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#991B1B]">
+                        {t.sheets.send.addressPoisoningSimilarLabel}
+                      </span>
+                      <div className="font-mono text-[11px] text-[#0A0B0D] break-all leading-relaxed select-all">
+                        <span className="text-[#6B7280]">0x</span>
+                        {diff.oldChunks.map((chunk, cIdx) => (
+                          <span key={cIdx} className="inline-block mr-1">
+                            {chunk.chars.map((charObj, chIdx) => (
+                              <span
+                                key={chIdx}
+                                className={
+                                  charObj.isDiff
+                                    ? 'bg-red-200 text-red-950 font-bold px-0.5 rounded'
+                                    : 'text-[#4B5563]'
+                                }
+                              >
+                                {charObj.char}
+                              </span>
+                            ))}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Current target address */}
+                    <div className="p-2.5 rounded-xl bg-white/90 border border-emerald-300 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#047857]">
+                        {t.sheets.send.addressPoisoningCurrentLabel}
+                      </span>
+                      <div className="font-mono text-[11px] text-[#0A0B0D] break-all leading-relaxed select-all">
+                        <span className="text-[#6B7280]">0x</span>
+                        {diff.newChunks.map((chunk, cIdx) => (
+                          <span key={cIdx} className="inline-block mr-1">
+                            {chunk.chars.map((charObj, chIdx) => (
+                              <span
+                                key={chIdx}
+                                className={
+                                  charObj.isDiff
+                                    ? 'bg-emerald-200 text-emerald-950 font-bold px-0.5 rounded'
+                                    : 'text-[#4B5563]'
+                                }
+                              >
+                                {charObj.char}
+                              </span>
+                            ))}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* External Recipient: Contract Checking Notice */}
+            {resolvedRecipient?.isExternal && contractStatus === 'checking' && (
+              <div className="flex items-center gap-1.5 text-xs text-[#5B6577] animate-fade-up">
+                <Loader2 className="w-3.5 h-3.5 text-[#0052FF] animate-spin shrink-0" />
+                <span>{t.sheets.send.contractChecking}</span>
+              </div>
+            )}
+
+            {/* External Recipient: Contract Warning Banner (Red) */}
+            {resolvedRecipient?.isExternal && contractStatus === 'contract' && (
               <div
                 role="alert"
-                className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#991B1B] space-y-3 animate-fade-up"
+                className="p-3 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#991B1B] flex items-start gap-2.5 animate-fade-up"
               >
-                <div className="flex items-start gap-2.5">
-                  <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <h4 className="font-bold text-sm text-[#991B1B]">
-                      {t.sheets.send.lookalikeAddressWarning}
-                    </h4>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  {/* Previously used address */}
-                  <div className="p-2.5 rounded-xl bg-white/90 border border-red-200/80 space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#991B1B]">
-                      {t.sheets.send.addressPoisoningSimilarLabel}
-                    </span>
-                    <div className="font-mono text-[11px] text-[#0A0B0D] break-all leading-relaxed select-all">
-                      <span className="text-[#6B7280]">0x</span>
-                      {diff.oldChunks.map((chunk, cIdx) => (
-                        <span key={cIdx} className="inline-block mr-1">
-                          {chunk.chars.map((charObj, chIdx) => (
-                            <span
-                              key={chIdx}
-                              className={
-                                charObj.isDiff
-                                  ? 'bg-red-200 text-red-950 font-bold px-0.5 rounded'
-                                  : 'text-[#4B5563]'
-                              }
-                            >
-                              {charObj.char}
-                            </span>
-                          ))}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Current target address */}
-                  <div className="p-2.5 rounded-xl bg-white/90 border border-red-300 space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#047857]">
-                      {t.sheets.send.addressPoisoningCurrentLabel}
-                    </span>
-                    <div className="font-mono text-[11px] text-[#0A0B0D] break-all leading-relaxed select-all">
-                      <span className="text-[#6B7280]">0x</span>
-                      {diff.newChunks.map((chunk, cIdx) => (
-                        <span key={cIdx} className="inline-block mr-1">
-                          {chunk.chars.map((charObj, chIdx) => (
-                            <span
-                              key={chIdx}
-                              className={
-                                charObj.isDiff
-                                  ? 'bg-emerald-200 text-emerald-950 font-bold px-0.5 rounded'
-                                  : 'text-[#4B5563]'
-                              }
-                            >
-                              {charObj.char}
-                            </span>
-                          ))}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
+                <span className="leading-relaxed font-medium">
+                  {t.sheets.send.contractWarning}
+                </span>
               </div>
-            );
-          })()}
+            )}
 
-          {/* External Recipient: Contract Checking Notice */}
-          {resolvedRecipient?.isExternal && contractStatus === 'checking' && (
-            <div className="flex items-center gap-1.5 text-xs text-[#5B6577] animate-fade-up">
-              <Loader2 className="w-3.5 h-3.5 text-[#0052FF] animate-spin shrink-0" />
-              <span>{t.sheets.send.contractChecking}</span>
-            </div>
-          )}
-
-          {/* External Recipient: Contract Warning Banner (Red) */}
-          {resolvedRecipient?.isExternal && contractStatus === 'contract' && (
-            <div
-              role="alert"
-              className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#991B1B] flex items-start gap-2.5 animate-fade-up"
-            >
-              <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
-              <span className="leading-relaxed font-medium">
-                {t.sheets.send.contractWarning}
-              </span>
-            </div>
-          )}
-
-          {/* External Recipient: Contract Check Error Banner (Amber) */}
-          {resolvedRecipient?.isExternal && contractStatus === 'error' && (
-            <div
-              role="alert"
-              className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2.5 animate-fade-up"
-            >
-              <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
-              <span className="leading-relaxed font-medium">
-                {t.sheets.send.contractCheckFailed}
-              </span>
-            </div>
-          )}
-
-          {/* Flat Review Rows */}
-          <div className="divide-y divide-[#E5E7EB] border-y border-[#E5E7EB] py-1 text-sm">
-            {/* To */}
-            <div className="py-2.5 flex items-center justify-between">
-              <span className="text-[#5B6577]">{t.sheets.send.toLabel}</span>
-              <div className="text-right">
-                {resolvedRecipient?.isExternal ? (
-                  <div className="flex items-center gap-2 justify-end">
-                    <span className="font-semibold font-mono text-[#0A0B0D]">
-                      {shortenAddress(resolvedRecipient.address)}
-                    </span>
-                    <span className="text-[11px] font-medium bg-[#EEF4FF] text-[#0052FF] px-2 py-0.5 rounded-full">
-                      {t.sheets.send.externalWalletLabel}
-                    </span>
-                  </div>
-                ) : (
-                  <div>
-                    <span className="font-semibold text-[#0A0B0D]">@{resolvedRecipient?.id}</span>
-                    <span className="text-xs text-[#5B6577] ml-1.5 font-mono">
-                      ({shortenAddress(resolvedRecipient?.address || '')})
-                    </span>
-                  </div>
-                )}
+            {/* External Recipient: Contract Check Error Banner (Amber) */}
+            {resolvedRecipient?.isExternal && contractStatus === 'error' && (
+              <div
+                role="alert"
+                className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-[#B45309] flex items-start gap-2.5 animate-fade-up"
+              >
+                <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+                <span className="leading-relaxed font-medium">
+                  {t.sheets.send.contractCheckFailed}
+                </span>
               </div>
-            </div>
+            )}
 
-            {/* Recipient gets / Service Fee / Total Rows */}
+            {/* External Recipient: Compact Red Notice Banner (Menggabungkan pesan testnet & tidak bisa dibatalkan) */}
+            {resolvedRecipient?.isExternal && (
+              <div
+                role="alert"
+                className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-[#991B1B] flex items-start gap-2 animate-fade-up"
+              >
+                <AlertCircle className="w-4 h-4 text-[#DC2626] shrink-0 mt-0.5" />
+                <span className="leading-snug font-medium">
+                  {t.sheets.send.externalWalletNoticeBanner}
+                </span>
+              </div>
+            )}
+
+            {/* Compact Fee & Deduction Card */}
             {(() => {
               const reviewAsset = lockedSummary?.asset ?? selectedAsset;
               const reviewAmountUnits = lockedSummary?.amountUnits ?? amountUnits;
@@ -2988,8 +2984,9 @@ export function SendSheetContent({
               const reviewTotalUnits = lockedSummary?.totalUnits ?? (amountUnits + (feeActive ? feeUnits : 0n));
 
               return (
-                <>
-                  <div className="py-2.5 flex items-center justify-between">
+                <div className="p-3 rounded-2xl bg-white border border-[#E5E7EB] text-xs divide-y divide-[#F3F4F6] space-y-2">
+                  {/* Baris 1: Jumlah transfer */}
+                  <div className="flex items-center justify-between pb-1">
                     <span className="text-[#5B6577]">{t.sheets.send.transferAmountLabel}</span>
                     <span className="font-bold font-mono text-[#0A0B0D]">
                       {reviewAsset === 'USDC'
@@ -2998,8 +2995,8 @@ export function SendSheetContent({
                     </span>
                   </div>
 
-                  {/* Service Fee Row (shows nominal or free) */}
-                  <div className="py-2 flex items-center justify-between text-xs">
+                  {/* Baris 2: Biaya layanan Pukico */}
+                  <div className="flex items-center justify-between py-1.5">
                     <span className="text-[#5B6577] flex items-center gap-1.5">
                       <span>{t.sheets.send.serviceFee}</span>
                       {reviewFeeUnits > 0n ? (
@@ -3019,253 +3016,238 @@ export function SendSheetContent({
                     </span>
                   </div>
 
-                  {/* Total Deduction from token balance */}
-                  <div className="py-2.5 flex items-center justify-between font-semibold">
+                  {/* Baris 3: Total potongan (tebal, biru) */}
+                  <div className="flex items-center justify-between py-1.5 font-semibold">
                     <span className="text-[#0A0B0D]">
                       {reviewAsset === 'USDC'
                         ? t.sheets.send.totalDeductionUsdc
                         : t.sheets.send.totalDeductionAsset.replace('{asset}', reviewAsset)}
                     </span>
-                    <span className="font-bold font-mono text-[#0052FF]">
+                    <span className="font-bold font-mono text-[#0052FF] text-sm">
                       {reviewAsset === 'USDC'
                         ? `${fmt.usdcUnits(reviewTotalUnits)} USDC`
                         : `${fmt.units(reviewTotalUnits, ASSET_DECIMALS[reviewAsset])} ${reviewAsset}`}
                     </span>
                   </div>
-                </>
+
+                  {/* Baris 4: Gas ≈ <estimasi> ETH · saldo ETH <saldo> & teks bantu satu baris */}
+                  <div className="pt-1.5 space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#5B6577] flex items-center gap-1">
+                        <span>Gas ≈</span>
+                        {isEstimatingFee ? (
+                          <span className="inline-flex items-center gap-1 text-[#5B6577]">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                            <span>{t.sheets.send.estimating}</span>
+                          </span>
+                        ) : estimatedFeeEth ? (
+                          <span className="font-mono font-medium text-[#0A0B0D]">{fmt.number(estimatedFeeEth)} ETH</span>
+                        ) : (
+                          <span className="text-[#9CA3AF]">{t.sheets.send.feeUnavailable}</span>
+                        )}
+                      </span>
+                      {balances !== null && (
+                        <span className={`text-[11px] font-mono ${isInsufficientEth ? 'text-[#DC2626] font-semibold' : 'text-[#5B6577]'}`}>
+                          saldo ETH {fmt.ethBalance(balances.eth)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-[#9CA3AF] leading-tight truncate">
+                      {t.sheets.send.gasHelperCompact}
+                    </p>
+                  </div>
+                </div>
               );
             })()}
 
-            {/* Network Fee with ETH breakdown */}
-            <div className="py-2.5 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[#5B6577]">
-                  <span>{t.sheets.send.estimatedNetworkFee}</span>
-                  <span className="text-[10px] text-[#5B6577] font-medium bg-[#F3F4F6] px-1.5 py-0.5 rounded">
-                    {t.sheets.send.paidUsingEth}
-                  </span>
+            {/* Kartu Alamat Penerima (Alamat penuh checksum, badge Wallet luar, link Basescan) */}
+            {resolvedRecipient && (
+              <RecipientVerification
+                recipientId={resolvedRecipient.isExternal ? undefined : resolvedRecipient.id}
+                rawAddress={resolvedRecipient.address}
+                addressChanged={recipientAddressChanged}
+                previousAddress={previousRecipientAddress}
+                lastSentAt={lastSentAt}
+                isAddressChangeAcknowledged={isAddressChangeAcknowledged}
+                onAcknowledgeChange={setIsAddressChangeAcknowledged}
+                lookalikeId={resolvedRecipient.isExternal ? null : lookalikeRecipientId}
+                isExternal={resolvedRecipient.isExternal}
+                hideCheckbox={true}
+                onCopyAddress={() => {
+                  toast.success(t.toast.copiedAddress);
+                }}
+              />
+            )}
+          </div>
+
+          {/* (b) Sticky Footer: Checkbox gating + Tombol Konfirmasi dan Kirim */}
+          <div className="sticky bottom-0 -mx-5 -mb-[calc(20px+env(safe-area-inset-bottom,0px))] px-5 pt-3 pb-[calc(16px+env(safe-area-inset-bottom,0px))] bg-white border-t border-[#E5E7EB] z-20 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] max-h-[45dvh] flex flex-col justify-end mt-auto">
+            <div className="overflow-y-auto space-y-2 max-h-[calc(45dvh-64px)] pr-0.5">
+              {/* Input konfirmasi ketik untuk transfer besar */}
+              {isLargeTransfer && resolvedRecipient && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[#B45309] font-bold">
+                    <AlertTriangle className="w-3.5 h-3.5 text-[#B45309] shrink-0" />
+                    <span>{t.sheets.send.largeTransferTitle}</span>
+                  </div>
+                  <p className="text-[#B45309] text-[11px] leading-tight">
+                    {resolvedRecipient.isExternal
+                      ? t.sheets.send.typeToConfirm.replace('{address}', shortenAddress(resolvedRecipient.address))
+                      : t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id)}
+                  </p>
+                  <input
+                    type="text"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={largeTransferInput}
+                    onChange={(e) => setLargeTransferInput(e.target.value)}
+                    placeholder={
+                      resolvedRecipient.isExternal
+                        ? shortenAddress(resolvedRecipient.address)
+                        : t.sheets.send.largeTransferInputPlaceholder
+                    }
+                    className="w-full h-8 px-2.5 bg-white border border-amber-300 rounded-lg font-mono text-xs text-[#0A0B0D] placeholder:text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
                 </div>
-                <span className="font-medium font-mono text-[#0A0B0D]">
-                  {isEstimatingFee ? (
-                    <span className="inline-flex items-center gap-1 text-[#5B6577]">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      <span>{t.sheets.send.estimating}</span>
-                    </span>
-                  ) : estimatedFeeEth ? (
-                    <span>{t.sheets.send.aboutFeeEth.replace('{fee}', fmt.number(estimatedFeeEth))}</span>
-                  ) : (
-                    <span className="text-[#9CA3AF]">{t.sheets.send.feeUnavailable}</span>
-                  )}
-                </span>
-              </div>
+              )}
 
-              <p className="text-[11px] text-[#5B6577] leading-relaxed">
-                {t.sheets.send.gasPaidToNetwork}
-              </p>
-
-              {balances !== null && (
-                <div className="flex items-center justify-between text-[11px] text-[#5B6577] pt-0.5">
-                  <span>{t.sheets.send.availableEthBalance.replace('{amount}', fmt.ethBalance(balances.eth))}</span>
-                  {isInsufficientEth && (
-                    <span className="text-[#DC2626] font-semibold">
-                      {t.sheets.send.insufficientEthForGasWarning}
+              {/* Checkboxes gating transfer eksternal */}
+              {resolvedRecipient?.isExternal && (
+                <div className="p-2.5 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] space-y-1.5">
+                  {/* Checkbox A: Selalu wajib untuk eksternal */}
+                  <label className="flex items-center gap-2.5 cursor-pointer text-xs text-[#0A0B0D] min-h-[44px]">
+                    <input
+                      type="checkbox"
+                      checked={isExtAddressChecked}
+                      onChange={(e) => setIsExtAddressChecked(e.target.checked)}
+                      className="w-4 h-4 rounded border-[#D1D5DB] text-[#0052FF] focus:ring-[#0052FF] cursor-pointer shrink-0"
+                    />
+                    <span className="leading-tight font-medium select-none">
+                      {t.sheets.send.checkboxVerifyAddress}
                     </span>
+                  </label>
+
+                  {/* Checkbox B: Wajib jika poisoning, kontrak, atau error */}
+                  {Boolean(lookalikeExternalAddress || contractStatus === 'contract' || contractStatus === 'error') && (
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs text-[#991B1B] min-h-[44px] pt-1.5 border-t border-[#E5E7EB]">
+                      <input
+                        type="checkbox"
+                        checked={isExtRiskChecked}
+                        onChange={(e) => setIsExtRiskChecked(e.target.checked)}
+                        className="w-4 h-4 rounded border-red-300 text-[#DC2626] focus:ring-[#DC2626] cursor-pointer shrink-0"
+                      />
+                      <span className="leading-tight font-medium select-none">
+                        {t.sheets.send.checkboxUnderstandRisk}
+                      </span>
+                    </label>
                   )}
                 </div>
               )}
 
-              <p className="text-[10px] text-[#9CA3AF] leading-relaxed italic">
-                {t.sheets.send.gasEstimateDisclaimer}
-              </p>
-            </div>
-
-            {/* Network */}
-            <div className="py-2.5 flex items-center justify-between">
-              <span className="text-[#5B6577]">{t.sheets.send.networkLabel}</span>
-              <span className="font-medium text-[#0A0B0D]">Base Sepolia · Testnet</span>
-            </div>
-          </div>
-
-          {/* Full Checksum Recipient Address & Security Verifications (Always Visible) */}
-          {resolvedRecipient && (
-            <RecipientVerification
-              recipientId={resolvedRecipient.isExternal ? undefined : resolvedRecipient.id}
-              rawAddress={resolvedRecipient.address}
-              addressChanged={recipientAddressChanged}
-              previousAddress={previousRecipientAddress}
-              lastSentAt={lastSentAt}
-              isAddressChangeAcknowledged={isAddressChangeAcknowledged}
-              onAcknowledgeChange={setIsAddressChangeAcknowledged}
-              lookalikeId={resolvedRecipient.isExternal ? null : lookalikeRecipientId}
-              onCopyAddress={() => {
-                toast.success(t.toast.copiedAddress);
-              }}
-            />
-          )}
-
-          {/* Large Transfer Retype Confirmation */}
-          {isLargeTransfer && resolvedRecipient && (
-            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs space-y-2">
-              <div className="flex items-center gap-1.5 text-[#B45309] font-bold">
-                <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0" />
-                <span>{t.sheets.send.largeTransferTitle}</span>
-              </div>
-              <p className="text-[#B45309] leading-relaxed">
-                {resolvedRecipient.isExternal
-                  ? t.sheets.send.typeToConfirm.replace('{address}', shortenAddress(resolvedRecipient.address))
-                  : t.sheets.send.largeTransferPrompt.replace('{id}', resolvedRecipient.id)}
-              </p>
-              <input
-                type="text"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                value={largeTransferInput}
-                onChange={(e) => setLargeTransferInput(e.target.value)}
-                placeholder={
-                  resolvedRecipient.isExternal
-                    ? shortenAddress(resolvedRecipient.address)
-                    : t.sheets.send.largeTransferInputPlaceholder
-                }
-                className="w-full h-10 px-3 bg-white border border-amber-300 rounded-xl font-mono text-xs text-[#0A0B0D] placeholder:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
-          )}
-
-          <p className="text-xs text-[#5B6577] leading-relaxed">
-            {t.sheets.send.testnetNotice}
-          </p>
-
-          {/* External Recipient Security Banner and Checkboxes */}
-          {resolvedRecipient?.isExternal && (
-            <div className="space-y-3 pt-1">
-              {/* Fixed Red Notice Banner */}
-              <div
-                role="alert"
-                className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-[#991B1B] flex items-start gap-2.5"
-              >
-                <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
-                <span className="leading-relaxed font-medium">
-                  {t.sheets.send.externalWalletNoticeBanner}
-                </span>
-              </div>
-
-              {/* Confirmation Checkboxes */}
-              <div className="p-3.5 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] space-y-3">
-                {/* Checkbox A: Always mandatory for external */}
-                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#0A0B0D]">
-                  <input
-                    type="checkbox"
-                    checked={isExtAddressChecked}
-                    onChange={(e) => setIsExtAddressChecked(e.target.checked)}
-                    className="w-4 h-4 rounded border-[#D1D5DB] text-[#0052FF] focus:ring-[#0052FF] mt-0.5 cursor-pointer shrink-0"
-                  />
-                  <span className="leading-tight font-medium select-none">
-                    {t.sheets.send.checkboxVerifyAddress}
-                  </span>
-                </label>
-
-                {/* Checkbox B: Mandatory if lookalike address poisoning, contract, or check error */}
-                {Boolean(lookalikeExternalAddress || contractStatus === 'contract' || contractStatus === 'error') && (
-                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#991B1B]">
+              {/* Checkbox pengakuan alamat berubah untuk penerima @username */}
+              {!resolvedRecipient?.isExternal && recipientAddressChanged && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200">
+                  <label className="flex items-center gap-2.5 cursor-pointer text-xs text-[#991B1B] min-h-[44px]">
                     <input
                       type="checkbox"
-                      checked={isExtRiskChecked}
-                      onChange={(e) => setIsExtRiskChecked(e.target.checked)}
-                      className="w-4 h-4 rounded border-red-300 text-[#DC2626] focus:ring-[#DC2626] mt-0.5 cursor-pointer shrink-0"
+                      checked={isAddressChangeAcknowledged}
+                      onChange={(e) => setIsAddressChangeAcknowledged(e.target.checked)}
+                      className="w-4 h-4 rounded border-red-300 text-[#DC2626] focus:ring-[#DC2626] cursor-pointer shrink-0"
                     />
-                    <span className="leading-tight font-medium select-none">
-                      {t.sheets.send.checkboxUnderstandRisk}
+                    <span className="leading-tight font-semibold select-none">
+                      {t.sheets.send.addressChangeAcknowledge}
                     </span>
                   </label>
-                )}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* Inline Security Gate Error */}
-          {securityError && (
-            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-[#B91C1C] flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626]" />
-                <span className="font-medium leading-snug">{securityError}</span>
-              </div>
-            </div>
-          )}
+              {/* Inline Security Gate Error */}
+              {securityError && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-[#B91C1C] flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626]" />
+                    <span className="font-medium leading-snug">{securityError}</span>
+                  </div>
+                </div>
+              )}
 
-          {/* Error Message if recipient verification failed right before sending */}
-          {recipientVerificationError && (
-            <div className="p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-[#3B4455] flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626]" />
-                <span className="font-medium leading-snug">
-                  {t.sheets.send.recipientChangedOrUnverified}
-                </span>
-              </div>
+              {/* Error recipient verification */}
+              {recipientVerificationError && (
+                <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-[#3B4455] flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626]" />
+                    <span className="font-medium leading-snug">
+                      {t.sheets.send.recipientChangedOrUnverified}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExecuteSend}
+                    className="shrink-0 font-semibold text-[#0052FF] hover:underline cursor-pointer"
+                  >
+                    {t.sheets.send.tryAgainBtn}
+                  </button>
+                </div>
+              )}
+
+              {/* Error sendFailedBeforeHash */}
+              {sendFailedBeforeHash && !recipientVerificationError && (
+                <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-[#3B4455] flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-[#5B6577]" />
+                    <span className="font-medium leading-snug">
+                      {preHashFailureReason === 'user_rejected'
+                        ? t.sheets.send.cancelledTransfer
+                        : preHashFailureReason === 'insufficient_funds'
+                        ? t.sheets.send.insufficientFundsOrGas
+                        : t.sheets.send.notSentNoFundsMoved}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExecuteSend}
+                    className="shrink-0 font-semibold text-[#0052FF] hover:underline cursor-pointer"
+                  >
+                    {t.sheets.send.tryAgainBtn}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Tombol Kirim */}
+            <div className="pt-2">
               <button
                 type="button"
+                disabled={
+                  isSubmitting ||
+                  !hasBetaAccess ||
+                  !amountValidation.valid ||
+                  isInsufficientEth ||
+                  balances === null ||
+                  (isLargeTransfer && !isLargeConfirmed) ||
+                  Boolean(resolvedRecipient?.isExternal && contractStatus === 'checking') ||
+                  (!resolvedRecipient?.isExternal && recipientAddressChanged && !isAddressChangeAcknowledged) ||
+                  Boolean(
+                    resolvedRecipient?.isExternal &&
+                      (!isExtAddressChecked ||
+                        ((lookalikeExternalAddress ||
+                          contractStatus === 'contract' ||
+                          contractStatus === 'error') &&
+                          !isExtRiskChecked))
+                  )
+                }
                 onClick={handleExecuteSend}
-                className="shrink-0 font-semibold text-[#0052FF] hover:underline cursor-pointer"
+                className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
               >
-                {t.sheets.send.tryAgainBtn}
-              </button>
-            </div>
-          )}
-
-          {/* Error Message if send failed before hash was produced */}
-          {sendFailedBeforeHash && !recipientVerificationError && (
-            <div className="p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-[#3B4455] flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <AlertCircle className="w-4 h-4 shrink-0 text-[#5B6577]" />
-                <span className="font-medium leading-snug">
-                  {preHashFailureReason === 'user_rejected'
-                    ? t.sheets.send.cancelledTransfer
-                    : preHashFailureReason === 'insufficient_funds'
-                    ? t.sheets.send.insufficientFundsOrGas
-                    : t.sheets.send.notSentNoFundsMoved}
+                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>
+                  {sendFailedBeforeHash || recipientVerificationError
+                    ? t.sheets.send.tryAgainBtn
+                    : t.sheets.send.confirmAndSend}
                 </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleExecuteSend}
-                className="shrink-0 font-semibold text-[#0052FF] hover:underline cursor-pointer"
-              >
-                {t.sheets.send.tryAgainBtn}
               </button>
             </div>
-          )}
-
-          <div className="pt-2">
-            <button
-              type="button"
-              disabled={
-                isSubmitting ||
-                !hasBetaAccess ||
-                !amountValidation.valid ||
-                isInsufficientEth ||
-                balances === null ||
-                (isLargeTransfer && !isLargeConfirmed) ||
-                Boolean(resolvedRecipient?.isExternal && contractStatus === 'checking') ||
-                (!resolvedRecipient?.isExternal && recipientAddressChanged && !isAddressChangeAcknowledged) ||
-                Boolean(
-                  resolvedRecipient?.isExternal &&
-                    (!isExtAddressChecked ||
-                      ((lookalikeExternalAddress ||
-                        contractStatus === 'contract' ||
-                        contractStatus === 'error') &&
-                        !isExtRiskChecked))
-                )
-              }
-              onClick={handleExecuteSend}
-              className="w-full h-12 rounded-2xl bg-[#0052FF] text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0042D6] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
-            >
-              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              <span>
-                {sendFailedBeforeHash || recipientVerificationError
-                  ? t.sheets.send.tryAgainBtn
-                  : t.sheets.send.confirmAndSend}
-              </span>
-            </button>
           </div>
         </div>
       )}
