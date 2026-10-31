@@ -235,6 +235,12 @@ function DashboardContent({
     setIsSendWaitingApproval,
   } = useFriends();
 
+  const [isSendReviewStep, setIsSendReviewStep] = useState<boolean>(false);
+  const handleCloseSend = useCallback(() => {
+    setIsSendReviewStep(false);
+    closeSend();
+  }, [closeSend]);
+
   return (
     <>
       <AppLayout
@@ -349,15 +355,18 @@ function DashboardContent({
       {/* Global Send Bottom Sheet (triggered from Home quick action or Friends profile) */}
       <BottomSheet
         open={isSendOpen}
-        onClose={closeSend}
+        onClose={handleCloseSend}
         title={t.sheets.send.title}
         disableBackdropClick={isSendWaitingApproval}
+        sheetClassName={isSendReviewStep ? 'max-h-[92dvh]' : undefined}
+        contentClassName={isSendReviewStep ? 'flex flex-col flex-1 min-h-0 overflow-hidden p-0' : undefined}
       >
         <SendSheetContent
-          onClose={closeSend}
+          onClose={handleCloseSend}
           isDemoMode={isDemoMode}
           onApprovalStateChange={setIsSendWaitingApproval}
           prefilledRecipientId={sendPrefilledId}
+          onStepChange={(s) => setIsSendReviewStep(s === 4)}
         />
       </BottomSheet>
     </>

@@ -86,6 +86,7 @@ interface SendSheetContentProps {
   onClose: () => void;
   isDemoMode?: boolean;
   onApprovalStateChange?: (isWaiting: boolean) => void;
+  onStepChange?: (step: SendStep) => void;
   prefilledRecipientId?: string | null;
 }
 
@@ -197,6 +198,7 @@ export function SendSheetContent({
   onClose,
   isDemoMode = false,
   onApprovalStateChange,
+  onStepChange,
   prefilledRecipientId,
 }: SendSheetContentProps) {
   const { t, formatNumber, fmt, lang } = useT();
@@ -241,6 +243,11 @@ export function SendSheetContent({
   }, [hasPasskeyMfa, t.toast.passkeyActive, toast]);
 
   const [step, setStep] = useState<SendStep>(1);
+
+  useEffect(() => {
+    onStepChange?.(step);
+  }, [step, onStepChange]);
+
   const [selectedAsset, setSelectedAsset] = useState<AssetType>('USDC');
 
   // Exact on-chain bigint balances: null means unknown/loading
@@ -2798,6 +2805,8 @@ export function SendSheetContent({
                   feeUnits: feeActive ? feeUnits : 0n,
                   totalUnits: amountUnits + (feeActive ? feeUnits : 0n),
                   recipientId: resolvedRecipient?.id || '',
+                  isExternal: Boolean(resolvedRecipient?.isExternal),
+                  recipientAddress: resolvedRecipient?.address,
                 });
                 setStep(4);
                 calculateFee(selectedAsset, resolvedRecipient?.address, amountInput);
@@ -2812,28 +2821,84 @@ export function SendSheetContent({
 
       {/* ================= STEP 4: REVIEW ================= */}
       {step === 4 && (
-        <div className="flex flex-col min-h-full">
-          {/* (a) Scrollable Content Area */}
-          <div className="space-y-3 pb-4 flex-1">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setLockedSummary(null);
-                  setSendFailedBeforeHash(false);
-                  setRecipientVerificationError(false);
-                  setSecurityError(null);
-                  setStep(3);
-                }}
-                className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
-                aria-label={t.sheets.send.backBtn}
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <h3 className="text-base font-semibold text-[#0A0B0D]">
-                {t.sheets.send.review}
-              </h3>
-            </div>
+        <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden text-left select-none">
+          {/* Header tetap: shrink-0 */}
+          <div className="shrink-0 px-5 pt-3.5 pb-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setLockedSummary(null);
+                setSendFailedBeforeHash(false);
+                setRecipientVerificationError(false);
+                setSecurityError(null);
+                setStep(3);
+              }}
+              className="w-8 h-8 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#5B6577] cursor-pointer"
+              aria-label={t.sheets.send.backBtn}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <h3 className="text-base font-semibold text-[#0A0B0D]">
+              {t.sheets.send.review}
+            </h3>
+          </div>
+
+          {/* Area konten di tengah: flex-1 min-h-0 overflow-y-auto */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 space-y-2.5 pb-3">
+            {/* Demo Notice */}
+            {isDemoMode && (
+              <div className="flex items-center gap-1.5 text-xs text-[#B45309]">
+                <AlertCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0" />
+                <span className="font-semibold">{t.sheets.send.demoNotice}</span>
+                <span className="text-[11px] font-normal text-[#B45309]/80">· Base Sepolia</span>
+              </div>
+            )}
+
+            {/* Insufficient ETH warning */}
+            {(isInsufficientEth || isEthBalanceTooLow) && !isWalletUnverified && balances !== null && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309]">
+                <div className="flex items-start gap-1.5 min-w-0">
+                  <AlertCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0 mt-0.5" />
+                  <span className="leading-snug font-medium">
+                    {(() => {
+                      if (selectedAsset === 'ETH' && isEthBalanceTooLow) {
+                        const template =
+                          ethMinTxCount === 2n
+                            ? t.sheets.send.insufficientEthFees
+                            : (t.sheets.send.insufficientEthFeesSingle || t.sheets.send.insufficientEthFees);
+                        return template
+                          .replace('{needed}', fmt.ethBalance(ethGasNeeded))
+                          .replace('{balance}', fmt.ethBalance(balances.eth));
+                      }
+                      const txCount = isFeeActive(isDemoMode) && !isFeeExempt && feeUnits > 0n ? 2n : 1n;
+                      const template =
+                        selectedAsset === 'ETH'
+                          ? (txCount === 2n
+                              ? t.sheets.send.insufficientEthDetailedEth
+                              : t.sheets.send.insufficientEthDetailedEthSingle)
+                          : (txCount === 2n
+                              ? t.sheets.send.insufficientEthDetailed
+                              : t.sheets.send.insufficientEthDetailedSingle);
+
+                      return template
+                        .replace('{needed}', fmt.ethBalance(ethRequiredWei))
+                        .replace('{balance}', fmt.ethBalance(balances.eth));
+                    })()}
+                  </span>
+                </div>
+                {CHAIN_CONFIG.testnet && (
+                  <a
+                    href={FAUCET_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 font-semibold text-[#0052FF] hover:underline flex items-center gap-1 self-start sm:self-auto"
+                  >
+                    <span>{t.sheets.send.getTestEth}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            )}
 
             {/* Internal Pukico ID: New Recipient Amber Warning */}
             {!isKnownRecipient && resolvedRecipient && !resolvedRecipient.isExternal && !lookalikeRecipientId && (
@@ -3080,9 +3145,9 @@ export function SendSheetContent({
             )}
           </div>
 
-          {/* (b) Sticky Footer: Checkbox gating + Tombol Konfirmasi dan Kirim */}
-          <div className="sticky bottom-0 -mx-5 -mb-[calc(20px+env(safe-area-inset-bottom,0px))] px-5 pt-3 pb-[calc(16px+env(safe-area-inset-bottom,0px))] bg-white border-t border-[#E5E7EB] z-20 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] max-h-[45dvh] flex flex-col justify-end mt-auto">
-            <div className="overflow-y-auto space-y-2 max-h-[calc(45dvh-64px)] pr-0.5">
+          {/* Footer di bawah: shrink-0, tidak sticky, tidak overlay, tidak margin negatif */}
+          <div className="shrink-0 bg-white border-t border-[#E5E7EB] px-5 pt-2.5 pb-[calc(16px+env(safe-area-inset-bottom,0px))] max-h-[40dvh] flex flex-col justify-end">
+            <div className="overflow-y-auto space-y-2 max-h-[calc(40dvh-58px)] pr-0.5">
               {/* Input konfirmasi ketik untuk transfer besar */}
               {isLargeTransfer && resolvedRecipient && (
                 <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1.5">
@@ -3112,32 +3177,32 @@ export function SendSheetContent({
                 </div>
               )}
 
-              {/* Checkboxes gating transfer eksternal */}
+              {/* Checkboxes gating transfer eksternal - baris biasa TANPA kartu border */}
               {resolvedRecipient?.isExternal && (
-                <div className="p-2.5 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] space-y-1.5">
+                <div className="space-y-1">
                   {/* Checkbox A: Selalu wajib untuk eksternal */}
-                  <label className="flex items-center gap-2.5 cursor-pointer text-xs text-[#0A0B0D] min-h-[44px]">
+                  <label className="flex items-center gap-2.5 cursor-pointer text-[#0A0B0D] min-h-[44px] py-0.5 select-none">
                     <input
                       type="checkbox"
                       checked={isExtAddressChecked}
                       onChange={(e) => setIsExtAddressChecked(e.target.checked)}
-                      className="w-4 h-4 rounded border-[#D1D5DB] text-[#0052FF] focus:ring-[#0052FF] cursor-pointer shrink-0"
+                      className="w-5 h-5 rounded border-[#D1D5DB] text-[#0052FF] focus:ring-[#0052FF] cursor-pointer shrink-0"
                     />
-                    <span className="leading-tight font-medium select-none">
+                    <span className="text-[14px] leading-snug font-medium text-[#0A0B0D]">
                       {t.sheets.send.checkboxVerifyAddress}
                     </span>
                   </label>
 
                   {/* Checkbox B: Wajib jika poisoning, kontrak, atau error */}
                   {Boolean(lookalikeExternalAddress || contractStatus === 'contract' || contractStatus === 'error') && (
-                    <label className="flex items-center gap-2.5 cursor-pointer text-xs text-[#991B1B] min-h-[44px] pt-1.5 border-t border-[#E5E7EB]">
+                    <label className="flex items-center gap-2.5 cursor-pointer text-[#991B1B] min-h-[44px] py-0.5 select-none">
                       <input
                         type="checkbox"
                         checked={isExtRiskChecked}
                         onChange={(e) => setIsExtRiskChecked(e.target.checked)}
-                        className="w-4 h-4 rounded border-red-300 text-[#DC2626] focus:ring-[#DC2626] cursor-pointer shrink-0"
+                        className="w-5 h-5 rounded border-red-300 text-[#DC2626] focus:ring-[#DC2626] cursor-pointer shrink-0"
                       />
-                      <span className="leading-tight font-medium select-none">
+                      <span className="text-[14px] leading-snug font-medium text-[#991B1B]">
                         {t.sheets.send.checkboxUnderstandRisk}
                       </span>
                     </label>
@@ -3145,21 +3210,19 @@ export function SendSheetContent({
                 </div>
               )}
 
-              {/* Checkbox pengakuan alamat berubah untuk penerima @username */}
+              {/* Checkbox pengakuan alamat berubah untuk penerima @username - baris biasa */}
               {!resolvedRecipient?.isExternal && recipientAddressChanged && (
-                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200">
-                  <label className="flex items-center gap-2.5 cursor-pointer text-xs text-[#991B1B] min-h-[44px]">
-                    <input
-                      type="checkbox"
-                      checked={isAddressChangeAcknowledged}
-                      onChange={(e) => setIsAddressChangeAcknowledged(e.target.checked)}
-                      className="w-4 h-4 rounded border-red-300 text-[#DC2626] focus:ring-[#DC2626] cursor-pointer shrink-0"
-                    />
-                    <span className="leading-tight font-semibold select-none">
-                      {t.sheets.send.addressChangeAcknowledge}
-                    </span>
-                  </label>
-                </div>
+                <label className="flex items-center gap-2.5 cursor-pointer text-[#991B1B] min-h-[44px] py-0.5 select-none">
+                  <input
+                    type="checkbox"
+                    checked={isAddressChangeAcknowledged}
+                    onChange={(e) => setIsAddressChangeAcknowledged(e.target.checked)}
+                    className="w-5 h-5 rounded border-red-300 text-[#DC2626] focus:ring-[#DC2626] cursor-pointer shrink-0"
+                  />
+                  <span className="text-[14px] leading-snug font-semibold text-[#991B1B]">
+                    {t.sheets.send.addressChangeAcknowledge}
+                  </span>
+                </label>
               )}
 
               {/* Inline Security Gate Error */}
@@ -3215,7 +3278,7 @@ export function SendSheetContent({
               )}
             </div>
 
-            {/* Tombol Kirim */}
+            {/* Tombol Kirim: tinggi 48px */}
             <div className="pt-2">
               <button
                 type="button"
@@ -3273,9 +3336,9 @@ export function SendSheetContent({
                   ? fmt.usdcUnits(lockedSummary.amountUnits)
                   : fmt.units(lockedSummary.amountUnits, ASSET_DECIMALS[lockedSummary.asset], 8)}{' '}
                 {lockedSummary.asset} →{' '}
-                {lockedSummary.isExternal
+                {lockedSummary.isExternal || !lockedSummary.recipientId
                   ? shortenAddress(lockedSummary.recipientAddress || '')
-                  : `@${lockedSummary.recipientId}`}
+                  : `@${lockedSummary.recipientId.replace(/^@/, '')}`}
               </p>
             )}
             {txHash && (
@@ -3317,6 +3380,16 @@ export function SendSheetContent({
                     8
                   );
             const displayRecipient = lockedSummary?.recipientId || resolvedRecipient?.id || '';
+            const isExternalTransfer = Boolean(
+              lockedSummary?.isExternal ||
+              resolvedRecipient?.isExternal ||
+              (!displayRecipient && (lockedSummary?.recipientAddress || resolvedRecipient?.address)) ||
+              (displayRecipient.startsWith('0x') && !displayRecipient.startsWith('@'))
+            );
+            const rawTargetAddr =
+              lockedSummary?.recipientAddress ||
+              resolvedRecipient?.address ||
+              (displayRecipient.startsWith('0x') ? displayRecipient : '');
 
             return (
               <>
@@ -3326,18 +3399,18 @@ export function SendSheetContent({
 
                 <div className="space-y-1">
                   <h4 className="text-base font-bold text-[#0A0B0D]">
-                    {lockedSummary?.isExternal
+                    {isExternalTransfer
                       ? t.sheets.send.sentSuccessExternal
                           .replace('{amount}', displayAmount)
                           .replace('{asset}', displayAsset)
                           .replace(
                             '{address}',
-                            shortenAddress(lockedSummary.recipientAddress || displayRecipient)
+                            shortenAddress(rawTargetAddr)
                           )
                       : t.sheets.send.sentSuccess
                           .replace('{amount}', displayAmount)
                           .replace('{asset}', displayAsset)
-                          .replace('{id}', displayRecipient)}
+                          .replace('{id}', (displayRecipient || 'user').replace(/^@/, ''))}
                   </h4>
                   <p className="text-xs text-[#5B6577]">
                     {t.sheets.send.confirmedOnBase}

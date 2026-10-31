@@ -18,6 +18,7 @@ import {
   type ServerNotificationItem,
 } from '../../context/NotificationsContext';
 import { formatRelativeTime, formatAssetAmount } from '../../lib/formatters';
+import { shortenAddress } from '../../lib/txApi';
 
 interface NotificationPanelProps {
   isOpen: boolean;
@@ -134,11 +135,11 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
 
       let message = '';
       const formattedAmount = fmt.asset(item.data.amount, item.data.asset);
-      const rawCp = (item.data.counterparty || '').replace(/^@+/, '').trim();
-      const isExt = !rawCp || rawCp.startsWith('0x');
+      const rawCp = (item.data.counterparty || (item.data as any).to_address || '').replace(/^@+/, '').trim();
+      const isExt = !rawCp || rawCp.startsWith('0x') || Boolean((item.data as any).is_external);
       const cpLabel = isExt
         ? (rawCp
-            ? `${rawCp.length >= 10 ? `${rawCp.slice(0, 6)}…${rawCp.slice(-4)}` : rawCp} (${t.history.externalWallet})`
+            ? `${shortenAddress(rawCp)} (${t.history.externalWallet})`
             : t.history.externalWallet)
         : `@${rawCp}`;
 
@@ -243,7 +244,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
         open={isOpen}
         onClose={onClose}
         title={t.notifications.title}
-        contentClassName="px-5 pt-0 sheet-body-pad"
+        contentClassName="overflow-y-auto px-5 pt-0 sheet-body-pad"
       >
         <div className="select-none">
           {unifiedList.length > 0 && (

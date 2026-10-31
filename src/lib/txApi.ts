@@ -1,3 +1,4 @@
+import { getAddress, isAddress } from 'viem';
 import { ENV } from './config';
 
 export interface ResolveIdResult {
@@ -789,10 +790,20 @@ export function getExplorerUrl(txHash: string): string {
 
 
 /**
- * Shorten an Ethereum address to 0x1234…abcd
+ * Shorten an Ethereum address to 0x1234…abcd with EIP-55 checksum normalization
  */
 export function shortenAddress(address: string): string {
-  if (!address || address.length < 10) return address || '';
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+  if (!address || typeof address !== 'string') return '';
+  const trimmed = address.trim();
+  let normalized = trimmed;
+  try {
+    if (isAddress(trimmed)) {
+      normalized = getAddress(trimmed);
+    }
+  } catch {
+    normalized = trimmed;
+  }
+  if (normalized.length < 10) return normalized;
+  return `${normalized.slice(0, 6)}…${normalized.slice(-4)}`;
 }
 

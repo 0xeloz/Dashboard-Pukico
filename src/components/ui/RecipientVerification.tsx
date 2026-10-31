@@ -185,7 +185,7 @@ export function RecipientVerification({
       )}
 
       {/* 3. FULL RECIPIENT CHECKSUM ADDRESS (ALWAYS VISIBLE) */}
-      <div className="p-3.5 rounded-2xl bg-white border border-[#E5E7EB] space-y-2.5 text-xs shadow-xs">
+      <div className="px-3.5 py-2.5 rounded-2xl bg-white border border-[#E5E7EB] space-y-2 text-xs shadow-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[#0A0B0D] font-semibold">
             <ShieldCheck className="w-4 h-4 text-[#0052FF]" />
@@ -223,7 +223,7 @@ export function RecipientVerification({
         <div
           onClick={handleCopy}
           title={t.common.copyAddress}
-          className="font-mono text-[11px] tracking-wide bg-[#F9FAFB] hover:bg-[#F3F4F6] transition-colors p-2.5 rounded-xl border border-[#E5E7EB] flex flex-wrap gap-x-1.5 gap-y-1 items-center select-all cursor-pointer leading-relaxed"
+          className="font-mono text-[11px] tracking-wide bg-[#F9FAFB] hover:bg-[#F3F4F6] transition-colors px-2.5 py-1.5 rounded-xl border border-[#E5E7EB] flex flex-wrap gap-x-1.5 gap-y-0.5 items-center select-all cursor-pointer leading-snug"
         >
           <span className="text-[#5B6577] font-semibold">0x</span>
           {chunks.map((chunk, index) => {

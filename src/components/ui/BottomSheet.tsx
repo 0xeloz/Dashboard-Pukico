@@ -12,6 +12,7 @@ interface BottomSheetProps {
   children: React.ReactNode;
   disableBackdropClick?: boolean;
   contentClassName?: string;
+  sheetClassName?: string;
 }
 
 export function BottomSheet({
@@ -23,6 +24,7 @@ export function BottomSheet({
   children,
   disableBackdropClick = false,
   contentClassName,
+  sheetClassName,
 }: BottomSheetProps) {
   const { t } = useT();
 
@@ -212,7 +214,9 @@ export function BottomSheet({
         tabIndex={-1}
         onAnimationEnd={handleAnimationEnd}
         onClick={(e) => e.stopPropagation()}
-        className={`relative z-10 w-full max-w-[560px] max-h-[85dvh] bg-white rounded-t-[24px] lg:rounded-[24px] shadow-2xl flex flex-col overflow-hidden outline-none ${animClass}`}
+        className={`relative z-10 w-full max-w-[560px] ${
+          sheetClassName ?? 'max-h-[85dvh]'
+        } bg-white rounded-t-[24px] lg:rounded-[24px] shadow-2xl flex flex-col overflow-hidden outline-none ${animClass}`}
         style={{
           transform: dragOffset > 0 && !closing ? `translateY(${dragOffset}px)` : undefined,
           ['--drag-y' as any]: `${dragOffset}px`,
@@ -250,8 +254,10 @@ export function BottomSheet({
 
         {/* Scrollable Content Body */}
         <div
-          className={`flex-1 overflow-y-auto px-5 sheet-body-pad ${
-            contentClassName !== undefined ? contentClassName : 'pt-5 space-y-4'
+          className={`flex-1 min-h-0 ${
+            contentClassName !== undefined
+              ? contentClassName
+              : 'overflow-y-auto px-5 sheet-body-pad pt-5 space-y-4'
           }`}
         >
           {children}
