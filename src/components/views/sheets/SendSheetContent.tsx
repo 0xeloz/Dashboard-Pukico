@@ -2438,10 +2438,21 @@ export function SendSheetContent({
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5 text-[#0052FF] font-medium">
                       <ExternalLink className="w-3.5 h-3.5 text-[#0052FF] shrink-0" />
-                      <span>{t.sheets.send.externalWalletStatus}</span>
-                      <span className="font-mono text-xs text-[#5B6577]">
-                        ({shortenAddress(resolvedRecipient.address)})
-                      </span>
+                      {t.sheets.send.externalWalletStatus.includes('{address}') ? (
+                        <span>
+                          {t.sheets.send.externalWalletStatus.split('({address})')[0]}
+                          <span className="font-mono text-xs text-[#5B6577]">
+                            ({shortenAddress(resolvedRecipient.address)})
+                          </span>
+                        </span>
+                      ) : (
+                        <>
+                          <span>{t.sheets.send.externalWalletStatus}</span>
+                          <span className="font-mono text-xs text-[#5B6577]">
+                            ({shortenAddress(resolvedRecipient.address)})
+                          </span>
+                        </>
+                      )}
                     </div>
                     {contractStatus === 'checking' && (
                       <div className="flex items-center gap-1.5 text-xs text-[#5B6577]">
