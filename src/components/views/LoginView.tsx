@@ -37,10 +37,10 @@ export function LoginView() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] flex flex-col justify-between p-4 sm:p-6">
-      <div className="w-full max-w-[560px] mx-auto my-auto py-8 text-center">
-        {/* Logo */}
-        <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-6 flex items-center justify-center">
+    <div className="min-h-screen min-h-dvh bg-[#F7F8FA] flex flex-col justify-between px-6 py-6 sm:py-8">
+      <div className="w-full max-w-[380px] mx-auto my-auto flex flex-col items-center text-center">
+        {/* 1. Logo */}
+        <div className="w-16 h-16 sm:w-20 sm:h-20 mb-6 flex items-center justify-center">
           {!logoFailed ? (
             <img
               src="/pukico-logo.png"
@@ -55,17 +55,19 @@ export function LoginView() {
           )}
         </div>
 
-        {/* Heading and subtitle */}
-        <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0B0D] mb-2">
+        {/* 2. Judul */}
+        <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0B0D] mb-2 tracking-tight">
           {t.login.signIn}
         </h1>
+
+        {/* 3. Subjudul */}
         <p className="text-xs sm:text-sm text-[#5B6577] leading-relaxed mb-6 font-medium">
           {t.login.tagline}
         </p>
 
         {/* State 1: Session Loading */}
         {isLoadingSession && (
-          <div className="p-5 bg-[#EEF4FF] rounded-2xl mb-6 text-center">
+          <div className="w-full p-5 bg-[#EEF4FF] rounded-2xl mb-6 text-center">
             <RefreshCw className="w-6 h-6 text-[#0052FF] animate-spin mx-auto mb-2" />
             <div className="font-semibold text-sm text-[#0A0B0D] mb-0.5">
               {t.login.authenticating}
@@ -78,7 +80,7 @@ export function LoginView() {
 
         {/* State 2: Session Error (human-friendly, mapped from code) */}
         {sessionError && !isLoadingSession && (
-          <div className="p-5 bg-[#FEF2F2] rounded-2xl border border-[#FECACA] mb-6 text-left">
+          <div className="w-full p-5 bg-[#FEF2F2] rounded-2xl border border-[#FECACA] mb-6 text-left">
             <div className="flex items-start gap-2.5 mb-2">
               <AlertCircle className="w-5 h-5 text-[#B91C1C] shrink-0 mt-0.5" />
               <div>
@@ -115,7 +117,8 @@ export function LoginView() {
 
         {/* State 3: Primary Action: Continue with email */}
         {!isLoadingSession && !sessionError && (
-          <div className="space-y-3 max-w-sm mx-auto">
+          <div className="w-full flex flex-col items-center">
+            {/* 4. Tombol Utama */}
             <button
               type="button"
               onClick={login}
@@ -125,49 +128,45 @@ export function LoginView() {
               <span>{t.login.continueWithEmail}</span>
             </button>
             {isDemoMode && (
-              <p className="text-xs text-[#5B6577] text-center pt-1 font-medium">
+              <p className="text-xs text-[#5B6577] text-center pt-2 font-medium">
                 {t.login.demoPreviewActive}
               </p>
             )}
 
-            <div className="pt-1 space-y-1.5 text-center">
-              <p className="text-xs text-[#5B6577] leading-relaxed text-center">
-                {t.login.termsPrefix}
-                <a
-                  href={termsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#0052FF] underline hover:text-[#0042D6]"
-                >
-                  {t.login.termsOfUse}
-                </a>
-                {t.login.and}
-                <a
-                  href={privacyUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#0052FF] underline hover:text-[#0042D6]"
-                >
-                  {t.login.privacyPolicy}
-                </a>
-                .
-              </p>
-              <p className="text-xs text-[#5B6577] leading-relaxed text-center">
-                {t.login.testnetNotice}
-              </p>
+            {/* 5. Kalimat Persetujuan */}
+            <p className="text-xs text-[#5B6577] leading-relaxed text-center mt-4">
+              {t.login.termsPrefix}
+              <a
+                href={termsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0052FF] underline hover:text-[#0042D6]"
+              >
+                {t.login.termsOfUse}
+              </a>
+              {t.login.and}
+              <a
+                href={privacyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0052FF] underline hover:text-[#0042D6]"
+              >
+                {t.login.privacyPolicy}
+              </a>
+              .
+            </p>
+
+            {/* 6. Badge Testnet Tunggal */}
+            <div className="mt-6 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#ECFDF5] border border-[#D1FAE5] text-[11px] sm:text-xs text-[#047857] font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#047857] shrink-0" />
+              <span>{t.login.testnetBadge}</span>
             </div>
           </div>
         )}
-
-        {/* Testnet Security Badge */}
-        <div className="mt-8 pt-5 border-t border-[#E5E7EB] flex items-center justify-center gap-2 text-xs text-[#5B6577]">
-          <ShieldCheck className="w-4 h-4 text-[#047857]" />
-          <span>{t.login.securityBadge}</span>
-        </div>
       </div>
 
       {/* Footer */}
-      <footer className="text-center py-2 text-xs text-[#3B4455]">
+      <footer className="text-center py-2 text-xs text-[#5B6577]">
         {t.login.footer}
       </footer>
     </div>
