@@ -16,6 +16,7 @@ import { HistoryView } from './components/views/HistoryView';
 import { SettingsView } from './components/views/SettingsView';
 import { DevView } from './components/views/DevView';
 import { ComingSoonView } from './components/views/ComingSoonView';
+import { DiscoverView } from './components/views/DiscoverView';
 import { OnboardingView } from './components/views/OnboardingView';
 import { AccessCodeView } from './components/views/AccessCodeView';
 import { SplashScreen } from './components/ui/SplashScreen';
@@ -300,7 +301,7 @@ function DashboardContent({
               inert={currentTab !== 'discover' ? true : undefined}
               className={currentTab === 'discover' ? 'tab-view-active' : ''}
             >
-              <ComingSoonView tab="discover" />
+              <DiscoverView onNavigateToTab={onTabChange} />
             </div>
           )}
 

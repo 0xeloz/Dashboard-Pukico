@@ -330,6 +330,50 @@ export const en = {
     currentScope: 'Current scope',
     scopeDesc: 'Current milestone covers authentication, session management, wallet address display, and Base Sepolia USDC & ETH tracking.',
   },
+  discover: {
+    title: 'Get started',
+    subtitle: 'Finish these quick missions to see how Pukico works.',
+    progressText: '{completed} of {total} missions done',
+    allComplete: 'All missions complete. Thanks for trying Pukico! 🎉',
+    completedBadge: 'Done',
+    missions: {
+      claimId: {
+        title: 'Choose a Pukico ID',
+        desc: 'Pick a unique username for your account.',
+      },
+      faucet: {
+        title: 'Get testnet tokens',
+        desc: 'Request testnet USDC or ETH to start exploring.',
+        action: 'Open faucet',
+      },
+      passkey: {
+        title: 'Enable passkey',
+        desc: 'Protect your transfers with biometric authentication.',
+        action: 'Open Settings',
+      },
+      addFriend: {
+        title: 'Add a friend',
+        desc: 'Save a friend to your contact list for fast transfers.',
+        action: 'Open Friends',
+      },
+      sendFirstUsdc: {
+        title: 'Send your first USDC',
+        desc: 'Make your first transfer on the Base Sepolia network.',
+        action: 'Send',
+      },
+      sendExternal: {
+        title: 'Send to an external address',
+        desc: 'Send tokens to any wallet address outside Pukico.',
+        note: 'Try sending to your own testnet MetaMask wallet.',
+        action: 'Send',
+      },
+    },
+    community: {
+      title: 'Help us improve',
+      text: 'Found a bug or have an idea? Tell us on Discord.',
+      action: 'Open Discord',
+    },
+  },
   settings: {
     title: 'Account Settings',
     subtitle: 'Profile and connection details',

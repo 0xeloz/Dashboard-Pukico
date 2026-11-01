@@ -339,6 +339,50 @@ export const id: Translations = {
     currentScope: 'Cakupan saat ini',
     scopeDesc: 'Milestone saat ini mencakup autentikasi, manajemen sesi, tampilan alamat wallet, serta pelacakan USDC & ETH di Base Sepolia.',
   },
+  discover: {
+    title: 'Mulai',
+    subtitle: 'Selesaikan misi singkat ini supaya kamu paham cara kerja Pukico.',
+    progressText: '{completed} dari {total} misi selesai',
+    allComplete: 'Semua misi selesai. Makasih sudah mencoba Pukico! 🎉',
+    completedBadge: 'Selesai',
+    missions: {
+      claimId: {
+        title: 'Pilih Pukico ID',
+        desc: 'Pilih username unik untuk akun kamu.',
+      },
+      faucet: {
+        title: 'Dapatkan token testnet',
+        desc: 'Minta USDC atau ETH tes untuk mulai menjelajah.',
+        action: 'Buka faucet',
+      },
+      passkey: {
+        title: 'Aktifkan passkey',
+        desc: 'Amankan transfer kamu dengan autentikasi biometrik.',
+        action: 'Buka Pengaturan',
+      },
+      addFriend: {
+        title: 'Tambah satu teman',
+        desc: 'Simpan teman ke daftar kontak untuk transfer cepat.',
+        action: 'Buka Teman',
+      },
+      sendFirstUsdc: {
+        title: 'Kirim USDC pertama',
+        desc: 'Kirim transfer pertamamu di jaringan Base Sepolia.',
+        action: 'Kirim',
+      },
+      sendExternal: {
+        title: 'Kirim ke alamat di luar Pukico',
+        desc: 'Kirim token ke alamat wallet mana pun di luar Pukico.',
+        note: 'Coba kirim ke wallet MetaMask testnet-mu sendiri.',
+        action: 'Kirim',
+      },
+    },
+    community: {
+      title: 'Bantu kami',
+      text: 'Nemu bug atau punya ide? Ceritakan di Discord.',
+      action: 'Buka Discord',
+    },
+  },
   settings: {
     title: 'Pengaturan Akun',
     subtitle: 'Detail profil dan koneksi',
