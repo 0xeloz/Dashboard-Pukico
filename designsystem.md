@@ -1,119 +1,159 @@
-# Design System Pukico
+# Design System Pukico Dashboard
 
-Dokumen ini menetapkan prinsip tampilan dan interaksi untuk menjaga dashboard dan landing page Pukico terasa sebagai satu produk. Detail token visual harus disesuaikan dengan implementasi aktual dan diperbarui saat desain berubah.
+**Status:** Token dan pola di bawah ini diambil langsung dari `src/index.css` dan komponen pada commit `c8d90ef`. Jika nilai di kode berubah, dokumen ini harus ikut berubah.
 
 ## 1. Arah desain
 
-Pukico harus terasa jelas, tenang, dan praktis. Antarmuka finansial tidak perlu ramai untuk terlihat modern. Informasi terpenting adalah siapa penerimanya, berapa jumlahnya, aset dan jaringan apa yang digunakan, berapa biaya yang diketahui, dan tindakan apa yang akan dilakukan.
+Jelas, tenang, praktis. Antarmuka finansial tidak perlu ramai untuk terasa modern. Prioritas informasi pada layar transfer:
 
-## 2. Hirarki informasi
-
-Pada layar transfer, urutan prioritas informasi:
-
-1. Penerima dan identitas yang telah di-resolve.
-2. Nominal dan token.
+1. Penerima dan identitas yang sudah di-resolve.
+2. Nominal dan aset.
 3. Jaringan aktif.
-4. Rincian biaya dan total yang relevan.
+4. Rincian biaya dan total.
 5. Status serta tindakan berikutnya.
 
-Jangan menyembunyikan biaya atau jaringan di balik teks yang sulit ditemukan sebelum konfirmasi.
+Biaya dan jaringan tidak boleh disembunyikan di balik teks yang sulit ditemukan sebelum konfirmasi.
 
-## 3. Warna dan status
+## 2. Token warna
 
-Gunakan warna yang sudah menjadi bagian dari antarmuka Pukico. Warna tidak boleh menjadi satu-satunya cara membedakan status.
+Didefinisikan sebagai `@theme` Tailwind di `src/index.css`.
 
-- **Confirmed:** label teks yang jelas dan indikator visual positif.
-- **Pending:** jelaskan bahwa transaksi masih diproses.
-- **Failed:** jelaskan bahwa transaksi gagal dan tindakan aman berikutnya.
-- **Warning:** gunakan untuk kondisi seperti saldo gas tidak cukup atau jaringan yang tidak sesuai.
-- **Disabled:** tampilkan bahwa tindakan tidak tersedia dan, jika berguna, alasannya.
+| Token | Nilai | Kegunaan |
+| --- | --- | --- |
+| `--color-primary` | `#0052FF` | Aksi utama, tautan, fokus, aksen |
+| `--color-primary-hover` | `#0042D6` | Hover/pressed tombol utama |
+| `--color-heading` | `#0A0B0D` | Judul dan teks utama |
+| `--color-pukitext` | `#3B4455` | Teks isi |
+| `--color-pukimuted` | `#5B6577` | Label sekunder, metadata |
+| `--color-surface` | `#EEF4FF` | Latar aksen lembut, hover ikon |
+| `--color-border-subtle` | `#E5E7EB` | Garis pemisah, border kartu |
+| `--color-card` | `#FFFFFF` | Permukaan kartu dan sheet |
 
-Jangan menggunakan gaya sukses untuk transaksi yang baru dikirim tetapi belum terverifikasi.
+Latar halaman: `#F7F8FA`. Netral tambahan yang dipakai di komponen: `#F3F4F6` (isi abu), `#9CA3AF` (teks nonaktif), `#D1D5DB` (drag handle, border kuat), `#BFDBFE` (aksen pucat).
 
-## 4. Tipografi dan angka
+### Warna status
 
-- Gunakan gaya teks yang konsisten dengan komponen yang sudah ada.
-- Nominal token harus mudah dipindai dan tidak terpotong pada layar kecil.
-- Gunakan pemformatan angka yang konsisten dengan bahasa dan konteks pengguna.
-- Jangan membulatkan nilai internal untuk perhitungan transaksi.
-- Untuk gas, tampilkan satuan yang jelas, misalnya ETH.
-- Label estimasi harus terlihat berbeda dari biaya final.
+| Status | Teks | Latar | Border |
+| --- | --- | --- | --- |
+| Berhasil / lunas | `#047857` | `#ECFDF5` | — |
+| Peringatan / fee tertunda | `#B45309` | `#FFFBEB` | `#FDE68A` |
+| Gagal / belum dibayar | `#DC2626`, `#B91C1C` | `#FEF2F2` | — |
 
-## 5. Tombol dan tindakan
+Warna tidak boleh menjadi satu-satunya pembeda status. Setiap status wajib punya label teks, dan idealnya ikon.
 
-Gunakan label tindakan yang spesifik:
-- `Send` untuk memulai transfer.
-- `Request` untuk membuat permintaan pembayaran.
-- `Review transfer` atau padanan bahasa Indonesia untuk memeriksa rincian.
-- `Confirm` hanya pada tindakan yang benar-benar memerlukan persetujuan.
-- `Cancel` untuk membatalkan tindakan yang belum dijalankan.
+## 3. Tipografi
 
-Jangan membuat tombol Request terlihat seolah-olah langsung menagih atau menarik dana dari penerima.
+Font: **Plus Jakarta Sans** (`--font-sans`), fallback `system-ui`. Weight yang dipakai 400, 500, 600, 700.
 
-Tindakan utama harus mudah ditemukan. Tindakan sekunder tidak boleh secara visual bersaing dengan konfirmasi transaksi.
+| Peran | Ukuran | Catatan |
+| --- | --- | --- |
+| Label mikro | `10px`, `11px` | Badge, caption, label sheet |
+| Sekunder | `text-xs` (12px) | Metadata, timestamp — ukuran paling sering dipakai |
+| Isi | `text-sm` (14px) | Mayoritas teks UI |
+| Judul | `text-base` (16px) ke atas | Judul layar dan nominal besar |
 
-## 6. Quick Actions
+Aturan angka:
 
-Quick Actions adalah tempat yang sesuai untuk tindakan yang sering dipakai, seperti Send dan Request, selama sesuai dengan susunan dashboard yang aktif.
+- Nominal memakai `tabular-nums` agar tidak bergeser saat berubah.
+- Alamat dan hash memakai `font-mono` dan dipotong di tengah (`formatChecksum` + `chunkAddress`), bukan di akhir.
+- Format angka mengikuti locale aktif (`id-ID` / `en-US`) lewat `fmt` di `i18n`.
+- Nilai internal tidak pernah dibulatkan untuk perhitungan; pembulatan hanya di lapisan tampilan.
+
+## 4. Radius dan bentuk
+
+| Elemen | Radius |
+| --- | --- |
+| Kartu, panel | `rounded-2xl` / `rounded-xl` |
+| Tombol dan pill | `rounded-full` |
+| Bottom sheet | `rounded-t-[24px]`, `lg:rounded-[24px]` |
+| Bottom nav mengambang | `rounded-[30px]` |
+| Drag handle sheet | `rounded-full`, 36×4 px, warna `#D1D5DB` |
+
+## 5. Layout dan kepadatan
+
+- Shell: `max-w-[560px]` di mobile, `lg:max-w-[720px]`, `xl:max-w-[1040px]`, padding horizontal `px-4` (`xl:px-6`).
+- Bottom nav mengambang: tinggi 60 px, `grid-cols-5`, `bottom-3`, dengan `.pb-safe` untuk safe-area iOS.
+- Bottom sheet: `max-h-[85dvh]` (bisa dioverride, mis. `max-h-[92dvh]` saat review transfer).
+- Konten di dalam sheet memakai `.sheet-body-pad` agar tidak tertutup home indicator.
+- Layar kecil adalah acuan utama. Layout desktop hanya memperlebar, tidak menambah kepadatan.
+
+## 6. Motion
+
+Token durasi dan easing di `:root`:
+
+```
+--ease-out   cubic-bezier(0.22, 1, 0.36, 1)
+--dur-tap    90ms    tekan tombol
+--dur-fast   150ms   hover, transisi kecil
+--dur-base   240ms   masuk tab, fade up
+--dur-sheet  320ms   bottom sheet
+```
+
+Animasi bernama yang tersedia: `animate-sheet-in/out`, `animate-backdrop-in/out`, `animate-modal-in/out`, `tab-view-active`, `animate-balance-change`, `animate-fade-up`, `animate-popover-in`, `animate-fade-through`, `animate-checkmark-pop`, `animate-toast-in`, dan transisi bahasa `lang-content[data-phase]`.
 
 Aturan:
-- Gunakan ikon yang mudah dikenali dan label teks.
-- Pertahankan ukuran area sentuh yang nyaman pada perangkat mobile.
-- Hindari menambahkan terlalu banyak tindakan sekaligus.
-- Pastikan tindakan membuka alur yang benar dan tidak memulai transaksi secara otomatis.
 
-## 7. Formulir
+- Gunakan animasi yang sudah ada; jangan menulis keyframes baru untuk satu layar.
+- `prefers-reduced-motion: reduce` sudah ditangani global (durasi dipaksa ~0 dan transform dinonaktifkan). Jangan menambahkan animasi yang mengabaikan media query ini.
+- Animasi tidak boleh menunda aksi pengguna; semua transisi bersifat kosmetik.
 
-Formulir harus:
-- Memiliki label yang terlihat, bukan hanya placeholder.
-- Memvalidasi input dan menjelaskan masalah dekat dengan field terkait.
-- Menjaga input pengguna ketika terjadi error yang bisa dipulihkan.
-- Mencegah submit berulang saat permintaan sedang diproses.
-- Menampilkan loading dan hasil operasi dengan jelas.
-- Tidak mengandalkan floating-point arithmetic untuk nominal token.
+## 7. Komponen
 
-Untuk Request Money, tampilkan penerima, nominal, jaringan, catatan opsional, dan ringkasan sebelum permintaan dibuat.
+| Komponen | Peran |
+| --- | --- |
+| `AppLayout` | Header, tab bar, kontainer konten |
+| `BottomSheet` | Sheet dengan drag handle, backdrop, tutup, animasi masuk/keluar |
+| `TxDetailsSheet` | Detail transaksi, status fee, tombol bayar fee, unduh/bagikan receipt |
+| `ActivityRow` | Baris transaksi di beranda dan riwayat |
+| `NotificationPanel` | Daftar notifikasi, tandai dibaca, hapus |
+| `RecipientVerification` | Ringkasan penerima, peringatan alamat berubah atau mirip |
+| `LanguagePopover` | Pemilih bahasa dengan transisi |
+| `ToastViewport` | Antrean toast (info, success, warning, error, loading) |
+| `SplashScreen` | Layar muat dan transisi selesai onboarding |
+| `PukicoBrand` | Logo dan ikon aset (USDC, ETH, jaringan generik) |
 
-## 8. Fee breakdown
+Sebelum membuat komponen baru, cari yang sudah ada untuk tombol, sheet, toast, badge status, dan detail transaksi. Perluas yang ada daripada membuat pola baru.
 
-Sebelum transaksi ditandatangani, tampilkan komponen biaya yang diketahui:
+## 8. Pola status dan uang
 
-- Nominal USDC yang akan dikirim.
-- Service fee jika memang dikenakan.
-- Total potongan USDC berdasarkan aturan aktual.
-- Estimasi network fee dan aset gas yang digunakan.
+- Status transaksi ditampilkan sebagai pil berlabel teks: `Pending`, `Confirmed`, `Failed`, `Unpaid`, `Legacy`.
+- Gaya sukses hanya untuk transaksi yang sudah confirmed, bukan untuk transaksi yang baru disiarkan.
+- Fee tertunda mendapat blok peringatan dengan aksi `Pay now`, bukan error merah — transaksinya berhasil, hanya biayanya belum terbayar.
+- Jangan mencampur USDC dan ETH menjadi satu total. Gas selalu disebut dalam ETH.
+- Estimasi selalu diberi label estimasi.
 
-Jangan mencampur jumlah USDC dan ETH menjadi satu total tanpa konversi yang valid. Jika estimasi belum tersedia, katakan demikian; jangan tampilkan angka lama seolah-olah masih berlaku.
+## 9. Formulir
 
-## 9. Transaction receipt
+- Label terlihat, bukan hanya placeholder.
+- Validasi tampil dekat field terkait, bukan hanya di toast.
+- Input dipertahankan saat error yang masih bisa dipulihkan.
+- Tombol submit dinonaktifkan selama permintaan berjalan untuk mencegah pengiriman ganda.
+- Nominal memakai `inputMode="decimal"` dan divalidasi ke unit integer sebelum dipakai.
 
-Receipt harus mudah dibaca dan aman dibagikan. Tampilkan data yang tersedia dan relevan, seperti pihak terkait, nominal, jaringan, waktu, status, biaya yang diketahui, hash, dan link explorer.
+## 10. Copy dan bahasa
 
-Jangan menampilkan data yang tidak diketahui sebagai nilai pasti. Link explorer harus sesuai jaringan. Data yang dibagikan tidak boleh mengandung token autentikasi atau informasi rahasia.
+Dua bahasa: `en` dan `id`, dipilih dari `localStorage` (`pukico.lang`) atau `navigator.language`, dengan transisi fade 120 ms keluar → 280 ms masuk.
 
-## 10. Empty, loading, dan error states
+- Semua teks UI berasal dari `src/i18n/en.ts` dan `id.ts`. Jangan menulis string bahasa langsung di komponen.
+- Nada bahasa Indonesia: singkat, langsung, tanpa istilah internal. `Kirim`, `Terima`, `Riwayat`, `Teman`, `Pengaturan`.
+- Tombol memakai kata kerja spesifik: `Review transfer` sebelum konfirmasi, `Confirm` hanya untuk persetujuan nyata, `Cancel` untuk membatalkan tindakan yang belum dijalankan.
+- Jangan memakai kata "berhasil" sebelum status terverifikasi.
 
-Setiap fitur data harus mempertimbangkan:
-- **Loading:** data sedang dimuat.
-- **Empty:** belum ada data; jelaskan apa yang dapat dilakukan pengguna.
-- **Error:** data tidak dapat dimuat; sediakan cara mencoba kembali jika aman.
-- **Pending:** operasi belum selesai.
-- **Success:** operasi berhasil sesuai sumber kebenaran yang tepat.
+## 11. Aksesibilitas
 
-Jangan mengganti error dengan data contoh tanpa penanda yang jelas.
-
-## 11. Mobile dan aksesibilitas
-
-- Uji layout pada layar kecil.
-- Hindari overflow pada alamat, hash, nominal, dan Pukico ID.
-- Jangan mengandalkan warna saja untuk status.
-- Beri label yang dapat dipahami pada kontrol ikon.
-- Jaga kontras teks dan latar.
-- Pastikan sheet atau modal bisa ditutup dan dinavigasi dengan jelas.
+- `:focus-visible` global: outline 2 px `#0052FF`, offset 2 px.
+- Tab yang tidak aktif diberi `inert` sehingga tidak bisa difokus keyboard atau dibaca screen reader.
+- Semua kontrol ikon punya `aria-label`; ada ±80 atribut `aria-*` di kode.
+- Status tidak boleh bergantung pada warna saja.
+- Sheet dapat ditutup lewat backdrop, tombol tutup, dan tombol Escape.
 - Jangan menaruh informasi penting hanya pada hover.
+- Uji overflow pada alamat, hash, dan nominal di layar sempit.
 
-## 12. Konsistensi komponen
+## 12. Yang tidak boleh dilakukan
 
-Sebelum membuat komponen baru, cari komponen yang sudah ada untuk tombol, bottom sheet, toast, status, dan detail transaksi. Perluas komponen yang sesuai daripada membuat pola baru tanpa alasan.
-
-Dokumen ini sengaja tidak menetapkan nilai warna, ukuran, atau radius numerik yang belum diverifikasi dari kode desain. Jika token desain formal ditambahkan, dokumentasikan nilai yang benar-benar digunakan di kode.
+- Menambah library UI baru untuk satu layar.
+- Mengubah token global demi kebutuhan satu fitur.
+- Menampilkan angka biaya yang belum tersedia sebagai angka pasti.
+- Menampilkan data contoh tanpa penanda sebagai data nyata.
+- Menggunakan float untuk menghitung nominal token.
+- Membuat tombol aksi yang langsung memindahkan dana tanpa langkah review.

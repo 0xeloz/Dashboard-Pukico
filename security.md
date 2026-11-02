@@ -1,93 +1,168 @@
-# Keamanan Pukico
+# Keamanan Pukico Dashboard
 
-Keamanan transaksi adalah bagian dari produk, bukan pekerjaan yang bisa ditunda sampai setelah fitur selesai. Dokumen ini menjelaskan prinsip yang harus diikuti dan tidak menyatakan bahwa seluruh sistem telah diaudit secara independen.
+**Status:** Diverifikasi terhadap kode commit `c8d90ef` (2 November 2026). Dokumen ini mencatat kontrol yang benar-benar ada di kode, risiko yang masih terbuka, dan apa yang harus ditutup sebelum rilis. Ini bukan hasil audit keamanan independen.
 
-## 1. Prinsip utama
+## 1. Prinsip
 
-- Pengguna menyetujui transaksi melalui wallet yang terhubung.
-- Private key tidak boleh diminta atau disimpan oleh aplikasi.
-- Status transaksi harus didukung bukti yang sesuai dari jaringan.
-- Setiap permintaan backend harus mengautentikasi pemanggil dan memeriksa hak akses.
-- Data pengguna tidak boleh dapat dibaca atau diubah oleh akun yang tidak berhak.
-- Kegagalan harus ditangani secara eksplisit, bukan ditutupi dengan data simulasi.
+- Pengguna menyetujui setiap transaksi lewat wallet Privy. Aplikasi tidak pernah meminta atau menyimpan private key.
+- Frontend bukan sumber kebenaran status pembayaran.
+- Setiap permintaan backend harus diautentikasi dan diotorisasi di sisi server.
+- Kegagalan harus terlihat sebagai kegagalan, bukan ditutupi data simulasi.
+- Data contoh hanya boleh muncul di mode demo yang eksplisit.
 
-## 2. Autentikasi bukan otorisasi
+## 2. Model kepercayaan
 
-Pengguna yang sudah login belum tentu berhak membaca atau mengubah setiap baris data. Backend dan kebijakan Row Level Security (RLS) harus membatasi akses berdasarkan pemilik data dan aturan bisnis.
+| Pihak | Dipercaya untuk | Tidak dipercaya untuk |
+| --- | --- | --- |
+| Privy | Login, penyimpanan wallet, tanda tangan | Menentukan status transaksi |
+| viem / RPC | Membaca saldo, estimasi gas, receipt | — |
+| Edge Function | Autorisasi, pencatatan, verifikasi transaksi | — |
+| Browser | Menampilkan UI, menyiapkan payload | Menentukan nominal, status, atau identitas |
 
-Jangan menggunakan metadata profil yang bisa diubah pengguna sebagai satu-satunya dasar keputusan akses. Untuk operasi sensitif, validasi identitas dan izin di sisi server.
+Payload yang dikirim browser (`amount`, `email`, `wallet_address`, `tx_hash`) adalah klaim, bukan bukti. Backend wajib menurunkannya ulang dari token dan chain.
 
-## 3. Perlindungan secret
+## 3. Autentikasi
 
-- Jangan memasukkan private key, service-role key, token rahasia, atau kredensial ke kode frontend.
-- Jangan menaruh secret dalam file dokumentasi, issue publik, screenshot, atau log.
-- Gunakan pengelolaan secret pada lingkungan server.
-- Jika secret terlanjur dipublikasikan, cabut atau rotasi sesuai prosedur dan periksa penggunaan yang tidak sah.
+Setiap panggilan ke Edge Function membawa `x-privy-token` (hasil `getAccessToken()` Privy) dan `apikey` (anon key). `buildHeaders` di `src/lib/txApi.ts` adalah satu-satunya tempat header ini dirakit.
 
-Kunci publik yang memang dirancang untuk frontend berbeda dari secret server. Tetap pastikan konfigurasi sesuai panduan penyedia layanan.
+### R-01 — Token tidak diverifikasi (kritis)
 
-## 4. Verifikasi transaksi
+`supabase/functions/resolve-id/index.ts:16` (`extractDidFromPrivyToken`) memecah JWT, melakukan base64-decode payload, dan membaca `sub` / `user_id` / `privy_did`. **Signature tidak pernah diperiksa.** Siapa pun dapat menyusun token `{"sub":"did:privy:<korban>"}` bertanda tangan sembarang dan diterima sebagai pengguna tersebut.
 
-Jangan menyatakan transaksi sukses hanya karena:
-- Pengguna menekan tombol.
-- Wallet mengembalikan transaction hash.
-- Transaksi telah dikirim ke jaringan.
-- UI menerima respons sukses dari permintaan awal.
+Dampaknya diperbesar dua hal:
 
-Sebelum status confirmed ditampilkan, periksa jaringan yang benar dan receipt yang sukses. Untuk pembayaran Request Money, cocokkan token, nominal, penerima, jaringan, dan referensi permintaan yang relevan.
+- Function memakai client dengan `SUPABASE_SERVICE_ROLE_KEY` (`index.ts:73`), sehingga Row Level Security tidak ikut membatasi.
+- Nilai balik function memuat `wallet_address` milik target, jadi enumerasi Pukico ID → alamat wallet menjadi mudah.
 
-Pending, confirmed, dan failed harus memiliki arti yang konsisten. Jika status belum diketahui, tampilkan bahwa status masih diproses atau belum dapat diverifikasi.
+Komentar di kode menyatakan verifikasi "di produksi", tetapi tidak ada implementasinya. Anggap fungsi ini **belum aman untuk dipakai dengan data nyata**.
 
-## 5. Rincian biaya
+Perbaikan yang diperlukan:
 
-Service fee dan network fee adalah hal yang berbeda. Tampilkan hanya biaya layanan yang benar-benar dikenakan. Estimasi gas harus diberi label estimasi, menyebut aset gas yang benar, dan tidak disajikan sebagai biaya final.
+1. Verifikasi JWT terhadap JWKS Privy (`https://auth.privy.io/api/v1/apps/<app_id>/jwks.json`) memakai `jose` atau `jwtVerify`.
+2. Tolak token dengan `exp` lewat, `aud` tidak cocok dengan App ID, atau `iss` bukan `privy.io`.
+3. Setelah itu baru ambil `sub` sebagai DID.
+4. Terapkan pola yang sama di empat fungsi lain yang tidak ada di repo ini sebelum dipakai produksi.
 
-Jangan menjumlahkan USDC dan ETH menjadi satu angka tanpa konversi yang jelas dan sumber kurs yang dapat dipertanggungjawabkan.
+### R-02 — CORS terbuka (tinggi)
 
-## 6. Request Money
+`Access-Control-Allow-Origin: *` di `resolve-id/index.ts:5`. Digabung dengan R-01, situs mana pun dapat memanggil endpoint atas nama pengguna yang tokennya berhasil dipalsukan. Batasi ke origin aplikasi (`https://app.pukico.xyz`) dan origin preview yang dikenal.
 
-Permintaan pembayaran tidak boleh memindahkan dana secara otomatis.
+## 4. Otorisasi
 
-- Hanya pembuat yang sah yang boleh membuat permintaan atas namanya sendiri.
-- Pembatalan dan perubahan status harus dibatasi sesuai aturan produk.
-- Tautan yang dapat dibagikan tidak otomatis berarti semua data permintaan boleh dibaca publik.
-- Jangan percaya nominal atau identitas yang dikirim frontend tanpa memeriksa data server.
-- Status paid hanya boleh ditetapkan setelah pembayaran yang sesuai diverifikasi.
-- Cegah pemrosesan event berulang dan pembayaran ganda melalui mekanisme server-side, constraint, atau idempotensi yang sesuai.
+- Dashboard tidak memakai `supabase-js` di browser dan tidak memegang service-role key, sehingga tidak ada jalur langsung ke database dari klien.
+- Semua otorisasi terjadi di Edge Function. Karena function memakai service role, **RLS tidak akan menyelamatkan operasi yang lupa memeriksa pemilik data**. Pemeriksaan harus eksplisit di setiap action.
+- `resolve-id` sudah memeriksa bahwa pemanggil punya profil dan, bila belum punya Pukico ID, mengembalikan `403 onboarding_required` kecuali `role = admin`.
+- Profil memuat `role` dan `beta_access`; keduanya dipakai untuk gating UI. Gating UI bukan kontrol keamanan — server harus menolak sendiri, bukan mengandalkan tombol yang disembunyikan.
 
-## 7. RLS dan akses database
+### R-03 — Empat fungsi backend tidak ada di repo (tinggi)
 
-Untuk tabel yang dapat diakses melalui API, aktifkan RLS dan tulis kebijakan berdasarkan model kepemilikan yang sebenarnya. Uji operasi baca, tambah, ubah, dan hapus secara terpisah. Jangan menganggap pemeriksaan role login saja sudah cukup.
+`tx`, `friends`, `claim-pukico-id`, dan `session` dipanggil frontend tetapi tidak ada di `supabase/functions/`. Otorisasi, verifikasi transaksi, dan policy di dalamnya **tidak dapat diperiksa dari repo ini**, sehingga tidak bisa dinyatakan aman maupun tidak. Ini harus diselesaikan sebelum klaim keamanan apa pun dibuat.
 
-Perubahan pada view, fungsi database, atau operasi dengan hak istimewa perlu ditinjau khusus karena dapat mengubah perilaku kontrol akses.
+Khusus `/session`: frontend mengirim `email` dan `wallet_address` (`src/lib/sessionApi.ts`). Server harus menurunkan DID dari token dan tidak boleh mengikat wallet_address ke akun hanya karena klien mengirimkannya.
 
-## 8. Log dan privasi
+## 5. Verifikasi transaksi
 
-Log sebaiknya membantu diagnosis tanpa menyimpan rahasia atau data pribadi yang tidak diperlukan. Hindari mencatat token autentikasi, private key, isi sensitif, atau seluruh payload pengguna tanpa alasan.
+Yang sudah berjalan:
 
-Data yang ditampilkan pada receipt atau dibagikan melalui tautan harus dibatasi pada informasi yang diperlukan untuk memahami transaksi.
+- Transaksi disimulasikan (`estimateGas`) sebelum tanda tangan; kegagalan membatalkan lebih awal.
+- Hash divalidasi formatnya (`isTxHash`) sebelum disimpan atau dikirim.
+- Hash yang sudah disiarkan dicatat di `pukico.pendingTx` dan dikirim ulang pada sesi berikutnya, jadi tidak hilang bila tab ditutup.
+- Submit mengulang saat backend menjawab `202 tx_not_found_yet`, maksimal 20 detik.
+- Status akhir diambil dari `/tx` (`sync`, `sync_pending`, `list`), bukan dari respons submit.
+- Transaksi `pending` dan `failed` ditampilkan apa adanya dan tidak pernah dipromosikan menjadi sukses oleh UI.
 
-## 9. Testnet dan produksi
+### R-04 — Status receipt tidak diperiksa sebelum fee dikirim (sedang)
 
-Testnet digunakan untuk menguji perilaku aplikasi. Token testnet bukan aset bernilai uang nyata. Sebelum rilis produksi, verifikasi jaringan, alamat kontrak token, konfigurasi explorer, mekanisme biaya, dan proses pemulihan kegagalan.
+`SendSheetContent.tsx:1960` menunggu `waitForTransactionReceipt` dengan timeout 60 detik, tetapi hasilnya tidak diperiksa. Bila transaksi di-revert atau waktu tunggu habis, blok `catch` hanya mencatat log (`:1964`) dan alur **tetap melanjutkan pembayaran fee** ke treasury. Akibatnya pengguna bisa membayar biaya layanan untuk transfer yang gagal.
 
-Jangan mempromosikan testnet sebagai bukti bahwa sistem produksi telah aman.
+Perbaikan: periksa `receipt.status === 'success'` dan hentikan alur fee bila tidak; bedakan timeout (transaksi mungkin masih diproses) dari revert (transaksi gagal).
 
-## 10. Checklist sebelum rilis
+## 6. Nominal dan biaya
 
-- [ ] Tidak ada secret dalam bundle frontend atau repositori publik.
-- [ ] RLS diuji dengan lebih dari satu akun.
-- [ ] API memverifikasi identitas dan otorisasi server-side.
-- [ ] Status transaksi bersumber dari verifikasi yang benar.
-- [ ] Transaksi pending dan failed tidak dinyatakan sukses.
-- [ ] Permintaan pembayaran tidak memicu transfer otomatis.
-- [ ] Event duplikat tidak menghasilkan perubahan atau notifikasi ganda.
-- [ ] Error tidak menampilkan data palsu sebagai data nyata.
-- [ ] Build dan tes yang relevan berhasil.
-- [ ] Risiko yang belum terselesaikan dicatat sebelum rilis.
+- Seluruh perhitungan uang memakai `bigint` pada unit terkecil (`parseUnits`, `formatUnits`). Tidak ada float di jalur transaksi.
+- Fee dibatasi maksimum 500 bps (`MAX_FEE_BPS`) dan dinonaktifkan sepenuhnya bila treasury tidak dikonfigurasi atau bps 0.
+- Fee USDC dibulatkan ke bawah ke kelipatan 0,01 USDC dengan minimum 0,01 USDC; ETH memakai ceil division.
+- Kebutuhan gas dihitung dengan buffer 150% (`computeGasReserve`), dan saldo dibaca ulang dari chain tepat sebelum fee dikirim.
+- Estimasi gas selalu diberi label estimasi dan tidak pernah digabung dengan nominal USDC.
 
-## 11. Pelaporan kerentanan
+Catatan: `amount` tetap dikirim dari klien ke `/tx`. Backend wajib membuktikan nominal dan penerima dari receipt on-chain, bukan dari payload.
 
-Jangan memublikasikan kredensial atau langkah eksploitasi pada issue publik. Gunakan kanal kontak keamanan resmi yang dipublikasikan Pukico. Jika kanal tersebut belum tersedia, siapkan sebelum membuka program pelaporan publik.
+## 7. Guard alamat dan penerima
 
-Dokumen ini adalah panduan keamanan produk, bukan hasil audit keamanan independen.
+`src/lib/txGuards.ts` menolak: alamat tidak valid, zero address, alamat `dead`, alamat pengirim sendiri, dan alamat kontrak USDC. `src/lib/addressSafety.ts` membandingkan alamat tujuan dengan alamat transaksi sebelumnya memakai jarak levenshtein untuk memperingatkan alamat mirip, dan menampilkan alamat dalam bentuk checksum yang dipotong di tengah. `resolve-id` mengembalikan `address_changed` bila penerima berganti wallet sejak transaksi terakhir, dan UI menampilkan peringatan sebelum pengguna melanjutkan.
+
+## 8. Data lokal
+
+Aplikasi tidak menyimpan access token, private key, atau kredensial di kode maupun storage-nya sendiri — setiap panggilan mengambil token dari Privy saat dibutuhkan dan mengirimnya sebagai header. Yang tersimpan di browser hanya cache dan preferensi: `pukico.pendingTx`, `pukico.fee_due.<wallet>`, `pukico_tx_cache_<wallet>`, `pukico_balance_cache_<wallet>`, `pukico_friends_cache_<wallet>`, `pukico.notif.*.<wallet>`, `pukico.lang`. (Privy sendiri mengelola sesi login dengan mekanisme internalnya.)
+
+### R-06 — Cache tidak dibersihkan saat logout (rendah)
+
+`PrivyConnectedProvider.tsx:203` hanya menghapus `pukico.history_filters` dari sessionStorage lalu memanggil logout Privy. Cache transaksi, saldo, teman, dan fee tertunda tetap ada di localStorage. Pada perangkat bersama, orang berikutnya yang login dengan akun lain tidak melihat data tersebut (key di-scope per alamat wallet), tetapi data tetap tersimpan di disk tanpa batas waktu dan tanpa enkripsi.
+
+Perbaikan: hapus key milik wallet saat logout, atau setidaknya sediakan aksi "hapus data lokal" di Pengaturan.
+
+## 9. Secret
+
+- Anon key Supabase ada di bundle frontend (`VITE_SUPABASE_ANON_KEY`). Ini by design, tetapi hanya aman selama RLS/otorisasi di server benar.
+- Service-role key hanya dibaca dari `Deno.env` di Edge Function dan tidak pernah masuk repo.
+- Pemindaian repo tidak menemukan token, private key, atau service-role key yang ter-commit.
+
+## 10. Header keamanan (`vercel.json`)
+
+| Header | Nilai | Catatan |
+| --- | --- | --- |
+| `Content-Security-Policy` | `frame-ancestors 'none'` | Satu-satunya directive yang ditegakkan |
+| `X-Frame-Options` | `DENY` | Mencegah framing |
+| `X-Content-Type-Options` | `nosniff` | — |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | — |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=()` | — |
+| `Strict-Transport-Security` | `max-age=31536000` | Belum `includeSubDomains` / `preload` |
+| `Content-Security-Policy-Report-Only` | policy lengkap + `report-uri` | **Hanya melaporkan, tidak memblokir** |
+
+### R-07 — CSP belum menegakkan apa pun (sedang)
+
+Policy lengkap dikirim sebagai `Report-Only`. Selama masih report-only, injeksi script pihak ketiga tidak dicegah. Setelah laporan bersih di produksi, pindahkan policy yang sama ke `Content-Security-Policy` dan pertahankan `frame-ancestors 'none'`.
+
+## 11. Rantai pasokan dan build
+
+### R-08 — Tidak ada lockfile (sedang)
+
+Tidak ada `package-lock.json` di repo. Instalasi bisa menghasilkan pohon dependency berbeda antar mesin dan antar waktu, termasuk untuk paket yang menyentuh jalur wallet dan transaksi. Tambahkan lockfile dan pakai `npm ci` di CI.
+
+Tidak ada test otomatis di repo. Matematika fee dan guard alamat adalah fungsi murni yang paling mudah diuji dan paling mahal bila salah.
+
+## 12. Checklist sebelum rilis
+
+- [ ] **Verifikasi JWT di setiap Edge Function** (R-01) — saat ini gagal.
+- [ ] **CORS dibatasi ke origin aplikasi** (R-02) — saat ini `*`.
+- [ ] Empat fungsi backend yang tidak ada di repo ditinjau dan di-deploy dari sumber yang terkontrol (R-03).
+- [ ] `receipt.status` diperiksa sebelum fee dikirim (R-04).
+- [ ] CSP ditegakkan, bukan report-only (R-07).
+- [ ] Lockfile ditambahkan dan build memakai `npm ci` (R-08).
+- [x] Tidak ada secret yang ter-commit.
+- [x] Service-role key tidak ada di bundle frontend.
+- [x] Transaksi `pending` dan `failed` tidak pernah ditampilkan sebagai sukses.
+- [x] Nominal dan fee dihitung dengan integer unit, tanpa float.
+- [x] Alamat berisiko (zero, dead, self, kontrak USDC) ditolak sebelum tanda tangan.
+- [x] Tidak ada alur yang memindahkan dana tanpa persetujuan eksplisit pengguna.
+- [x] Error tidak diganti data contoh di build produksi — mode demo hanya aktif bila diminta eksplisit.
+- [ ] RLS dan policy diuji dengan lebih dari satu akun di proyek Supabase aktif.
+- [ ] Uji end-to-end di Base Sepolia setelah semua perbaikan di atas.
+
+## 13. Risiko terbuka
+
+| ID | Tingkat | Ringkas |
+| --- | --- | --- |
+| R-01 | Kritis | JWT hanya di-decode, tidak diverifikasi → impersonasi akun |
+| R-02 | Tinggi | CORS `*` memperluas dampak R-01 ke semua origin |
+| R-03 | Tinggi | Empat Edge Function tidak ada di repo, tidak dapat ditinjau |
+| R-04 | Sedang | Fee dapat terbayar walau transfer gagal/revert |
+| R-07 | Sedang | CSP report-only, tidak memblokir |
+| R-08 | Sedang | Tanpa lockfile, build tidak reproducible |
+| R-06 | Rendah | Cache lokal tidak dibersihkan saat logout |
+
+## 14. Pelaporan kerentanan
+
+Jangan mempublikasikan kredensial atau langkah eksploitasi di issue publik. Gunakan kanal kontak keamanan resmi Pukico. Bila belum tersedia, siapkan sebelum membuka program pelaporan publik.
+
+Dokumen ini adalah panduan dan catatan status, bukan jaminan keamanan.
